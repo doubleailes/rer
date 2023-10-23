@@ -3,7 +3,7 @@ name = "rer"
 version = "0.1.0"
 edition = "2021"
 authors = ["Philippe Llerena<philippe.llerena@gmail.com>"]
-description = "a simple command line tool to list frame sequence in friendly way"
+description = "A rez implementation in rust"
 readme = "README.md"
 license-file = "LICENSE"
 
