@@ -1,6 +1,6 @@
 # rer
 
-![rer.logo](docs\content\images\res_v01.png)
+![rer.logo](https://github.com/doubleailes/rer/blob/main/docs/content/images/res_v01.png)
 
 r.e.r stand for the french sentence: "Rez En Rust"
 
