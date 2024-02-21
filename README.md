@@ -14,7 +14,7 @@ A rez implementation in rust
 ### Library
 
 - [clap](https://github.com/clap-rs/clap) as the command line tool.
-- [resolvo](https://github.com/mamba-org/resolvo) as the resolution algorithm based on CDCL SAT solving.
+- [resolvo](https://github.com/mamba-org/resolvo) as the resolution algorithm based on CDCL SAT solving or [pubgrub](https://github.com/pubgrub-rs/pubgrub)
 
 
 ## Roadmap
@@ -40,6 +40,6 @@ A rez implementation in rust
 
 ## TODO
 
-- [ ] `rez-build`
-- [ ] `rez-bind`
-- [ ] `rez-env`
+- [ ] `rer-build`
+- [ ] `rer-bind`
+- [ ] `rer-env`
