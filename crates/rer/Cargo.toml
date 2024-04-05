@@ -1,0 +1,19 @@
+
+[package]
+name = "rer"
+version = "0.1.0"
+edition = "2021"
+authors = ["Philippe Llerena<philippe.llerena@gmail.com>"]
+description = "A rez implementation in rust"
+readme = "README.md"
+license-file = "LICENSE"
+repository = "https://github.com/doubleailes/rer"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[[bin]]
+name = "rer"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4.4.6", features = ["derive"] }
