@@ -1,7 +1,7 @@
 
 [package]
 name = "rer"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["Philippe Llerena<philippe.llerena@gmail.com>"]
 description = "A rez implementation in rust"
