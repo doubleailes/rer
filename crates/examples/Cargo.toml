@@ -1,0 +1,15 @@
+
+[package]
+name = "examples"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[[example]]
+name = "with_candidate_selector_rayon"
+path = "with_candidate_selector_rayon.rs"
+
+[dependencies]
+pubgrub = { workspace = true }
+rer-version = { workspace = true }
+rer-resolver = { workspace = true }

@@ -1,0 +1,19 @@
+[package]
+name = "rer-resolver"
+version = "0.0.1"
+edition = { workspace = true }
+repository = { workspace = true }
+authors = { workspace = true }
+license-file = { workspace = true }
+
+[lib]
+name = "rer_resolver"
+
+[dependencies]
+pubgrub = { workspace = true }
+rer-version = { workspace = true }
+rayon = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+itertools = { workspace = true }
