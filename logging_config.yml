@@ -1,0 +1,19 @@
+appenders:
+  log_2_file:
+    kind: rolling_file
+    path: "log/rer.log"
+    encoder:
+      pattern: "{d(%Y-%m-%d %H:%M:%S.%f)(utc)} - {h({l})}: {m}{n}"
+    policy:
+      trigger:
+        kind: size
+        limit: 10 mb
+      roller:
+        kind: fixed_window
+        base: 1
+        count: 10
+        pattern: "log/rer_{}.log"
+root:
+  level: debug
+  appenders:
+    - log_2_file
