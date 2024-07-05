@@ -3,8 +3,13 @@ members = ["crates/*"]
 resolver = "2"
 
 [workspace.package]
+authors = [
+    "Lorenzo Montant <lo.montant.pro@gmail.com>",
+    "Maxim Doucet <maxim.doucet@gmail.com>",
+    "Philippe Llerena<philippe.llerena@gmail.com>",
+    "Rémi Viette <remi.viette@gmail.com>",
+]
 edition = "2021"
-authors = ["Philippe Llerena<philippe.llerena@gmail.com>"]
 description = "A rez implementation in rust"
 readme = "README.md"
 license-file = "LICENSE"
