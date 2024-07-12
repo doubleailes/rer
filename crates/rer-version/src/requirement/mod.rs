@@ -45,11 +45,11 @@ impl Requirement {
         let mut conflict = s.starts_with('!');
         let mut sep = '-';
 
-        let mut s = s.to_string();
+        let mut raw_string = s.to_string();
         if conflict {
-            s.remove(0);
+            raw_string.remove(0);
         } else if s.starts_with('~') {
-            s.remove(0);
+            raw_string.remove(0);
             negate = true;
             conflict = true;
         }
@@ -66,11 +66,11 @@ impl Requirement {
             }
             s[..m.start()].to_string()
         } else if negate {
-            s
+            raw_string
             // '~foo' equates to no effect, so range remains None
         } else {
             range = Some(Range::any());
-            s
+            raw_string
         };
 
         Requirement {
