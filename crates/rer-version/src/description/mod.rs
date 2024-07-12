@@ -12,6 +12,20 @@ lazy_static! {
         r"^(?P<major>0|[1-9]\d*)\.(?P<minor>0|[1-9]\d*)\.(?P<patch>0|[1-9]\d*)(?:-(?P<prerelease>(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+(?P<buildmetadata>[0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$"
     ).expect("Can't compile SEMVER_REGEX regex");
     static ref NUMERIC_REGEX: Regex = Regex::new(r"[0-9]+").expect("Can't compile NUMERIC_REGEX regex");
+    static ref ORDER_LOOKUP:[u8; 256] = {
+        let mut lookup = [255; 256]; // Default to 255 for characters not explicitly set
+        lookup[b'_' as usize] = 0;
+        for (i, b) in (b'a'..=b'z').enumerate() {
+            lookup[b as usize] = 1 + i as u8;
+        }
+        for (i, b) in (b'A'..=b'Z').enumerate() {
+            lookup[b as usize] = 27 + i as u8;
+        }
+        for (i, b) in (b'0'..=b'9').enumerate() {
+            lookup[b as usize] = 53 + i as u8;
+        }
+        lookup
+    };
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Ord)]
@@ -30,13 +44,7 @@ impl SubToken {
     }
 
     fn custom_char_order(&self, c: char) -> u8 {
-        match c {
-            '_' => 0,
-            'a'..='z' => 1 + (c as u8 - 'a' as u8),
-            'A'..='Z' => 27 + (c as u8 - 'A' as u8),
-            '0'..='9' => 53 + (c as u8 - '0' as u8),
-            _ => 255, // Other characters are considered the largest
-        }
+        ORDER_LOOKUP[c as usize]
     }
     fn compare_subtokens(&self, a: &str, b: &str) -> Ordering {
         a.chars()
