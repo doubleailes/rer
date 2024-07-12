@@ -39,7 +39,7 @@ impl Requirement {
     /// ## Arguments
     ///
     /// * `s` - The string to parse
-    pub fn new(input_str: &str) -> Self {
+    pub fn from_str(input_str: &str) -> Self {
         let mut range = None;
         let mut negate = false;
         let mut conflict = input_str.starts_with('!');
@@ -141,7 +141,7 @@ impl Requirement {
 
 #[test]
 fn test_requierement() {
-    let a = Requirement::new("voodoo-1");
+    let a = Requirement::from_str("voodoo-1");
     assert_eq!(a.name, "voodoo");
     let v: RerVersion = "1".try_into().unwrap();
     assert_eq!(a.range, Some(Range::between(v.clone(), v.bump())));
@@ -164,28 +164,28 @@ impl fmt::Display for Requirement {
 }
 #[test]
 fn test_to_string() {
-    let a = Requirement::new("maya-1");
+    let a = Requirement::from_str("maya-1");
     assert_eq!(a.to_string(), "maya-1");
-    let a = Requirement::new("maya");
+    let a = Requirement::from_str("maya");
     assert_eq!(a.to_string(), "maya-∗");
-    let a = Requirement::new("maya-1.2.3+<2.0.0");
+    let a = Requirement::from_str("maya-1.2.3+<2.0.0");
     assert_eq!(a.to_string(), "maya-1.2.3 <= v < 2.0.0");
-    let a = Requirement::new("maya-1.2.3+");
+    let a = Requirement::from_str("maya-1.2.3+");
     assert_eq!(a.to_string(), "maya-1.2.3 <= v");
 }
 
 #[test]
 fn test_merge_requirement() {
-    let a = Requirement::new("foo-1.2");
-    let b = Requirement::new("~foo-1");
+    let a = Requirement::from_str("foo-1.2");
+    let b = Requirement::from_str("~foo-1");
     let c = a.merge(&b).unwrap();
     assert_eq!(c.to_string(), "!~foo-[ 1.2, 1.2_ [  [ 1_, ∞ [");
-    let a = Requirement::new("foo-1.2");
-    let b = Requirement::new("foo-1");
+    let a = Requirement::from_str("foo-1.2");
+    let b = Requirement::from_str("foo-1");
     let c = a.merge(&b).unwrap();
     assert_eq!(c.to_string(), "foo-1");
-    let a = Requirement::new("foo-1.2");
-    let b = Requirement::new("foo==1.2.2");
+    let a = Requirement::from_str("foo-1.2");
+    let b = Requirement::from_str("foo==1.2.2");
     let c = a.merge(&b).unwrap();
     assert_eq!(c.to_string(), "foo-1.2");
 }
@@ -204,7 +204,10 @@ impl Requirements {
     ///
     /// Create a list of requirements from a list of string.
     pub fn from_str(requirements: Vec<&str>) -> Self {
-        let requirements = requirements.iter().map(|x| Requirement::new(x)).collect();
+        let requirements = requirements
+            .iter()
+            .map(|x| Requirement::from_str(x))
+            .collect();
         Requirements(requirements)
     }
     /// # merge

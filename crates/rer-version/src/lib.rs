@@ -1,4 +1,5 @@
-pub mod parser;
 pub mod description;
-pub mod requirement;
+pub mod parser;
 pub use description::RerVersion;
+pub mod requirement;
+pub use requirement::Requirement;
