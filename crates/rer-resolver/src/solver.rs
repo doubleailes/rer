@@ -89,6 +89,6 @@ pub fn solver(requirements_str: Vec<&str>, packages: LocalPackages) -> Vec<Strin
     };
     solution
         .into_iter()
-        .map(|(name, version)| format!("{}-{}", name, version.to_string()))
+        .map(|(name, version)| format!("{}=={}", name, version.to_string()))
         .collect()
 }
