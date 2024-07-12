@@ -219,7 +219,7 @@ impl RerVersion {
     /// let v: RerVersion = "1.2.3-alpha+beta".try_into().unwrap();
     /// assert_eq!(v.to_string(), "1.2.3-alpha+beta");
     /// ```
-    fn from_str(s: &str) -> Result<Self, &'static str> {
+    pub fn from_str(s: &str) -> Result<Self, &'static str> {
         if !ALPHABET_REGEX.is_match(s) {
             Err("Invalid version token")
         } else {
