@@ -1,0 +1,24 @@
+[package]
+name = "rer-version"
+version = "0.0.1"
+edition = { workspace = true }
+repository = { workspace = true }
+authors = { workspace = true }
+license-file = { workspace = true }
+
+[lib]
+name = "rer_version"
+
+
+[dependencies]
+pubgrub = { workspace = true }
+regex = { workspace = true }
+lazy_static = { workspace = true }
+rand = { workspace = true }
+
+[dev-dependencies]
+criterion = "0.5.1"
+
+[[bench]]
+name = "main"
+harness = false
