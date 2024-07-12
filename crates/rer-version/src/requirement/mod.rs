@@ -124,7 +124,7 @@ impl Requirement {
             return None;
         }
         let range = match (&self.range, &other.range) {
-            (Some(a), Some(b)) => Some(a.union(b)),
+            (Some(a), Some(b)) => Some(a.intersection(b)),
             (Some(a), None) => Some(a.clone()),
             (None, Some(b)) => Some(b.clone()),
             (None, None) => None,
@@ -174,12 +174,20 @@ fn test_to_string() {
     assert_eq!(a.to_string(), "maya-1.2.3 <= v");
 }
 
+#[test]
+fn test_merge_requirement() {
+    let a = Requirement::new("foo-1.2");
+    let b = Requirement::new("foo-1");
+    let c = a.merge(&b).unwrap();
+    assert_eq!(c.to_string(), "foo-1.2");
+}
+
 /// # Requirements
 ///
 /// ## Description
 ///
 /// A list of requirements.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Requirements(Vec<Requirement>);
 impl Requirements {
     /// # from_str

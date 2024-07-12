@@ -156,11 +156,11 @@ impl VersionParsed<'_> {
     }
 }
 
-pub fn parse_version_range(s: &str) -> Range<RerVersion> {
-    if s.is_empty() {
+pub fn parse_version_range(input_str: &str) -> Range<RerVersion> {
+    if input_str.is_empty() {
         return Range::any();
     }
-    let parsed = VersionParsed::parse_str(s);
+    let parsed = VersionParsed::parse_str(input_str);
     if !parsed.is_range() {
         if parsed.exact_version.is_some() {
             let v: RerVersion = parsed.exact_version_group.unwrap().try_into().unwrap();
