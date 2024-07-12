@@ -39,23 +39,23 @@ impl Requirement {
     /// ## Arguments
     ///
     /// * `s` - The string to parse
-    pub fn new(s: &str) -> Self {
+    pub fn new(input_str: &str) -> Self {
         let mut range = None;
         let mut negate = false;
-        let mut conflict = s.starts_with('!');
+        let mut conflict = input_str.starts_with('!');
         let mut sep = '-';
 
-        let mut raw_string = s.to_string();
+        let mut input_str = input_str.to_string();
         if conflict {
-            raw_string.remove(0);
-        } else if s.starts_with('~') {
-            raw_string.remove(0);
+            input_str.remove(0);
+        } else if input_str.starts_with('~') {
+            input_str.remove(0);
             negate = true;
             conflict = true;
         }
 
-        let name: String = if let Some(m) = SEP_REGEX.find(&s) {
-            let mut req_str = s[m.start()..].to_string();
+        let name: String = if let Some(m) = SEP_REGEX.find(&input_str) {
+            let mut req_str = input_str[m.start()..].to_string();
             if ['-', '@', '#'].contains(&req_str.chars().next().unwrap()) {
                 sep = req_str.remove(0);
             }
@@ -64,13 +64,13 @@ impl Requirement {
             if negate {
                 range = Some(parse_version_range(&req_str).negate());
             }
-            s[..m.start()].to_string()
+            input_str[..m.start()].to_string()
         } else if negate {
-            raw_string
+            input_str
             // '~foo' equates to no effect, so range remains None
         } else {
             range = Some(Range::any());
-            raw_string
+            input_str
         };
 
         Requirement {
