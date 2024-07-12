@@ -14,3 +14,14 @@ description = "A rez implementation in rust"
 readme = "README.md"
 license-file = "LICENSE"
 repository = "https://github.com/doubleailes/rer"
+
+[workspace.dependencies]
+pubgrub = "0.2.1"
+regex = "1.10.5"
+lazy_static = "1.5.0"
+rand = "0.8.5"
+rayon = "1.10.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+rer-version = { path = "crates/rer-version" }
+uuid = { version = "1.9.1", features = ["v4", "fast-rng"] }
