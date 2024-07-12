@@ -124,7 +124,7 @@ impl Requirement {
             return None;
         }
         let range = match (&self.range, &other.range) {
-            (Some(a), Some(b)) => Some(a.intersection(b)),
+            (Some(a), Some(b)) => Some(a.union(b)),
             (Some(a), None) => Some(a.clone()),
             (None, Some(b)) => Some(b.clone()),
             (None, None) => None,
