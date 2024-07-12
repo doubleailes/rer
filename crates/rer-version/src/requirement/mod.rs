@@ -177,7 +177,15 @@ fn test_to_string() {
 #[test]
 fn test_merge_requirement() {
     let a = Requirement::new("foo-1.2");
+    let b = Requirement::new("~foo-1");
+    let c = a.merge(&b).unwrap();
+    assert_eq!(c.to_string(), "!~foo-[ 1.2, 1.2_ [  [ 1_, ∞ [");
+    let a = Requirement::new("foo-1.2");
     let b = Requirement::new("foo-1");
+    let c = a.merge(&b).unwrap();
+    assert_eq!(c.to_string(), "foo-1");
+    let a = Requirement::new("foo-1.2");
+    let b = Requirement::new("foo==1.2.2");
     let c = a.merge(&b).unwrap();
     assert_eq!(c.to_string(), "foo-1.2");
 }
