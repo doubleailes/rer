@@ -38,34 +38,35 @@ lazy_static! {
     static ref RE_REZ_PACKAGE: Regex =
         regex::Regex::new(&get_regex()).expect("Can't compile regex");
 }
+#[allow(dead_code)] // Some fields are not used at the moment maybe an optimization
 #[derive(Default)]
-pub struct VersionParsed<'a> {
-    pub version: Option<&'a str>,
-    pub exact_version: Option<&'a str>,
-    pub exact_version_group: Option<&'a str>,
-    pub inclusive_bound: Option<&'a str>,
-    pub inclusive_lower_version: Option<&'a str>,
-    pub inclusive_upper_version: Option<&'a str>,
-    pub lower_bound: Option<&'a str>,
-    pub lower_bound_prefix: Option<&'a str>,
-    pub lower_version: Option<&'a str>,
-    pub upper_bound: Option<&'a str>,
-    pub upper_bound_prefix: Option<&'a str>,
-    pub upper_version: Option<&'a str>,
-    pub range_asc: Option<&'a str>,
-    pub range_lower_asc: Option<&'a str>,
-    pub range_lower_asc_prefix: Option<&'a str>,
-    pub range_lower_asc_version: Option<&'a str>,
-    pub range_upper_asc: Option<&'a str>,
-    pub range_upper_asc_prefix: Option<&'a str>,
-    pub range_upper_asc_version: Option<&'a str>,
-    pub range_desc: Option<&'a str>,
-    pub range_upper_desc: Option<&'a str>,
-    pub range_upper_desc_prefix: Option<&'a str>,
-    pub range_upper_desc_version: Option<&'a str>,
-    pub range_lower_desc: Option<&'a str>,
-    pub range_lower_desc_prefix: Option<&'a str>,
-    pub range_lower_desc_version: Option<&'a str>,
+pub(crate) struct VersionParsed<'a> {
+    version: Option<&'a str>,
+    exact_version: Option<&'a str>,
+    exact_version_group: Option<&'a str>,
+    inclusive_bound: Option<&'a str>,
+    inclusive_lower_version: Option<&'a str>,
+    inclusive_upper_version: Option<&'a str>,
+    lower_bound: Option<&'a str>,
+    lower_bound_prefix: Option<&'a str>,
+    lower_version: Option<&'a str>,
+    upper_bound: Option<&'a str>,
+    upper_bound_prefix: Option<&'a str>,
+    upper_version: Option<&'a str>,
+    range_asc: Option<&'a str>,
+    range_lower_asc: Option<&'a str>,
+    range_lower_asc_prefix: Option<&'a str>,
+    range_lower_asc_version: Option<&'a str>,
+    range_upper_asc: Option<&'a str>,
+    range_upper_asc_prefix: Option<&'a str>,
+    range_upper_asc_version: Option<&'a str>,
+    range_desc: Option<&'a str>,
+    range_upper_desc: Option<&'a str>,
+    range_upper_desc_prefix: Option<&'a str>,
+    range_upper_desc_version: Option<&'a str>,
+    range_lower_desc: Option<&'a str>,
+    range_lower_desc_prefix: Option<&'a str>,
+    range_lower_desc_version: Option<&'a str>,
 }
 
 fn get_named_capture<'a>(regex: &regex::Captures<'a>, name: &str) -> Option<&'a str> {
@@ -74,7 +75,7 @@ fn get_named_capture<'a>(regex: &regex::Captures<'a>, name: &str) -> Option<&'a 
 
 impl VersionParsed<'_> {
     // TODO: bench this function to compare to version in REZ which a list of if
-    pub fn parse_str(input: &str) -> VersionParsed<'_> {
+    pub(crate) fn parse_str(input: &str) -> VersionParsed<'_> {
         if input.is_empty() {
             return VersionParsed::default();
         }
@@ -147,7 +148,7 @@ impl VersionParsed<'_> {
             range_lower_desc_version,
         }
     }
-    pub fn is_range(&self) -> bool {
+    fn is_range(&self) -> bool {
         self.inclusive_bound.is_some()
             || self.lower_bound.is_some()
             || self.upper_bound.is_some()
@@ -156,7 +157,7 @@ impl VersionParsed<'_> {
     }
 }
 
-pub fn parse_version_range(input_str: &str) -> Range<RerVersion> {
+pub(crate) fn parse_version_range(input_str: &str) -> Range<RerVersion> {
     if input_str.is_empty() {
         return Range::any();
     }
@@ -197,6 +198,7 @@ pub fn parse_version_range(input_str: &str) -> Range<RerVersion> {
         if parsed.range_upper_desc_prefix == Some("<") {
             return Range::between(start, end);
         }
+        // parsed.range_upper_desc_prefix should a +<
         return Range::between(start, end.clone()).union(&Range::exact(end));
     }
     Range::any()
@@ -260,4 +262,88 @@ fn test_parse_version_range() {
     let end: RerVersion = "2.0.0".try_into().unwrap();
     let start: RerVersion = "1.0.0".try_into().unwrap();
     assert_eq!(a, Range::between(start, end));
+}
+
+#[test]
+fn test_parser_exact_version() {
+    let version = "1.2.3";
+    let parsed_version = VersionParsed::parse_str(version);
+    assert_eq!(parsed_version.exact_version, None);
+    let version = "==1.2.3";
+    let parsed_version = VersionParsed::parse_str(version);
+    assert_eq!(parsed_version.exact_version, Some("==1.2.3"));
+    assert_eq!(parsed_version.exact_version_group, Some("1.2.3"));
+}
+
+#[test]
+fn test_parser_inclusive_bound() {
+    let version = "1.2.3";
+    let parsed_version = VersionParsed::parse_str(version);
+    assert_eq!(parsed_version.inclusive_bound, None);
+    let version = "1.2.3..2.0.0";
+    let parsed_version = VersionParsed::parse_str(version);
+    assert_eq!(parsed_version.inclusive_bound, Some("1.2.3..2.0.0"));
+    assert_eq!(parsed_version.inclusive_lower_version, Some("1.2.3"));
+    assert_eq!(parsed_version.inclusive_upper_version, Some("2.0.0"));
+}
+#[test]
+fn test_parser_lower_bound() {
+    let version = "1.2.3";
+    let parsed_version = VersionParsed::parse_str(version);
+    assert_eq!(parsed_version.lower_bound, None);
+    let version = ">=1.2.3";
+    let parsed_version = VersionParsed::parse_str(version);
+    assert_eq!(parsed_version.lower_bound, Some(">=1.2.3"));
+    assert_eq!(parsed_version.lower_bound_prefix, Some(">="));
+    assert_eq!(parsed_version.lower_version, Some("1.2.3"));
+    let version = ">=5.15.2.1";
+    let parsed_version = VersionParsed::parse_str(version);
+    assert_eq!(parsed_version.lower_bound, Some(">=5.15.2.1"));
+    assert_eq!(parsed_version.lower_bound_prefix, Some(">="));
+    assert_eq!(parsed_version.lower_version, Some("5.15.2.1"));
+}
+#[test]
+fn test_ascending_range() {
+    let version = "1.2.3+<2.0.0";
+    let parsed_version = VersionParsed::parse_str(version);
+    assert_eq!(parsed_version.range_asc, Some("1.2.3+<2.0.0"));
+    assert_eq!(parsed_version.range_lower_asc, Some("1.2.3+"));
+    assert_eq!(parsed_version.range_lower_asc_prefix, None);
+    assert_eq!(parsed_version.range_lower_asc_version, Some("1.2.3"));
+    assert_eq!(parsed_version.range_upper_asc, Some("<2.0.0"));
+    assert_eq!(parsed_version.range_upper_asc_prefix, Some("<"));
+    assert_eq!(parsed_version.range_upper_asc_version, Some("2.0.0"));
+    let version = "5.15.2.1+<5.15.2.1.1";
+    let parsed_version = VersionParsed::parse_str(version);
+    assert_eq!(parsed_version.range_asc, Some("5.15.2.1+<5.15.2.1.1"));
+    assert_eq!(parsed_version.range_lower_asc, Some("5.15.2.1+"));
+}
+
+#[test]
+fn test_descending_range() {
+    let version = "<=2.0.0,1.0.0+";
+    let parsed_version = VersionParsed::parse_str(version);
+    assert_eq!(parsed_version.range_desc, Some("<=2.0.0,1.0.0+"));
+    assert_eq!(parsed_version.range_upper_desc, Some("<=2.0.0"));
+    assert_eq!(parsed_version.range_upper_desc_prefix, Some("<="));
+    assert_eq!(parsed_version.range_upper_desc_version, Some("2.0.0"));
+    assert_eq!(parsed_version.range_lower_desc, Some("1.0.0+"));
+    assert_eq!(parsed_version.range_lower_desc_version, Some("1.0.0"));
+    assert_eq!(parsed_version.range_lower_desc_prefix, None);
+}
+
+#[test]
+fn test_is_range() {
+    let version = "1.2.3";
+    let parsed_version = VersionParsed::parse_str(version);
+    assert!(!parsed_version.is_range());
+    let version = "1.2.3..2.0.0";
+    let parsed_version = VersionParsed::parse_str(version);
+    assert!(parsed_version.is_range());
+    let version = "1.2.3+<2.0.0";
+    let parsed_version = VersionParsed::parse_str(version);
+    assert!(parsed_version.is_range());
+    let version = "<=2.0.0,1.0.0+";
+    let parsed_version = VersionParsed::parse_str(version);
+    assert!(parsed_version.is_range());
 }
