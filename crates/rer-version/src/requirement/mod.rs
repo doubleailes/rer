@@ -6,6 +6,7 @@ use pubgrub::range::Range;
 #[allow(unused_imports)] // Needed to import the Version trait
 use pubgrub::version::Version;
 use regex::Regex;
+use std::hash::{Hash, Hasher};
 
 lazy_static! {
     static ref SEP_REGEZ_STR: Regex =
@@ -20,13 +21,14 @@ lazy_static! {
 /// A requirement is the representation of the scope of range of a specific package.
 /// Mainly it is use to represent a requierement in the list of `requieres` of a
 /// package.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Requirement {
     name: String,
     range: Option<Range<RerVersion>>,
     negate: bool,
     conflict: bool,
     sep: char,
+    orignal_name: String,
 }
 
 impl Requirement {
@@ -40,6 +42,7 @@ impl Requirement {
     ///
     /// * `s` - The string to parse
     pub fn from_str(input_str: &str) -> Self {
+        let orignal_name = input_str.to_string();
         let mut range = None;
         let mut negate = false;
         let mut conflict = input_str.starts_with('!');
@@ -79,6 +82,7 @@ impl Requirement {
             negate,
             conflict,
             sep,
+            orignal_name,
         }
     }
     /// # get_pubgrub
@@ -135,6 +139,7 @@ impl Requirement {
             negate: self.negate || other.negate,
             conflict: self.conflict || other.conflict,
             sep: self.sep,
+            orignal_name: self.orignal_name.clone(),
         })
     }
 }
@@ -160,6 +165,12 @@ impl fmt::Display for Requirement {
             write!(f, "{}{}", self.sep, range)?;
         }
         Ok(())
+    }
+}
+
+impl Hash for Requirement {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.orignal_name.hash(state);
     }
 }
 #[test]
