@@ -3,7 +3,9 @@ from rez.version._version import (
     AlphanumericVersionToken,
     _SubToken,
     Version,
+    
 )
+from rez.version._requirement import Requirement
 
 a = Version("1.2.3-alpha+beta")
 print(a.tokens, a.seps)
@@ -17,3 +19,8 @@ print(a.subtokens[0])
 b = AlphanumericVersionToken("1_")
 print(a.subtokens, b.subtokens)
 assert a.next() == b
+
+a = Requirement("cffi-1.8+<1.11.3|1.11.3.1+")
+b = _VersionRangeParser("1.8+<1.11.3|1.11.3.1+", make_token=AlphanumericVersionToken)
+print(b._groups)
+
