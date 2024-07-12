@@ -4,7 +4,6 @@ use pubgrub::error::PubGrubError;
 use pubgrub::range::Range;
 use pubgrub::report::{DefaultStringReporter, Reporter};
 use pubgrub::solver::{resolve, OfflineDependencyProvider};
-use rayon;
 use rer_version::{requirement::Requirements, RerVersion};
 use std::sync::{Arc, Mutex};
 use uuid::Uuid;
@@ -26,20 +25,19 @@ fn check_version<'a>(
     }
 }
 
-#[inline]
 fn recursive(
     dependency_provider: &Arc<Mutex<OfflineDependencyProvider<String, RerVersion>>>,
     local_packages: &LocalPackages,
     dependencies: Requirements,
 ) {
     for dependency in dependencies {
-        let package_name = dependency.name;
+        let package_name = dependency.get_name().to_string();
         let versions = local_packages.get_versions(&package_name);
         let candidates = CandidateList::from_vec_str(versions.iter().map(|x| x.as_str()).collect());
-        let candidates = candidates.find_candidates(&dependency.range.unwrap());
+        let range = dependency.get_version_range().unwrap_or(Range::any());
+        let candidates = candidates.find_candidates(&range);
         for candidate in candidates {
-            let versions_package = check_version(dependency_provider, &package_name, &candidate);
-            if versions_package {
+            if check_version(dependency_provider, &package_name, &candidate) {
                 continue;
             }
             let dependencies =
@@ -71,10 +69,6 @@ pub fn solver(requirements_str: Vec<&str>, packages: LocalPackages) -> Vec<Strin
     let dependencies_pubgrub: Vec<(String, Range<RerVersion>)> = dependencies.to_pubgrub();
     // clone the current version
     let v: RerVersion = "1.0.0".try_into().unwrap();
-    rayon::ThreadPoolBuilder::new()
-        .num_threads(24)
-        .build_global()
-        .unwrap();
     // grab the mutex
     dependency_provider.lock().unwrap().add_dependencies(
         context_name.clone(),
