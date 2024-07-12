@@ -100,7 +100,7 @@ impl Requirement {
     ///
     /// ```rust
     /// use rer_version::requirement::Requirement;
-    /// let a = Requirement::new("maya-1.2.3+<2.0.0");
+    /// let a = Requirement::from_str("maya-1.2.3+<2.0.0");
     /// assert_eq!(a.get_name(), "maya");
     /// ```
     pub fn get_name(&self) -> &str {
