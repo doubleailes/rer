@@ -6,7 +6,7 @@ use pubgrub::report::{DefaultStringReporter, Reporter};
 use pubgrub::solver::{resolve, OfflineDependencyProvider};
 use rer_version::requirement::Requirement;
 use rer_version::{requirement::Requirements, RerVersion};
-use std::collections::{HashMap,HashSet};
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use uuid::Uuid;
@@ -120,7 +120,7 @@ pub fn solver(requirements_str: Vec<&str>, paths: Vec<PathBuf>) -> Vec<String> {
         .collect()
 }
 
-pub struct Resolver{
+pub struct Resolver {
     dependency_provider: OfflineDependencyProvider<String, RerVersion>,
     current_context: String,
     cache_requierements: HashMap<Requirement, bool>,
