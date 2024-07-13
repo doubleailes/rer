@@ -6,7 +6,8 @@ use pubgrub::report::{DefaultStringReporter, Reporter};
 use pubgrub::solver::{resolve, OfflineDependencyProvider};
 use rer_version::requirement::Requirement;
 use rer_version::{requirement::Requirements, RerVersion};
-use std::collections::HashMap;
+use std::collections::{HashMap,HashSet};
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 
@@ -29,17 +30,17 @@ fn check_version<'a>(
 
 fn recursive(
     dependency_provider: &Arc<Mutex<OfflineDependencyProvider<String, RerVersion>>>,
-    local_packages: &LocalPackages,
+    local_packages: &mut LocalPackages,
     dependencies: Requirements,
-    cache_requierements: &Arc<Mutex<HashMap<Requirement, bool>>>,
+    cache_requierements: &Arc<Mutex<HashSet<Requirement>>>,
 ) {
     for dependency in dependencies {
         // Acquire the mutex
         let mut cache_requi = cache_requierements.lock().unwrap();
-        if cache_requi.contains_key(&dependency) {
+        if cache_requi.contains(&dependency) {
             continue;
         } else {
-            cache_requi.insert(dependency.clone(), true);
+            cache_requi.insert(dependency.clone());
         }
         // Drop the mutex to be sure it is not poison
         drop(cache_requi);
@@ -61,9 +62,10 @@ fn recursive(
                 candidate.clone(),
                 dependencies_pubgrub,
             );
-            let dependencies =
-                local_packages.get_dependencies(&package_name, &candidate.to_string());
             drop(dependency_provider_guard);
+            if dependencies.is_empty() {
+                continue;
+            }
             recursive(
                 dependency_provider,
                 local_packages,
@@ -74,12 +76,13 @@ fn recursive(
     }
 }
 
-pub fn solver(requirements_str: Vec<&str>, packages: LocalPackages) -> Vec<String> {
+pub fn solver(requirements_str: Vec<&str>, paths: Vec<PathBuf>) -> Vec<String> {
     let dependency_provider: Arc<Mutex<OfflineDependencyProvider<String, RerVersion>>> = Arc::new(
         Mutex::new(OfflineDependencyProvider::<String, RerVersion>::new()),
     );
-    let cache_requierements: Arc<Mutex<HashMap<Requirement, bool>>> =
-        Arc::new(Mutex::new(HashMap::new()));
+    let cache_requierements: Arc<Mutex<HashSet<Requirement>>> =
+        Arc::new(Mutex::new(HashSet::new()));
+    let mut packages = LocalPackages::lazy_paths(paths);
     // Create a uuid to represent the current request
     let context_name = Uuid::new_v4().to_string();
     // Transform the list of str into a list of Requirement and merge if possible
@@ -96,7 +99,7 @@ pub fn solver(requirements_str: Vec<&str>, packages: LocalPackages) -> Vec<Strin
     );
     recursive(
         &dependency_provider,
-        &packages,
+        &mut packages,
         dependencies,
         &cache_requierements,
     );
@@ -115,4 +118,10 @@ pub fn solver(requirements_str: Vec<&str>, packages: LocalPackages) -> Vec<Strin
         .into_iter()
         .map(|(name, version)| format!("{}=={}", name, version.to_string()))
         .collect()
+}
+
+pub struct Resolver{
+    dependency_provider: OfflineDependencyProvider<String, RerVersion>,
+    current_context: String,
+    cache_requierements: HashMap<Requirement, bool>,
 }

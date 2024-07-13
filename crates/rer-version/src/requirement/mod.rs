@@ -254,6 +254,14 @@ impl Requirements {
     pub fn to_pubgrub(&self) -> Vec<(String, Range<RerVersion>)> {
         self.0.iter().map(|x| x.get_pubgrub()).collect()
     }
+    /// # is_empty
+    /// 
+    /// ## Description
+    /// 
+    /// Check if the list of requirements is empty.
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
 }
 
 impl Iterator for Requirements {
