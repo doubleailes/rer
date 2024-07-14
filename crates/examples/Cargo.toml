@@ -18,4 +18,4 @@ pubgrub = { workspace = true }
 rer-version = { workspace = true }
 rer-resolver = { workspace = true }
 serde_json = { workspace = true }
-serde = {workspace = true}
+serde = { workspace = true }
