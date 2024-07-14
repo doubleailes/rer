@@ -9,7 +9,12 @@ edition = "2021"
 name = "with_candidate_selector_rayon"
 path = "with_candidate_selector_rayon.rs"
 
+[[example]]
+name = "rez_benchmark"
+path = "rez_benchmark.rs"
+
 [dependencies]
 pubgrub = { workspace = true }
 rer-version = { workspace = true }
 rer-resolver = { workspace = true }
+serde_json = { workspace = true }

@@ -23,9 +23,9 @@ lazy_static! {
 /// package.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Requirement {
-    name: String,
-    range: Option<Range<RerVersion>>,
-    negate: bool,
+    pub name: String,
+    pub range: Option<Range<RerVersion>>,
+    weak_ref: bool,
     conflict: bool,
     sep: char,
     orignal_name: String,
@@ -44,8 +44,8 @@ impl Requirement {
     pub fn from_str(input_str: &str) -> Self {
         let orignal_name = input_str.to_string();
         let mut range = None;
-        let mut negate = false;
-        let mut conflict = input_str.starts_with('!');
+        let mut weak_ref = false;
+        let conflict = input_str.starts_with('!');
         let mut sep = '-';
 
         let mut input_str = input_str.to_string();
@@ -53,8 +53,7 @@ impl Requirement {
             input_str.remove(0);
         } else if input_str.starts_with('~') {
             input_str.remove(0);
-            negate = true;
-            conflict = true;
+            weak_ref = true;
         }
 
         let name: String = if let Some(m) = SEP_REGEX.find(&input_str) {
@@ -62,13 +61,27 @@ impl Requirement {
             if ['-', '@', '#'].contains(&req_str.chars().next().unwrap()) {
                 sep = req_str.remove(0);
             }
-
-            range = Some(parse_version_range(&req_str));
-            if negate {
-                range = Some(parse_version_range(&req_str).negate());
+            if req_str.contains("|") {
+                let reqs: Vec<Range<RerVersion>> = req_str
+                    .split("|")
+                    .into_iter()
+                    .map(|x| parse_version_range(x))
+                    .collect();
+                for req in reqs {
+                    if range.is_none() {
+                        range = Some(req);
+                    } else {
+                        range = Some(range.unwrap().union(&req));
+                    }
+                }
+            } else {
+                range = Some(parse_version_range(&req_str));
+            }
+            if conflict {
+                range = Some(range.unwrap().negate());
             }
             input_str[..m.start()].to_string()
-        } else if negate {
+        } else if conflict {
             input_str
             // '~foo' equates to no effect, so range remains None
         } else {
@@ -79,7 +92,7 @@ impl Requirement {
         Requirement {
             name,
             range,
-            negate,
+            weak_ref,
             conflict,
             sep,
             orignal_name,
@@ -136,11 +149,19 @@ impl Requirement {
         Some(Requirement {
             name: self.name.clone(),
             range,
-            negate: self.negate || other.negate,
-            conflict: self.conflict || other.conflict,
+            weak_ref: self.weak_ref && other.weak_ref,
+            conflict: self.conflict && other.conflict,
             sep: self.sep,
             orignal_name: self.orignal_name.clone(),
         })
+    }
+    /// # is_weak_ref
+    ///
+    /// ## Description
+    ///
+    /// Check if the requirement is a weak reference.
+    pub fn is_weak_ref(&self) -> bool {
+        self.weak_ref
     }
 }
 
@@ -150,6 +171,14 @@ fn test_requierement() {
     assert_eq!(a.name, "voodoo");
     let v: RerVersion = "1".try_into().unwrap();
     assert_eq!(a.range, Some(Range::between(v.clone(), v.bump())));
+    let a = Requirement::from_str("voodoo-1.13.0|2.1.0");
+    assert_eq!(a.name, "voodoo");
+    let v: RerVersion = "1.13.0".try_into().unwrap();
+    let v2: RerVersion = "2.1.0".try_into().unwrap();
+    assert_eq!(
+        a.range,
+        Some(Range::between(v.clone(), v.bump()).union(&Range::between(v2.clone(), v2.bump())))
+    );
 }
 
 impl fmt::Display for Requirement {
@@ -157,7 +186,7 @@ impl fmt::Display for Requirement {
         if self.conflict {
             write!(f, "!")?;
         }
-        if self.negate {
+        if self.weak_ref {
             write!(f, "~")?;
         }
         write!(f, "{}", self.name)?;
@@ -190,7 +219,7 @@ fn test_merge_requirement() {
     let a = Requirement::from_str("foo-1.2");
     let b = Requirement::from_str("~foo-1");
     let c = a.merge(&b).unwrap();
-    assert_eq!(c.to_string(), "!~foo-[ 1.2, 1.2_ [  [ 1_, ∞ [");
+    assert_eq!(c.to_string(), "foo-1");
     let a = Requirement::from_str("foo-1.2");
     let b = Requirement::from_str("foo-1");
     let c = a.merge(&b).unwrap();
@@ -209,6 +238,12 @@ fn test_merge_requirement() {
 #[derive(Clone, Debug)]
 pub struct Requirements(Vec<Requirement>);
 impl Requirements {
+    pub fn empty() -> Self {
+        Requirements(Vec::new())
+    }
+    pub fn add(&mut self, requirement: Requirement) {
+        self.0.push(requirement);
+    }
     /// # from_str
     ///
     /// ## Description

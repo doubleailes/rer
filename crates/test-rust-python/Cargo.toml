@@ -1,7 +1,12 @@
 [package]
 name = "test-rust-python"
-version = "0.1.0"
-edition = "2021"
+edition = { workspace = true }
+repository = { workspace = true }
+authors = { workspace = true }
+license-file = { workspace = true }
+
+[lib]
+name = "test_rust_python"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
