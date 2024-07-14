@@ -2,9 +2,10 @@ use rer_version::requirement::Requirements;
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
+use test_rust_python::Package;
 
 pub struct LocalPackages {
-    data: HashMap<String, HashMap<String, Option<Vec<String>>>>,
+    data: HashMap<String, HashMap<String, String>>,
     paths: Vec<PathBuf>,
 }
 
@@ -20,14 +21,15 @@ impl LocalPackages {
         }
         result
     }
-    fn search_and_merge_versions(&self, package_paths: Vec<PathBuf>) -> Vec<String> {
-        let mut result: Vec<String> = Vec::new();
+    fn search_and_merge_versions(&self, package_paths: Vec<PathBuf>) -> HashMap<String, String> {
+        let mut result: HashMap<String, String> = HashMap::new();
         for path in package_paths {
-            let mut versions = fs::read_dir(path)
-                .expect("Unable to read dir")
-                .map(|x| x.unwrap().file_name().into_string().unwrap())
-                .collect::<Vec<String>>();
-            result.append(&mut versions);
+            fs::read_dir(path).unwrap().for_each(|entry| {
+                let entry = entry.unwrap();
+                let path = entry.path();
+                let version = path.file_name().unwrap().to_str().unwrap().to_string();
+                result.insert(version, path.to_str().unwrap().to_string());
+            });
         }
         result
     }
@@ -35,10 +37,7 @@ impl LocalPackages {
         if !self.data.contains_key(package_name) {
             let package_paths = self.search_package(package_name);
             let versions = self.search_and_merge_versions(package_paths);
-            self.data.insert(
-                package_name.to_string(),
-                versions.iter().map(|x| (x.clone(), None)).collect(),
-            );
+            self.data.insert(package_name.to_string(), versions);
         }
         match self.data.get(package_name) {
             Some(versions) => versions.keys().cloned().collect(),
@@ -48,23 +47,24 @@ impl LocalPackages {
     pub fn get_dependencies(&self, package_name: &str, version: &str) -> Requirements {
         match self.data.get(package_name) {
             Some(versions) => match versions.get(version) {
-                Some(dependencies) => {
-                    match dependencies {
-                        Some(dependencies) => {
-                            let r: Vec<&str> = dependencies.iter().map(|x| x.as_str()).collect();
-                            Requirements::from_str(r)
-                        }
-                        None => Requirements::from_str(Vec::new()),
-                    }
-                }
-                None => Requirements::from_str(Vec::new()),
+                Some(path) => match Package::from_file(&format!("{}/package.py", path)) {
+                    Ok(package) => Requirements::from_str(
+                        package
+                            .get_dependencies()
+                            .iter()
+                            .map(|x| x.as_str())
+                            .collect(),
+                    ),
+                    Err(err) => panic!("Error reading package {}", err),
+                },
+                None => panic!("Path not found"),
             },
-            None => Requirements::from_str(Vec::new()),
+            None => panic!("Package not found"),
         }
     }
     pub fn build_from_json_path(path: &str) -> Self {
         let data_str = fs::read_to_string(path).expect("Unable to read file");
-        let data: HashMap<String, HashMap<String, Option<Vec<String>>>> =
+        let data: HashMap<String, HashMap<String, String>> =
             serde_json::from_str(&data_str).expect("Unable to parse json");
         LocalPackages {
             data,
@@ -94,5 +94,9 @@ fn test_search_and_merge_versions() {
     let local_packages = LocalPackages::lazy_paths(vec![PathBuf::from(path)]);
     let result =
         local_packages.search_and_merge_versions(vec![PathBuf::from(path.to_string() + "/many")]);
-    assert_eq!(result, vec!["1.2.0"]);
+    assert_eq!(result, {
+        let mut map = HashMap::new();
+        map.insert("1.2.0".to_string(), path.to_string() + "/many/1.2.0");
+        map
+    });
 }

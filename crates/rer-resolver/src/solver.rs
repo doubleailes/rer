@@ -33,6 +33,7 @@ fn recursive(
     local_packages: &mut LocalPackages,
     dependencies: Requirements,
     cache_requierements: &Arc<Mutex<HashSet<Requirement>>>,
+    weak_references: &Arc<Mutex<HashMap<String,Range<RerVersion>>>>
 ) {
     for dependency in dependencies {
         // Acquire the mutex
@@ -45,6 +46,18 @@ fn recursive(
         // Drop the mutex to be sure it is not poison
         drop(cache_requi);
         let package_name = dependency.get_name().to_string();
+        if dependency.is_weak_ref(){
+            let range = dependency.get_version_range().unwrap_or(Range::any());
+            let mut weak_references_guard = weak_references.lock().unwrap();
+            if !weak_references_guard.contains_key(&package_name){
+                weak_references_guard.insert(package_name.clone(),range);
+            }else {
+                let current_range = weak_references_guard.get(&package_name).unwrap();
+                let new_range = current_range.union(&range);
+                weak_references_guard.insert(package_name.clone(),new_range);
+            }
+            drop(weak_references_guard);
+        }
         let versions = local_packages.get_versions(&package_name);
         let candidates = CandidateList::from_vec_str(versions.iter().map(|x| x.as_str()).collect());
         let range = dependency.get_version_range().unwrap_or(Range::any());
@@ -71,6 +84,7 @@ fn recursive(
                 local_packages,
                 dependencies,
                 cache_requierements,
+                weak_references,
             );
         }
     }
@@ -82,11 +96,31 @@ pub fn solver(requirements_str: Vec<&str>, paths: Vec<PathBuf>) -> Vec<String> {
     );
     let cache_requierements: Arc<Mutex<HashSet<Requirement>>> =
         Arc::new(Mutex::new(HashSet::new()));
+    let weak_references:Arc<Mutex<HashMap<String,Range<RerVersion>>>> =Arc::new(Mutex::new(HashMap::new()));
     let mut packages = LocalPackages::lazy_paths(paths);
     // Create a uuid to represent the current request
     let context_name = Uuid::new_v4().to_string();
     // Transform the list of str into a list of Requirement and merge if possible
     let dependencies: Requirements = Requirements::from_str(requirements_str).merge();
+    let mut new_deps = Requirements::empty();
+    for dependency in dependencies{
+        if dependency.is_weak_ref(){
+            let name = dependency.get_name().to_string();
+            let range = dependency.get_version_range().unwrap_or(Range::any());
+            let mut weak_references_guard = weak_references.lock().unwrap();
+            if !weak_references_guard.contains_key(&name){
+                weak_references_guard.insert(name,range);
+            }else {
+                let current_range = weak_references_guard.get(&name).unwrap();
+                let new_range = current_range.union(&range);
+                weak_references_guard.insert(name,new_range);
+            }
+            drop(weak_references_guard);
+        }else{
+            new_deps.add(dependency);
+        }
+    }
+    let dependencies = new_deps;
     // Convert list of str into list of Requirement
     let dependencies_pubgrub: Vec<(String, Range<RerVersion>)> = dependencies.to_pubgrub();
     // clone the current version
@@ -102,6 +136,7 @@ pub fn solver(requirements_str: Vec<&str>, paths: Vec<PathBuf>) -> Vec<String> {
         &mut packages,
         dependencies,
         &cache_requierements,
+        &weak_references,
     );
     let p: OfflineDependencyProvider<String, RerVersion> =
         dependency_provider.lock().unwrap().clone();
@@ -114,10 +149,12 @@ pub fn solver(requirements_str: Vec<&str>, paths: Vec<PathBuf>) -> Vec<String> {
         }
         Err(err) => panic!("{:?}", err),
     };
-    solution
+    let mut s: Vec<String> = solution
         .into_iter()
         .map(|(name, version)| format!("{}=={}", name, version.to_string()))
-        .collect()
+        .collect();
+    s.sort();
+    s
 }
 
 pub struct Resolver {

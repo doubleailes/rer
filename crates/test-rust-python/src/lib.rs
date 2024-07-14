@@ -1,5 +1,5 @@
 use rustpython_parser::{
-    ast::{Constant, StmtAssign, StmtFunctionDef},
+    ast::{Constant, StmtAssign},
     lexer::lex,
     parse_tokens, Mode,
 };
@@ -7,7 +7,7 @@ use std::{collections::HashMap, error::Error, fs};
 
 #[derive(Debug)]
 #[allow(dead_code)]
-struct Package {
+pub struct Package {
     name: Option<String>,
     version: Option<String>,
     description: Option<String>,
@@ -52,6 +52,9 @@ struct Package {
 // tests: ?
 
 impl Package {
+    pub fn get_dependencies(&self) -> Vec<String> {
+        self.requires.clone().unwrap_or(Vec::new())
+    }
     fn from_data(raw_data: HashMap<String, Option<Value>>) -> Self {
         let mut name: Option<String> = None;
         let mut version: Option<String> = None;
@@ -201,7 +204,7 @@ impl Package {
         }
     }
 
-    fn from_file(package_path: &str) -> Result<Self, Box<dyn Error>> {
+    pub fn from_file(package_path: &str) -> Result<Self, Box<dyn Error>> {
         let package = parse_package(package_path)?;
         Ok(package)
     }
@@ -304,10 +307,4 @@ fn parse_package(package_path: &str) -> Result<Package, Box<dyn Error>> {
     // println!("{:#?}", function_defs);
 
     Ok(Package::from_data(assign_statements_map))
-}
-
-fn main() {
-    let package_path = "package.py";
-    let package = Package::from_file(package_path).unwrap();
-    println!("{:#?}", package);
 }
