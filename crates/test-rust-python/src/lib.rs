@@ -180,7 +180,10 @@ impl Package {
                     }
                 }
                 _ => {
-                    custom_attributes.insert(key.clone(), value.clone().unwrap_or(Value::Constant(Constant::None)));
+                    custom_attributes.insert(
+                        key.clone(),
+                        value.clone().unwrap_or(Value::Constant(Constant::None)),
+                    );
                 }
             }
         }
