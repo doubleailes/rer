@@ -12,9 +12,6 @@ struct RezResolveBenchmark {
 }
 
 fn main() {
-    let data_str_request =
-        fs::read_to_string("data_set_private/requests.json").expect("Unable to read file");
-    let requests: Vec<Vec<&str>> = serde_json::from_str(&data_str_request).unwrap();
     let data_str_resolves =
     fs::read_to_string("data_set_private/resolves.json").expect("Unable to read file");
     let resolves: Vec<RezResolveBenchmark> = serde_json::from_str(&data_str_resolves).unwrap();
@@ -25,6 +22,11 @@ fn main() {
         let start = std::time::Instant::now();
         let solution = solver(resolve.request.iter().map(|x|x.as_str() ).collect(), paths);
         let elapsed = start.elapsed();
+        println!("Result Rez {}, Rer {}", resolve.status, &solution.is_ok());
+        if solution.is_ok(){
+            let solution = solution.unwrap();
+            println!("Solution: {} rez got {}", solution.len(), resolve.resolved_packages.unwrap().len());
+        }
         println!("Resolve in Time: {:?} rez resolve it in {} ms", elapsed, resolve.resolve_time*1000.0);
     }
 }
