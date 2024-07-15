@@ -297,6 +297,18 @@ impl Requirements {
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
+    pub fn split_weak_ref(&self) -> (Self, Self) {
+        let mut weak_ref = Vec::new();
+        let mut strong_ref = Vec::new();
+        for req in &self.0 {
+            if req.is_weak_ref() {
+                weak_ref.push(req.clone());
+            } else {
+                strong_ref.push(req.clone());
+            }
+        }
+        (Requirements(weak_ref), Requirements(strong_ref))
+    }
 }
 
 impl Iterator for Requirements {
