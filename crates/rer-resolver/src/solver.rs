@@ -2,11 +2,10 @@ use crate::candidate_selector::CandidateList;
 use crate::LocalPackages;
 use pubgrub::error::PubGrubError;
 use pubgrub::range::Range;
-use pubgrub::report::{DefaultStringReporter, Reporter};
 use pubgrub::solver::{resolve, OfflineDependencyProvider};
 use rer_version::requirement::Requirement;
 use rer_version::{requirement::Requirements, RerVersion};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use uuid::Uuid;
@@ -76,7 +75,7 @@ fn recursive(
     }
 }
 
-pub fn solver(requirements_str: Vec<&str>, paths: Vec<PathBuf>) -> Vec<String> {
+pub fn solver(requirements_str: Vec<&str>, paths: Vec<PathBuf>) -> Result<Vec<String>, PubGrubError<String, RerVersion>> {
     let dependency_provider: Arc<Mutex<OfflineDependencyProvider<String, RerVersion>>> = Arc::new(
         Mutex::new(OfflineDependencyProvider::<String, RerVersion>::new()),
     );
@@ -105,19 +104,12 @@ pub fn solver(requirements_str: Vec<&str>, paths: Vec<PathBuf>) -> Vec<String> {
     );
     let p: OfflineDependencyProvider<String, RerVersion> =
         dependency_provider.lock().unwrap().clone();
-    let solution = match resolve(&p, context_name, v) {
-        Ok(solution) => solution,
-        Err(PubGrubError::NoSolution(mut derivation_tree)) => {
-            derivation_tree.collapse_no_versions();
-            eprintln!("{}", DefaultStringReporter::report(&derivation_tree));
-            panic!("No solution found")
-        }
-        Err(err) => panic!("{:?}", err),
-    };
-    let mut s: Vec<String> = solution
-        .into_iter()
-        .map(|(name, version)| format!("{}=={}", name, version.to_string()))
-        .collect();
-    s.sort();
-    s
+    match resolve(&p, context_name.clone(), v){
+        Ok(mut solution) => {
+            solution.remove(&context_name);
+            let resolves:Vec<String> = solution.into_iter().map(|(x, y)| format!("{}/{}/package.py", x, y)).collect();
+            Ok(resolves)
+        },
+        Err(e) => Err(e)
+    }
 }
