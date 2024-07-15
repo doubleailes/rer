@@ -75,7 +75,10 @@ fn recursive(
     }
 }
 
-pub fn solver(requirements_str: Vec<&str>, paths: Vec<PathBuf>) -> Result<Vec<String>, PubGrubError<String, RerVersion>> {
+pub fn solver(
+    requirements_str: Vec<&str>,
+    paths: Vec<PathBuf>,
+) -> Result<Vec<String>, PubGrubError<String, RerVersion>> {
     let dependency_provider: Arc<Mutex<OfflineDependencyProvider<String, RerVersion>>> = Arc::new(
         Mutex::new(OfflineDependencyProvider::<String, RerVersion>::new()),
     );
@@ -104,12 +107,15 @@ pub fn solver(requirements_str: Vec<&str>, paths: Vec<PathBuf>) -> Result<Vec<St
     );
     let p: OfflineDependencyProvider<String, RerVersion> =
         dependency_provider.lock().unwrap().clone();
-    match resolve(&p, context_name.clone(), v){
+    match resolve(&p, context_name.clone(), v) {
         Ok(mut solution) => {
             solution.remove(&context_name);
-            let resolves:Vec<String> = solution.into_iter().map(|(x, y)| format!("{}/{}/package.py", x, y)).collect();
+            let resolves: Vec<String> = solution
+                .into_iter()
+                .map(|(x, y)| format!("{}/{}/package.py", x, y))
+                .collect();
             Ok(resolves)
-        },
-        Err(e) => Err(e)
+        }
+        Err(e) => Err(e),
     }
 }
