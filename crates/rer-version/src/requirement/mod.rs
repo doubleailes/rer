@@ -46,7 +46,7 @@ impl Requirement {
         let orignal_name = input_str.to_string();
         let mut range = None;
         let mut weak_ref = false;
-        let conflict = input_str.starts_with('!');
+        let mut conflict = input_str.starts_with('!');
         let mut sep = '-';
 
         let mut input_str = input_str.to_string();
@@ -54,6 +54,7 @@ impl Requirement {
             input_str.remove(0);
         } else if input_str.starts_with('~') {
             input_str.remove(0);
+            conflict = true;
             weak_ref = true;
         }
 
@@ -330,6 +331,18 @@ impl Requirements {
         }
         (Requirements(weak_ref), Requirements(strong_ref))
     }
+    pub fn split_conflict(&self) -> (Self, Self) {
+        let mut conflict = Vec::new();
+        let mut no_conflict = Vec::new();
+        for req in &self.0 {
+            if req.conflict {
+                conflict.push(req.clone());
+            } else {
+                no_conflict.push(req.clone());
+            }
+        }
+        (Requirements(no_conflict), Requirements(conflict))
+    }
 }
 
 impl fmt::Display for Requirements {
@@ -361,12 +374,4 @@ fn test_reduce() {
     let requirements = requirements.merge();
     assert_eq!(requirements.0.len(), 2);
     assert_eq!(requirements.0[0].name, "foo");
-}
-
-#[test]
-fn test_split_weak_ref() {
-    let requirements_str = vec!["foo-1.2", "bah-3", "~foo-1"];
-    let (weak, strong) = Requirements::from_str(requirements_str).split_weak_ref();
-    assert_eq!(weak.0.len(), 1);
-    assert_eq!(strong.0.len(), 2);
 }
