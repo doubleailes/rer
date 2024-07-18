@@ -4,4 +4,4 @@ mod local_package;
 pub use local_package::LocalPackages;
 mod solver;
 pub use solver::solver;
-mod resolver;
+pub mod resolver;

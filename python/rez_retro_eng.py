@@ -5,6 +5,7 @@ from rez.version._version import (
     Version,
 )
 from rez.version._requirement import Requirement
+from rez.solver import RequirementList
 
 a = Version("1.2.3-alpha+beta")
 print(a.tokens, a.seps)
@@ -19,12 +20,8 @@ b = AlphanumericVersionToken("1_")
 print(a.subtokens, b.subtokens)
 assert a.next() == b
 
-a = Requirement("cffi-1.8+<1.11.3|1.11.3.1+")
-b = _VersionRangeParser("1.13.0|2.1.0", make_token=AlphanumericVersionToken)
-print(b._groups)
-a = Requirement("~understatement==x86_64")
-print(a.range)
-b = _VersionRangeParser("==x86_64", make_token=AlphanumericVersionToken)
-#print(b._groups)
-a = Requirement("!understatement==x86_64")
-print(a.range)
+a = Requirement("understatement==x86_64")
+b = Requirement("~understatement==x86_64")
+
+c = RequirementList([a, b])
+print(c)

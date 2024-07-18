@@ -6,6 +6,7 @@ use pubgrub::range::Range;
 #[allow(unused_imports)] // Needed to import the Version trait
 use pubgrub::version::Version;
 use regex::Regex;
+use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
 
 lazy_static! {
@@ -21,14 +22,14 @@ lazy_static! {
 /// A requirement is the representation of the scope of range of a specific package.
 /// Mainly it is use to represent a requierement in the list of `requieres` of a
 /// package.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Requirement {
     pub name: String,
     pub range: Option<Range<RerVersion>>,
     weak_ref: bool,
     conflict: bool,
     sep: char,
-    orignal_name: String,
+    original_name: String,
 }
 
 impl Requirement {
@@ -95,7 +96,7 @@ impl Requirement {
             weak_ref,
             conflict,
             sep,
-            orignal_name,
+            original_name,
         }
     }
     /// # get_pubgrub
@@ -138,22 +139,38 @@ impl Requirement {
     /// Merge two requirements into one. If the requirements are not compatible, return None.
     pub fn merge(&self, other: &Self) -> Option<Self> {
         if self.name != other.name {
-            return None;
+            return None; // cannot merge across object names
         }
-        let range = match (&self.range, &other.range) {
-            (Some(a), Some(b)) => Some(a.union(b)),
-            (Some(a), None) => Some(a.clone()),
-            (None, Some(b)) => Some(b.clone()),
-            (None, None) => None,
+
+        let merged_range = match (&self.range, &other.range) {
+            (None, _) => other.range.clone(),
+            (_, None) => self.range.clone(),
+            (Some(a), Some(b)) => {
+                if self.conflict {
+                    if other.conflict {
+                        Some(a.union(b)) // Merge conflicts by union
+                    } else {
+                        Some(Self::difference(b, a)) // Subtract self range from other
+                    }
+                } else if other.conflict {
+                    Some(Self::difference(a, b)) // Subtract other range from self
+                } else {
+                    Some(a.intersection(b)) // Merge by intersection
+                }
+            }
         };
-        Some(Requirement {
+
+        merged_range.map(|range| Requirement {
             name: self.name.clone(),
-            range,
-            weak_ref: self.weak_ref && other.weak_ref,
-            conflict: self.conflict && other.conflict,
-            sep: self.sep,
-            orignal_name: self.orignal_name.clone(),
+            range: Some(range),
+            weak_ref: self.weak_ref && other.weak_ref, // Assuming similar fields exist
+            conflict: self.conflict && other.conflict, // Assuming similar logic applies
+            sep: self.sep,                             // Assuming sep remains unchanged
+            original_name: self.original_name.clone(), // Assuming a typo fix in field name
         })
+    }
+    fn difference(a: &Range<RerVersion>, b: &Range<RerVersion>) -> Range<RerVersion> {
+        a.intersection(&b.negate())
     }
     /// # is_weak_ref
     ///
@@ -183,23 +200,13 @@ fn test_requierement() {
 
 impl fmt::Display for Requirement {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if self.conflict {
-            write!(f, "!")?;
-        }
-        if self.weak_ref {
-            write!(f, "~")?;
-        }
-        write!(f, "{}", self.name)?;
-        if let Some(range) = &self.range {
-            write!(f, "{}{}", self.sep, range)?;
-        }
-        Ok(())
+        write!(f, "{}", self.original_name)
     }
 }
 
 impl Hash for Requirement {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.orignal_name.hash(state);
+        self.original_name.hash(state);
     }
 }
 #[test]
@@ -227,7 +234,21 @@ fn test_merge_requirement() {
     let a = Requirement::from_str("foo-1.2");
     let b = Requirement::from_str("foo==1.2.2");
     let c = a.merge(&b).unwrap();
-    assert_eq!(c.to_string(), "foo-1.2");
+    let v_start: RerVersion = "1.2.2".try_into().unwrap();
+    assert_eq!(c.get_version_range(), Some(Range::exact(v_start)));
+    let a = Requirement::new("foo-1.2");
+    let b = Requirement::new("~foo-1");
+    let c = a.merge(&b).unwrap();
+    let v_start: RerVersion = "1.2".try_into().unwrap();
+    let v_end: RerVersion = "1.2_".try_into().unwrap();
+    assert_eq!(c.get_version_range(), Some(Range::between(v_start, v_end)));
+    let a = Requirement::new("foo-1.2");
+    let b = Requirement::new("!foo-1");
+    let c = a.merge(&b).unwrap();
+    let v_start: RerVersion = "1.2".try_into().unwrap();
+    let v_end: RerVersion = "1.2_".try_into().unwrap();
+    println!("{:?}", c.get_version_range().unwrap().to_string());
+    assert_eq!(c.get_version_range(), Some(Range::between(v_start, v_end)));
 }
 
 /// # Requirements
@@ -235,7 +256,7 @@ fn test_merge_requirement() {
 /// ## Description
 ///
 /// A list of requirements.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Requirements(Vec<Requirement>);
 impl Requirements {
     pub fn empty() -> Self {
@@ -311,6 +332,21 @@ impl Requirements {
     }
 }
 
+impl fmt::Display for Requirements {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut first = true;
+        for req in &self.0 {
+            if first {
+                first = false;
+            } else {
+                write!(f, ", ")?;
+            }
+            write!(f, "{}", req)?;
+        }
+        Ok(())
+    }
+}
+
 impl Iterator for Requirements {
     type Item = Requirement;
     fn next(&mut self) -> Option<Self::Item> {
@@ -325,4 +361,12 @@ fn test_reduce() {
     let requirements = requirements.merge();
     assert_eq!(requirements.0.len(), 2);
     assert_eq!(requirements.0[0].name, "foo");
+}
+
+#[test]
+fn test_split_weak_ref() {
+    let requirements_str = vec!["foo-1.2", "bah-3", "~foo-1"];
+    let (weak, strong) = Requirements::from_str(requirements_str).split_weak_ref();
+    assert_eq!(weak.0.len(), 1);
+    assert_eq!(strong.0.len(), 2);
 }

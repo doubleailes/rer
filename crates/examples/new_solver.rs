@@ -1,0 +1,58 @@
+use pubgrub::error::PubGrubError;
+use pubgrub::report::{DefaultStringReporter, Reporter};
+use pubgrub::solver::resolve;
+use rer_resolver::resolver::RerDependencyProvider;
+use rer_version::RerVersion;
+use std::fs;
+use serde::Deserialize;
+use serde_json;
+
+#[derive(Deserialize)]
+struct RezResolveBenchmark {
+    request: Vec<String>,
+    status: String,
+    resolve_time: f32,
+    resolved_packages: Option<Vec<String>>,
+}
+
+
+fn main() {
+    let paths = vec![std::path::PathBuf::from(
+        "/home/philippe.llerena/workspace/github.com/doubleailes/rer-bkp/data_set/packages",
+    )];
+    let data_str_resolves =fs::read_to_string("data_set_private/resolves.json").expect("Unable to read file");
+    let resolves: Vec<RezResolveBenchmark> = serde_json::from_str(&data_str_resolves).unwrap();
+    for resolved in resolves {
+        let start = std::time::Instant::now();
+        let mut dependency_provider = RerDependencyProvider::lazy_paths(paths.clone());
+        println!("Request: {:?}", resolved.request);
+        dependency_provider.add_init_request(resolved.request);
+        let version: RerVersion = "1.0.0".try_into().unwrap();
+        match resolve(&dependency_provider, "init".to_string(), version) {
+            Ok(solution) => {
+                let mut solution_str: Vec<String> = solution
+                    .into_iter()
+                    .map(|(x, y)| format!("{}/{}/package.py", x, y))
+                    .collect();
+                solution_str.sort();
+                println!("{:#?}", solution_str);
+                println!(
+                    "Solution: {} rez got {}",
+                    solution_str.len(),
+                    resolved.resolved_packages.unwrap().len()
+                );
+            }
+            Err(PubGrubError::NoSolution(mut derivation_tree)) => {
+                derivation_tree.collapse_no_versions();
+                eprintln!("{}", DefaultStringReporter::report(&derivation_tree));
+            }
+            Err(err) => panic!("{:?}", err),
+        }
+        let elapsed = start.elapsed();
+        println!(
+            "Resolve in Time: {:?} rez resolve it in {} ms",
+            elapsed,
+            resolved.resolve_time * 1000.0
+        );
+    }
+}
