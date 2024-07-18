@@ -277,6 +277,12 @@ impl TryFrom<&str> for RerVersion {
         RerVersion::from_str(s)
     }
 }
+impl TryFrom<String> for RerVersion {
+    type Error = &'static str;
+    fn try_from(s: String) -> Result<Self, Self::Error> {
+        RerVersion::from_str(&s)
+    }
+}
 
 #[test]
 fn test_from() {

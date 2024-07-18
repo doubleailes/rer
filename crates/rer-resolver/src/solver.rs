@@ -2,7 +2,6 @@ use crate::candidate_selector::CandidateList;
 use crate::LocalPackages;
 use pubgrub::error::PubGrubError;
 use pubgrub::range::Range;
-use pubgrub::solver::DependencyProvider;
 use pubgrub::solver::{resolve, OfflineDependencyProvider};
 use rer_version::requirement::Requirement;
 use rer_version::{requirement::Requirements, RerVersion};
