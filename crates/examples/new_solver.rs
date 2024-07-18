@@ -7,6 +7,7 @@ use std::fs;
 use serde::Deserialize;
 use serde_json;
 
+#[allow(dead_code)]
 #[derive(Deserialize)]
 struct RezResolveBenchmark {
     request: Vec<String>,
@@ -15,6 +16,14 @@ struct RezResolveBenchmark {
     resolved_packages: Option<Vec<String>>,
 }
 
+fn compare_solutions(solution: &Vec<String>, resolved_rez_list: &Vec<String>) {
+    for x in resolved_rez_list {
+        if !solution.contains(&x) {
+            eprintln!("Missing: {}", x);
+        }
+    }
+    
+}
 
 fn main() {
     let paths = vec![std::path::PathBuf::from(
@@ -35,12 +44,8 @@ fn main() {
                     .map(|(x, y)| format!("{}/{}/package.py", x, y))
                     .collect();
                 solution_str.sort();
-                println!("{:#?}", solution_str);
-                println!(
-                    "Solution: {} rez got {}",
-                    solution_str.len(),
-                    resolved.resolved_packages.unwrap().len()
-                );
+                //println!("{:#?}", solution_str);
+                compare_solutions(&solution_str, &resolved.resolved_packages.unwrap());
             }
             Err(PubGrubError::NoSolution(mut derivation_tree)) => {
                 derivation_tree.collapse_no_versions();
