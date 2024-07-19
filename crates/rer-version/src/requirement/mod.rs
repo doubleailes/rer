@@ -43,7 +43,7 @@ impl Requirement {
     ///
     /// * `s` - The string to parse
     pub fn from_str(input_str: &str) -> Self {
-        let orignal_name = input_str.to_string();
+        let original_name: String = input_str.to_string();
         let mut range = None;
         let mut weak_ref = false;
         let mut conflict = input_str.starts_with('!');
@@ -237,14 +237,14 @@ fn test_merge_requirement() {
     let c = a.merge(&b).unwrap();
     let v_start: RerVersion = "1.2.2".try_into().unwrap();
     assert_eq!(c.get_version_range(), Some(Range::exact(v_start)));
-    let a = Requirement::new("foo-1.2");
-    let b = Requirement::new("~foo-1");
+    let a = Requirement::from_str("foo-1.2");
+    let b = Requirement::from_str("~foo-1");
     let c = a.merge(&b).unwrap();
     let v_start: RerVersion = "1.2".try_into().unwrap();
     let v_end: RerVersion = "1.2_".try_into().unwrap();
     assert_eq!(c.get_version_range(), Some(Range::between(v_start, v_end)));
-    let a = Requirement::new("foo-1.2");
-    let b = Requirement::new("!foo-1");
+    let a = Requirement::from_str("foo-1.2");
+    let b = Requirement::from_str("!foo-1");
     let c = a.merge(&b).unwrap();
     let v_start: RerVersion = "1.2".try_into().unwrap();
     let v_end: RerVersion = "1.2_".try_into().unwrap();
