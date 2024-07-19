@@ -5,6 +5,7 @@ use pubgrub::range::Range;
 use pubgrub::solver::{resolve, OfflineDependencyProvider};
 use rer_version::requirement::Requirement;
 use rer_version::{requirement::Requirements, RerVersion};
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
