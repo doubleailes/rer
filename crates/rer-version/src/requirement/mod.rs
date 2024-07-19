@@ -257,7 +257,7 @@ fn test_merge_requirement() {
 /// ## Description
 ///
 /// A list of requirements.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Requirements(Vec<Requirement>);
 impl Requirements {
     pub fn empty() -> Self {
@@ -303,6 +303,12 @@ impl Requirements {
         }
         Requirements(requirements)
     }
+    pub fn extend(&mut self, other: &Self) {
+        self.0.extend(other.0.clone());
+    }
+    pub fn switch(&mut self, other: &Self) {
+        self.0 = other.0.clone();
+    }
     /// # to_pubgrub
     ///
     /// ## Description
@@ -331,6 +337,15 @@ impl Requirements {
         }
         (Requirements(weak_ref), Requirements(strong_ref))
     }
+    /// # split_conflict
+    ///
+    /// ## Description
+    ///
+    /// Split the requirements into two lists. One without the conflict and one with the conflict.
+    ///
+    /// ## Returns
+    ///
+    /// A tuple of two lists of requirements. `Requirements(no_conflict), Requirements(conflict)`
     pub fn split_conflict(&self) -> (Self, Self) {
         let mut conflict = Vec::new();
         let mut no_conflict = Vec::new();
@@ -374,4 +389,14 @@ fn test_reduce() {
     let requirements = requirements.merge();
     assert_eq!(requirements.0.len(), 2);
     assert_eq!(requirements.0[0].name, "foo");
+}
+
+#[test]
+fn test_switch() {
+    let requirements_str = vec!["foo-1.2", "bah-3", "~foo-1"];
+    let mut requirements = Requirements::from_str(requirements_str);
+    let requirements_str2 = vec!["foo-1.5", "bah-4", "~foo-6", "~toto-6"];
+    let requirements2 = Requirements::from_str(requirements_str2);
+    requirements.switch(&requirements2);
+    assert_eq!(requirements, requirements2);
 }

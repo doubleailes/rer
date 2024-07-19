@@ -44,8 +44,8 @@ fn main() {
                     .map(|(x, y)| format!("{}/{}/package.py", x, y))
                     .collect();
                 solution_str.sort();
-                //println!("{:#?}", solution_str);
-                compare_solutions(&solution_str, &resolved.resolved_packages.unwrap());
+                println!("{:#?}", solution_str);
+                //compare_solutions(&solution_str, &resolved.resolved_packages.unwrap());
             }
             Err(PubGrubError::NoSolution(mut derivation_tree)) => {
                 derivation_tree.collapse_no_versions();
