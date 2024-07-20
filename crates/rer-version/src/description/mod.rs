@@ -47,9 +47,13 @@ impl SubToken {
         ORDER_LOOKUP[c as usize]
     }
     fn compare_subtokens(&self, a: &str, b: &str) -> Ordering {
-        a.chars()
-            .zip(b.chars())
-            .map(|(ac, bc)| self.custom_char_order(ac).cmp(&self.custom_char_order(bc)))
+        let precomputed_a: Vec<u8> = a.chars().map(|ac| self.custom_char_order(ac)).collect();
+        let precomputed_b: Vec<u8> = b.chars().map(|bc| self.custom_char_order(bc)).collect();
+
+        precomputed_a
+            .iter()
+            .zip(precomputed_b.iter())
+            .map(|(&ac, &bc)| ac.cmp(&bc))
             .find(|&ordering| ordering != Ordering::Equal)
             .unwrap_or_else(|| a.len().cmp(&b.len()))
     }
@@ -229,22 +233,35 @@ impl RerVersion {
     /// ```
     pub fn from_str(s: &str) -> Result<Self, &'static str> {
         if !ALPHABET_REGEX.is_match(s) {
-            Err("Invalid version token")
-        } else {
-            let mut tokens = Vec::new();
-            let mut seps: Vec<char> = Vec::new();
-            let toks = ALPHABET_REGEX.find_iter(s);
-            let mut seps_iter = ALPHABET_REGEX.split(s);
-            for tok in toks {
-                tokens.push(AlphanumericVersionToken::new(tok.as_str())?);
-                if let Some(sep) = seps_iter.next() {
-                    if let Some(c) = sep.chars().next() {
-                        seps.push(c)
-                    }
-                }
-            }
-            Ok(Self { tokens, seps })
+            return Err("Invalid version token");
         }
+    
+        let mut tokens = Vec::new();
+        let mut seps = Vec::new();
+    
+        // Pre-allocate based on the input length, assuming a rough estimate of token/separator frequency.
+        let estimated_capacity = s.len() / 5; // Example estimation
+        tokens.reserve(estimated_capacity);
+        seps.reserve(estimated_capacity);
+    
+        let mut last_end = 0;
+        for mat in ALPHABET_REGEX.find_iter(s) {
+            tokens.push(AlphanumericVersionToken::new(mat.as_str())?);
+    
+            // Capture the separator character, if present.
+            if let Some(sep_start) = s[last_end..mat.start()].chars().next() {
+                seps.push(sep_start);
+            }
+    
+            last_end = mat.end();
+        }
+    
+        // Handle potential trailing separator
+        if let Some(trailing_sep) = s[last_end..].chars().next() {
+            seps.push(trailing_sep);
+        }
+    
+        Ok(Self { tokens, seps })
     }
 }
 impl Version for RerVersion {
