@@ -4,6 +4,9 @@ use rer_version::RerVersion;
 pub struct CandidateList(Vec<RerVersion>);
 
 impl CandidateList {
+    pub fn new(candidat_list: Vec<RerVersion>) -> Self {
+        CandidateList(candidat_list)
+    }
     pub fn sort(&mut self) {
         self.0.sort();
     }
@@ -19,10 +22,10 @@ impl CandidateList {
         &self,
         range: &Range<RerVersion>,
         strategy_mode: ResolutionMode,
-    ) -> Option<&RerVersion> {
+    ) -> Option<RerVersion> {
         match strategy_mode {
-            ResolutionMode::Highest => self.0.iter().rev().find(|&x| range.contains(x)),
-            ResolutionMode::Lowest => self.0.iter().find(|&x| range.contains(x)),
+            ResolutionMode::Highest => self.0.iter().rev().find(|&x| range.contains(x)).cloned(),
+            ResolutionMode::Lowest => self.0.iter().find(|&x| range.contains(x)).cloned(),
         }
     }
     pub fn find_candidates(&self, range: &Range<RerVersion>) -> Vec<&RerVersion> {
@@ -39,12 +42,12 @@ fn test_candidate_list() {
     let v3: RerVersion = "1.1.0".try_into().unwrap();
     assert_eq!(
         list.find_candidate(&range, ResolutionMode::Highest),
-        Some(&v3)
+        Some(v3)
     );
     let v3: RerVersion = "1.0.0".try_into().unwrap();
     assert_eq!(
         list.find_candidate(&range, ResolutionMode::Lowest),
-        Some(&v3)
+        Some(v3)
     );
 }
 

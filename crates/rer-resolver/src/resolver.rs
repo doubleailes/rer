@@ -1,5 +1,5 @@
+use crate::candidate_selector::{CandidateList, ResolutionMode};
 use pubgrub::range::Range;
-use pubgrub::solver::choose_package_with_fewest_versions;
 use pubgrub::solver::Dependencies;
 use pubgrub::solver::{DependencyConstraints, DependencyProvider};
 use rer_version::requirement::Requirements;
@@ -129,6 +129,25 @@ impl RerDependencyProvider {
             .collect();
         Self::search_and_merge_simple_versions(package_paths).into_iter()
     }
+    fn candidat_selector(
+        &self,
+        mut potential_packages: impl Iterator<Item = (String, Range<RerVersion>)>,
+    ) -> (String, Option<RerVersion>) {
+        let (pkg, range) = potential_packages.find(|_| true).unwrap();
+        let package_paths: Vec<PathBuf> = self
+            .paths
+            .iter()
+            .map(|x| {
+                let mut p = x.clone();
+                p.push(pkg.clone());
+                p
+            })
+            .filter(|x| x.exists())
+            .collect();
+        let v = CandidateList::new(Self::search_and_merge_simple_versions(package_paths))
+            .find_candidate(&range, ResolutionMode::Highest);
+        (pkg, v)
+    }
     pub fn lazy_paths(paths: Vec<PathBuf>) -> Self {
         Self {
             paths,
@@ -142,10 +161,21 @@ impl DependencyProvider<String, RerVersion> for RerDependencyProvider {
         &self,
         potential_packages: impl Iterator<Item = (T, U)>,
     ) -> Result<(T, Option<RerVersion>), Box<dyn Error>> {
-        Ok(choose_package_with_fewest_versions(
-            |p| self.get_potential_versions(p),
-            potential_packages,
-        ))
+        let mut potential_packages = potential_packages;
+        let (pkg, range) = potential_packages.find(|_| true).unwrap();
+        let package_paths: Vec<PathBuf> = self
+            .paths
+            .iter()
+            .map(|x| {
+                let mut p = x.clone();
+                p.push(pkg.borrow());
+                p
+            })
+            .filter(|x| x.exists())
+            .collect();
+        let v = CandidateList::new(Self::search_and_merge_simple_versions(package_paths))
+            .find_candidate(range.borrow(), ResolutionMode::Highest);
+        Ok((pkg, v))
     }
     fn get_dependencies(
         &self,
