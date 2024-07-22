@@ -181,6 +181,17 @@ impl Requirement {
     pub fn is_weak_ref(&self) -> bool {
         self.weak_ref
     }
+    fn from_pkg_and_range(name: String, range: Range<RerVersion>) -> Self {
+        let original_name = format!("{}-{}", name, range);
+        Requirement {
+            name,
+            range: Some(range),
+            weak_ref: false,
+            conflict: false,
+            sep: '-',
+            original_name,
+        }
+    }
 }
 
 #[test]
@@ -358,6 +369,26 @@ impl Requirements {
         }
         (Requirements(no_conflict), Requirements(conflict))
     }
+    pub fn reduced(
+        &mut self,
+        package_name: &String,
+        range: &Range<RerVersion>,
+    ) -> (Range<RerVersion>, Self) {
+        let new_req = Requirement::from_pkg_and_range(package_name.clone(), range.clone());
+        let requierements: Requirements = Requirements(vec![new_req]);
+        self.extend(&requierements);
+        let n = self.merge();
+        let (no_conflict, _conflict) = n.split_conflict();
+        let range = no_conflict
+            .0
+            .iter()
+            .find(|x| x.name == *package_name)
+            .unwrap()
+            .range
+            .clone()
+            .unwrap();
+        (range, n)
+    }
 }
 
 impl fmt::Display for Requirements {
@@ -383,7 +414,7 @@ impl Iterator for Requirements {
 }
 
 #[test]
-fn test_reduce() {
+fn test_merge() {
     let requirements_str = vec!["foo-1.2", "bah-3", "~foo-1"];
     let requirements = Requirements::from_str(requirements_str);
     let requirements = requirements.merge();
@@ -399,4 +430,15 @@ fn test_switch() {
     let requirements2 = Requirements::from_str(requirements_str2);
     requirements.switch(&requirements2);
     assert_eq!(requirements, requirements2);
+}
+
+#[test]
+fn test_reduce() {
+    let requirements_str = vec!["~foo-1.0.5"];
+    let mut requirements = Requirements::from_str(requirements_str);
+    let v: RerVersion = "1".try_into().unwrap();
+    let (range, toto) = requirements.reduced(&"foo".to_string(), &Range::exact(v.clone()));
+    let v_req: RerVersion = "1.0.5".try_into().unwrap();
+    let req_range: Range<RerVersion> = Range::exact(v_req);
+    assert_eq!(range, req_range);
 }
