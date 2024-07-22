@@ -52,7 +52,6 @@ impl RerDependencyProvider {
     }
     fn fetch_and_merge_conflict(&self, mut in_request: Requirements) -> Requirements {
         let conflicted = self.conflicted.lock().unwrap();
-        println!("Request: {}, Conflicted: {}", in_request, conflicted);
         in_request.extend(&conflicted);
         drop(conflicted);
         let (no_conflict, conflict) = in_request.merge().split_conflict();
@@ -101,7 +100,6 @@ impl RerDependencyProvider {
     fn init_dependencies(&self) -> Option<DependencyConstraints<String, RerVersion>> {
         let r: Requirements = self.init_request.clone();
         let (no_conflict, _conflict) = r.split_conflict();
-        println!("Extracted request {}", no_conflict);
         Some(
             no_conflict
                 .into_iter()
@@ -163,6 +161,10 @@ impl DependencyProvider<String, RerVersion> for RerDependencyProvider {
     ) -> Result<(T, Option<RerVersion>), Box<dyn Error>> {
         let mut potential_packages = potential_packages;
         let (pkg, range) = potential_packages.find(|_| true).unwrap();
+        if pkg.borrow() == "init" {
+            let unique_version: RerVersion = RerVersion::from_str("1.0.0").unwrap();
+            return Ok((pkg, Some(unique_version)));
+        }
         let package_paths: Vec<PathBuf> = self
             .paths
             .iter()
