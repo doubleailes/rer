@@ -1,10 +1,12 @@
 use pubgrub::range::Range;
+use pubgrub::version::Version;
 use rer_version::RerVersion;
 
 pub struct CandidateList(Vec<RerVersion>);
 
 impl CandidateList {
-    pub fn new(candidat_list: Vec<RerVersion>) -> Self {
+    pub fn new(mut candidat_list: Vec<RerVersion>) -> Self {
+        candidat_list.sort();
         CandidateList(candidat_list)
     }
     pub fn sort(&mut self) {
@@ -63,6 +65,15 @@ fn test_candidates_list() {
     let mut results = vec![&v1, &v3, &v4];
     results.sort();
     assert_eq!(list.find_candidates(&range), results);
+    let list =
+        CandidateList::from_vec_str(vec!["4.8.6.m1", "4.8.6.m2", "5.12.6", "5.6.1", "4.8.6.m3"]);
+    let v1: RerVersion = "4.8.6".try_into().unwrap();
+    let range = Range::between(v1.clone(), v1.bump());
+    let v2: RerVersion = "4.8.6.m3".try_into().unwrap();
+    assert_eq!(
+        list.find_candidate(&range, ResolutionMode::Highest),
+        Some(v2)
+    );
 }
 #[derive(Debug, Default)]
 pub enum ResolutionMode {

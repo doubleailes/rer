@@ -33,6 +33,9 @@ fn test_compare_version() {
     let v1: RerVersion = "1.0.0_".try_into().unwrap();
     let v2: RerVersion = "1.0.0a".try_into().unwrap();
     assert!(v1 < v2);
+    let v1: RerVersion = "4.8.6.m1".try_into().unwrap();
+    let v2: RerVersion = "4.8.6.m3".try_into().unwrap();
+    assert!(v1 < v2);
     let v1: RerVersion = "1.0.0a".try_into().unwrap();
     let v2: RerVersion = "1.0.0a".try_into().unwrap();
     assert!(v1 == v2);
