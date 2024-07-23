@@ -1,4 +1,4 @@
-use crate::description::RerVersion;
+use crate::version::RerVersion;
 use lazy_static::lazy_static;
 use pubgrub::{range::Range, version::Version};
 use regex::Regex;
