@@ -2,7 +2,7 @@ use crate::candidate_selector::{CandidateList, ResolutionMode};
 use pubgrub::range::Range;
 use pubgrub::solver::Dependencies;
 use pubgrub::solver::{DependencyConstraints, DependencyProvider};
-use rer_version::requirement::Requirements;
+use rer_version::Requirements;
 use rer_version::RerVersion;
 use std::borrow::Borrow;
 use std::error::Error;

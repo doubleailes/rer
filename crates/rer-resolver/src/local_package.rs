@@ -1,4 +1,4 @@
-use rer_version::requirement::Requirements;
+use rer_version::Requirements;
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
