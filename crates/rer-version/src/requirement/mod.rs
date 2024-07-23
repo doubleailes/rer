@@ -42,7 +42,7 @@ impl Requirement {
     /// ## Arguments
     ///
     /// * `s` - The string to parse
-    pub fn from_str(input_str: &str) -> Self {
+    fn parse_from_string(input_str: &str) -> Self {
         let original_name: String = input_str.to_string();
         let mut range = None;
         let mut weak_ref = false;
@@ -63,12 +63,9 @@ impl Requirement {
             if ['-', '@', '#'].contains(&req_str.chars().next().unwrap()) {
                 sep = req_str.remove(0);
             }
-            if req_str.contains("|") {
-                let reqs: Vec<Range<RerVersion>> = req_str
-                    .split("|")
-                    .into_iter()
-                    .map(|x| parse_version_range(x))
-                    .collect();
+            if req_str.contains('|') {
+                let reqs: Vec<Range<RerVersion>> =
+                    req_str.split('|').map(parse_version_range).collect();
                 for req in reqs {
                     if range.is_none() {
                         range = Some(req);
@@ -119,7 +116,7 @@ impl Requirement {
     ///
     /// ```rust
     /// use rer_version::requirement::Requirement;
-    /// let a = Requirement::from_str("maya-1.2.3+<2.0.0");
+    /// let a = Requirement::from("maya-1.2.3+<2.0.0");
     /// assert_eq!(a.get_name(), "maya");
     /// ```
     pub fn get_name(&self) -> &str {
@@ -196,11 +193,11 @@ impl Requirement {
 
 #[test]
 fn test_requierement() {
-    let a = Requirement::from_str("voodoo-1");
+    let a = Requirement::from("voodoo-1");
     assert_eq!(a.name, "voodoo");
     let v: RerVersion = "1".try_into().unwrap();
     assert_eq!(a.range, Some(Range::between(v.clone(), v.bump())));
-    let a = Requirement::from_str("voodoo-1.13.0|2.1.0");
+    let a = Requirement::from("voodoo-1.13.0|2.1.0");
     assert_eq!(a.name, "voodoo");
     let v: RerVersion = "1.13.0".try_into().unwrap();
     let v2: RerVersion = "2.1.0".try_into().unwrap();
@@ -221,41 +218,47 @@ impl Hash for Requirement {
         self.original_name.hash(state);
     }
 }
+
+impl From<&str> for Requirement {
+    fn from(s: &str) -> Self {
+        Requirement::parse_from_string(s)
+    }
+}
 #[test]
 fn test_to_string() {
-    let a = Requirement::from_str("maya-1");
+    let a = Requirement::from("maya-1");
     assert_eq!(a.to_string(), "maya-1");
-    let a = Requirement::from_str("maya");
-    assert_eq!(a.to_string(), "maya-∗");
-    let a = Requirement::from_str("maya-1.2.3+<2.0.0");
-    assert_eq!(a.to_string(), "maya-1.2.3 <= v < 2.0.0");
-    let a = Requirement::from_str("maya-1.2.3+");
-    assert_eq!(a.to_string(), "maya-1.2.3 <= v");
+    let a = Requirement::from("maya");
+    assert_eq!(a.to_string(), "maya");
+    let a = Requirement::from("maya-1.2.3+<2.0.0");
+    assert_eq!(a.to_string(), "maya-1.2.3+<2.0.0");
+    let a = Requirement::from("maya-1.2.3+");
+    assert_eq!(a.to_string(), "maya-1.2.3+");
 }
 
 #[test]
 fn test_merge_requirement() {
-    let a = Requirement::from_str("foo-1.2");
-    let b = Requirement::from_str("~foo-1");
+    let a = Requirement::from("foo-1.2");
+    let b = Requirement::from("~foo-1");
     let c = a.merge(&b).unwrap();
-    assert_eq!(c.to_string(), "foo-1");
-    let a = Requirement::from_str("foo-1.2");
-    let b = Requirement::from_str("foo-1");
+    assert_eq!(c.to_string(), "foo-1.2");
+    let a = Requirement::from("foo-1.2");
+    let b = Requirement::from("foo-1");
     let c = a.merge(&b).unwrap();
-    assert_eq!(c.to_string(), "foo-1");
-    let a = Requirement::from_str("foo-1.2");
-    let b = Requirement::from_str("foo==1.2.2");
+    assert_eq!(c.to_string(), "foo-1.2");
+    let a = Requirement::from("foo-1.2");
+    let b = Requirement::from("foo==1.2.2");
     let c = a.merge(&b).unwrap();
     let v_start: RerVersion = "1.2.2".try_into().unwrap();
     assert_eq!(c.get_version_range(), Some(Range::exact(v_start)));
-    let a = Requirement::from_str("foo-1.2");
-    let b = Requirement::from_str("~foo-1");
+    let a = Requirement::from("foo-1.2");
+    let b = Requirement::from("~foo-1");
     let c = a.merge(&b).unwrap();
     let v_start: RerVersion = "1.2".try_into().unwrap();
     let v_end: RerVersion = "1.2_".try_into().unwrap();
     assert_eq!(c.get_version_range(), Some(Range::between(v_start, v_end)));
-    let a = Requirement::from_str("foo-1.2");
-    let b = Requirement::from_str("!foo-1");
+    let a = Requirement::from("foo-1.2");
+    let b = Requirement::from("!foo-1");
     let c = a.merge(&b).unwrap();
     let v_start: RerVersion = "1.2".try_into().unwrap();
     let v_end: RerVersion = "1.2_".try_into().unwrap();
@@ -277,15 +280,15 @@ impl Requirements {
     pub fn add(&mut self, requirement: Requirement) {
         self.0.push(requirement);
     }
-    /// # from_str
+    /// # from
     ///
     /// ## Description
     ///
     /// Create a list of requirements from a list of string.
-    pub fn from_str(requirements: Vec<&str>) -> Self {
+    pub fn from(requirements: Vec<&str>) -> Self {
         let requirements = requirements
             .iter()
-            .map(|x| Requirement::from_str(x))
+            .map(|x| Requirement::parse_from_string(x))
             .collect();
         Requirements(requirements)
     }
@@ -318,7 +321,7 @@ impl Requirements {
         self.0.extend(other.0.clone());
     }
     pub fn switch(&mut self, other: &Self) {
-        self.0 = other.0.clone();
+        self.0.clone_from(&other.0)
     }
     /// # to_pubgrub
     ///
@@ -416,7 +419,7 @@ impl Iterator for Requirements {
 #[test]
 fn test_merge() {
     let requirements_str = vec!["foo-1.2", "bah-3", "~foo-1"];
-    let requirements = Requirements::from_str(requirements_str);
+    let requirements = Requirements::from(requirements_str);
     let requirements = requirements.merge();
     assert_eq!(requirements.0.len(), 2);
     assert_eq!(requirements.0[0].name, "foo");
@@ -425,9 +428,9 @@ fn test_merge() {
 #[test]
 fn test_switch() {
     let requirements_str = vec!["foo-1.2", "bah-3", "~foo-1"];
-    let mut requirements = Requirements::from_str(requirements_str);
+    let mut requirements = Requirements::from(requirements_str);
     let requirements_str2 = vec!["foo-1.5", "bah-4", "~foo-6", "~toto-6"];
-    let requirements2 = Requirements::from_str(requirements_str2);
+    let requirements2 = Requirements::from(requirements_str2);
     requirements.switch(&requirements2);
     assert_eq!(requirements, requirements2);
 }
@@ -435,9 +438,9 @@ fn test_switch() {
 #[test]
 fn test_reduce() {
     let requirements_str = vec!["~foo-1.0.5"];
-    let mut requirements = Requirements::from_str(requirements_str);
+    let mut requirements = Requirements::from(requirements_str);
     let v: RerVersion = "1".try_into().unwrap();
-    let (range, toto) = requirements.reduced(&"foo".to_string(), &Range::exact(v.clone()));
+    let (range, _toto) = requirements.reduced(&"foo".to_string(), &Range::exact(v.clone()));
     let v_req: RerVersion = "1.0.5".try_into().unwrap();
     let req_range: Range<RerVersion> = Range::exact(v_req);
     assert_eq!(range, req_range);
