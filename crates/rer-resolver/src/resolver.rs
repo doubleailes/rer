@@ -26,7 +26,7 @@ impl RerDependencyProvider {
         Self::default()
     }
     pub fn add_init_request(&mut self, init_request: Vec<String>) {
-        let reduced = Requirements::from_str(init_request.iter().map(|x| x.as_str()).collect());
+        let reduced = Requirements::from(init_request.iter().map(|x| x.as_str()).collect());
         self.init_request = self.fetch_and_merge_conflict(reduced);
     }
     fn search_and_merge_simple_versions(package_paths: Vec<PathBuf>) -> Vec<RerVersion> {
@@ -50,12 +50,9 @@ impl RerDependencyProvider {
             .collect();
         p.into_iter().rev().collect()
     }
-    fn fetch_and_merge_conflict(&self, mut in_request: Requirements) -> Requirements {
-        let conflicted = self.conflicted.lock().unwrap();
-        in_request.extend(&conflicted);
-        drop(conflicted);
-        let (no_conflict, conflict) = in_request.merge().split_conflict();
-        self.conflicted.lock().unwrap().switch(&conflict);
+    fn fetch_and_merge_conflict(&self, in_request: Requirements) -> Requirements {
+        let (no_conflict, conflict) = in_request.split_conflict();
+        self.conflicted.lock().unwrap().extend(&conflict);
         no_conflict
     }
     fn fetch_dependencies(&self, package_name: &str, version: &str) -> Option<Requirements> {
@@ -67,13 +64,15 @@ impl RerDependencyProvider {
             .and_then(|p| p.to_str().map(String::from))
             .unwrap_or_default();
         let package = Package::from_file(&format!("{}/package.py", path)).ok()?;
-        let r = Requirements::from_str(
-            package
-                .get_dependencies()
-                .iter()
-                .map(|x| x.as_str())
-                .collect(),
-        );
+        // Rough implementation of the logic to get the variants
+        let mut deps: Vec<String> = package.get_dependencies();
+        if package.is_variant_unique() {
+            println!("Variant unique");
+            let var = package.get_variant(0).unwrap();
+            deps.extend(var);
+        }
+        // A first reduction of the requierement appears here
+        let r = Requirements::from(deps.iter().map(|x| x.as_str()).collect()).merge();
         if r.is_empty() {
             Some(r)
         } else {
@@ -82,14 +81,12 @@ impl RerDependencyProvider {
     }
     fn dependencies(
         &self,
-        package: &String,
+        package: &str,
         version: &RerVersion,
     ) -> Option<DependencyConstraints<String, RerVersion>> {
         let r = self.fetch_dependencies(package, version.to_string().as_str())?;
-        let (no_conflict, _conflict) = r.split_conflict();
         Some(
-            no_conflict
-                .into_iter()
+            r.into_iter()
                 .map(|x| {
                     let (name, range) = x.get_pubgrub();
                     (name, range)
@@ -112,7 +109,7 @@ impl RerDependencyProvider {
     }
     fn get_potential_versions(&self, package: &String) -> impl Iterator<Item = RerVersion> {
         if package == "init" {
-            let unique_versions: Vec<RerVersion> = vec![RerVersion::from_str("1.0.0").unwrap()];
+            let unique_versions: Vec<RerVersion> = vec![RerVersion::try_from("1.0.0").unwrap()];
             return unique_versions.into_iter();
         }
         let package_paths: Vec<PathBuf> = self
@@ -142,6 +139,10 @@ impl RerDependencyProvider {
             })
             .filter(|x| x.exists())
             .collect();
+        let mut t = self.conflicted.lock().unwrap();
+        let (range, requirements) = t.reduced(&pkg, &range);
+        t.switch(&requirements);
+        drop(t);
         let v = CandidateList::new(Self::search_and_merge_simple_versions(package_paths))
             .find_candidate(&range, ResolutionMode::Highest);
         (pkg, v)
@@ -162,7 +163,7 @@ impl DependencyProvider<String, RerVersion> for RerDependencyProvider {
         let mut potential_packages = potential_packages;
         let (pkg, range) = potential_packages.find(|_| true).unwrap();
         if pkg.borrow() == "init" {
-            let unique_version: RerVersion = RerVersion::from_str("1.0.0").unwrap();
+            let unique_version: RerVersion = RerVersion::try_from("1.0.0").unwrap();
             return Ok((pkg, Some(unique_version)));
         }
         let package_paths: Vec<PathBuf> = self
@@ -175,6 +176,10 @@ impl DependencyProvider<String, RerVersion> for RerDependencyProvider {
             })
             .filter(|x| x.exists())
             .collect();
+        let mut t = self.conflicted.lock().unwrap();
+        let (range, requirements) = t.reduced(pkg.borrow(), range.borrow());
+        t.switch(&requirements);
+        drop(t);
         let v = CandidateList::new(Self::search_and_merge_simple_versions(package_paths))
             .find_candidate(range.borrow(), ResolutionMode::Highest);
         Ok((pkg, v))

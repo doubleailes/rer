@@ -53,7 +53,24 @@ pub struct Package {
 
 impl Package {
     pub fn get_dependencies(&self) -> Vec<String> {
-        self.requires.clone().unwrap_or(Vec::new())
+        self.requires.clone().unwrap_or_default()
+    }
+    pub fn is_variant(&self) -> bool {
+        self.variants.is_some()
+    }
+    pub fn is_variant_unique(&self) -> bool {
+        if self.variants.is_some() {
+            self.variants.as_ref().unwrap().len() == 1
+        } else {
+            false
+        }
+    }
+    pub fn get_variant(&self, index: usize) -> Option<Vec<String>> {
+        if self.variants.is_some() {
+            self.variants.as_ref().unwrap().get(index).cloned()
+        } else {
+            None
+        }
     }
     fn from_data(raw_data: HashMap<String, Option<Value>>) -> Self {
         let mut name: Option<String> = None;

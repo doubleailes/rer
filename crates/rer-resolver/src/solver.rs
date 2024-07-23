@@ -17,15 +17,11 @@ fn check_version<'a>(
     version: &'a RerVersion,
 ) -> bool {
     let versions_package: Vec<RerVersion> =
-        match dependency_provider.lock().unwrap().versions(&package_name) {
-            Some(versions_package) => versions_package.into_iter().map(|x| x.clone()).collect(),
+        match dependency_provider.lock().unwrap().versions(package_name) {
+            Some(versions_package) => versions_package.into_iter().cloned().collect(),
             None => Vec::new(),
         };
-    if versions_package.contains(&&version) {
-        return true;
-    } else {
-        false
-    }
+    versions_package.contains(version)
 }
 
 fn recursive(
@@ -63,7 +59,7 @@ fn recursive(
         let range = dependency.get_version_range().unwrap_or(Range::any());
         let candidates = candidates.find_candidates(&range);
         for candidate in candidates {
-            if check_version(dependency_provider, &package_name, &candidate) {
+            if check_version(dependency_provider, &package_name, candidate) {
                 continue;
             }
             let dependencies =
@@ -105,7 +101,7 @@ pub fn solver(
     // Create a uuid to represent the current request
     let context_name = Uuid::new_v4().to_string();
     // Transform the list of str into a list of Requirement and merge if possible
-    let dependencies: Requirements = Requirements::from_str(requirements_str).merge();
+    let dependencies: Requirements = Requirements::from(requirements_str).merge();
     let mut new_deps = Requirements::empty();
     for dependency in dependencies {
         if dependency.is_weak_ref() {

@@ -3,9 +3,9 @@ use pubgrub::report::{DefaultStringReporter, Reporter};
 use pubgrub::solver::resolve;
 use rer_resolver::resolver::RerDependencyProvider;
 use rer_version::RerVersion;
-use std::fs;
 use serde::Deserialize;
 use serde_json;
+use std::fs;
 
 #[allow(dead_code)]
 #[derive(Deserialize)]
@@ -22,14 +22,14 @@ fn compare_solutions(solution: &Vec<String>, resolved_rez_list: &Vec<String>) {
             eprintln!("Missing: {}", x);
         }
     }
-    
 }
 
 fn main() {
     let paths = vec![std::path::PathBuf::from(
         "/home/philippe.llerena/workspace/github.com/doubleailes/rer-bkp/data_set/packages",
     )];
-    let data_str_resolves =fs::read_to_string("data_set_private/resolves.json").expect("Unable to read file");
+    let data_str_resolves =
+        fs::read_to_string("data_set_private/resolves.json").expect("Unable to read file");
     let resolves: Vec<RezResolveBenchmark> = serde_json::from_str(&data_str_resolves).unwrap();
     for resolved in resolves {
         let start = std::time::Instant::now();

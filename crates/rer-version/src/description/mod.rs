@@ -14,6 +14,7 @@ lazy_static! {
     static ref NUMERIC_REGEX: Regex = Regex::new(r"[0-9]+").expect("Can't compile NUMERIC_REGEX regex");
 }
 
+#[allow(clippy::derive_ord_xor_partial_ord)]
 #[derive(Debug, PartialEq, Eq, Clone, Ord)]
 struct SubToken {
     s: String,
@@ -32,9 +33,9 @@ impl SubToken {
     fn custom_char_order(&self, c: char) -> u8 {
         match c {
             '_' => 0,
-            'a'..='z' => 1 + (c as u8 - 'a' as u8),
-            'A'..='Z' => 27 + (c as u8 - 'A' as u8),
-            '0'..='9' => 53 + (c as u8 - '0' as u8),
+            'a'..='z' => 1 + (c as u8 - b'a'),
+            'A'..='Z' => 27 + (c as u8 - b'A'),
+            '0'..='9' => 53 + (c as u8 - b'0'),
             _ => 255, // Other characters are considered the largest
         }
     }
@@ -59,6 +60,7 @@ fn test_subtoken_new() {
     assert_eq!(a.s, "a1");
 }
 
+#[allow(clippy::non_canonical_partial_ord_impl)]
 impl PartialOrd for SubToken {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         match (self.n, other.n) {
@@ -219,7 +221,7 @@ impl RerVersion {
     /// let v: RerVersion = "1.2.3-alpha+beta".try_into().unwrap();
     /// assert_eq!(v.to_string(), "1.2.3-alpha+beta");
     /// ```
-    pub fn from_str(s: &str) -> Result<Self, &'static str> {
+    fn parse_from_string(s: &str) -> Result<Self, &'static str> {
         if !ALPHABET_REGEX.is_match(s) {
             Err("Invalid version token")
         } else {
@@ -274,13 +276,13 @@ impl fmt::Display for RerVersion {
 impl TryFrom<&str> for RerVersion {
     type Error = &'static str;
     fn try_from(s: &str) -> Result<Self, Self::Error> {
-        RerVersion::from_str(s)
+        RerVersion::parse_from_string(s)
     }
 }
 impl TryFrom<String> for RerVersion {
     type Error = &'static str;
     fn try_from(s: String) -> Result<Self, Self::Error> {
-        RerVersion::from_str(&s)
+        RerVersion::parse_from_string(&s)
     }
 }
 
@@ -291,18 +293,18 @@ fn test_from() {
 }
 #[test]
 fn test_display() {
-    let v = RerVersion::from_str("1.2.3-alpha+beta").unwrap();
+    let v = RerVersion::parse_from_string("1.2.3-alpha+beta").unwrap();
     assert_eq!(v.to_string(), "1.2.3-alpha+beta");
 }
 #[test]
 fn test_from_str() {
-    let v = RerVersion::from_str("1.2.3").unwrap();
+    let v = RerVersion::parse_from_string("1.2.3").unwrap();
     assert_eq!(v.tokens.len(), 3);
     assert_eq!(v.seps.len(), 2);
-    let v = RerVersion::from_str("1.2.3-alpha").unwrap();
+    let v = RerVersion::parse_from_string("1.2.3-alpha").unwrap();
     assert_eq!(v.tokens.len(), 4);
     assert_eq!(v.seps.len(), 3);
-    let v = RerVersion::from_str("1.2.3-alpha+beta").unwrap();
+    let v = RerVersion::parse_from_string("1.2.3-alpha+beta").unwrap();
     assert_eq!(v.tokens.len(), 5);
     assert_eq!(v.seps.len(), 4);
     let v: RerVersion = "2.0.0_".try_into().unwrap();
@@ -311,14 +313,14 @@ fn test_from_str() {
 }
 #[test]
 fn test_order() {
-    let a = RerVersion::from_str("1.2.3").unwrap();
-    let b = RerVersion::from_str("1.2.4").unwrap();
+    let a = RerVersion::parse_from_string("1.2.3").unwrap();
+    let b = RerVersion::parse_from_string("1.2.4").unwrap();
     assert!(a < b);
-    let a = RerVersion::from_str("1.2.3").unwrap();
-    let b = RerVersion::from_str("1.2.3-alpha").unwrap();
+    let a = RerVersion::parse_from_string("1.2.3").unwrap();
+    let b = RerVersion::parse_from_string("1.2.3-alpha").unwrap();
     assert!(a < b);
-    let a = RerVersion::from_str("2.0.0").unwrap();
-    let b = RerVersion::from_str("2.0.0_").unwrap();
+    let a = RerVersion::parse_from_string("2.0.0").unwrap();
+    let b = RerVersion::parse_from_string("2.0.0_").unwrap();
     assert!(a < b);
 }
 

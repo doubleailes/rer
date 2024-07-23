@@ -48,7 +48,7 @@ impl LocalPackages {
         match self.data.get(package_name) {
             Some(versions) => match versions.get(version) {
                 Some(path) => match Package::from_file(&format!("{}/package.py", path)) {
-                    Ok(package) => Requirements::from_str(
+                    Ok(package) => Requirements::from(
                         package
                             .get_dependencies()
                             .iter()
