@@ -22,8 +22,8 @@ lazy_static! {
 /// package.
 #[derive(Debug, Clone)]
 pub struct Requirement {
-    pub name: String,
-    pub range: Option<Range<RerVersion>>,
+    name: String,
+    range: Option<Range<RerVersion>>,
     negate: bool,
     conflict: bool,
     sep: char,
