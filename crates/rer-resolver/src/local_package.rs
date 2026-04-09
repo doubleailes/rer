@@ -3,9 +3,48 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 
+/// Data for a single package version, including base requirements and variant-specific dependencies.
+///
+/// For a package like:
+/// ```text
+/// name = "maya_utils"
+/// version = "1.0.0"
+/// requires = ["python-3"]
+/// variants = [["maya-2024"], ["maya-2025"]]
+/// ```
+///
+/// `requires` would be `["python-3"]` and `variants` would be `[["maya-2024"], ["maya-2025"]]`.
+#[derive(Clone, Debug, Default)]
+pub struct PackageData {
+    /// Base requirements that apply to all variants.
+    pub requires: Vec<String>,
+    /// Each inner Vec is a list of dependency strings for one variant.
+    /// Empty if the package has no variants.
+    pub variants: Vec<Vec<String>>,
+}
+
+impl PackageData {
+    /// Returns true if the package has more than one variant.
+    pub fn is_multi_variant(&self) -> bool {
+        self.variants.len() > 1
+    }
+
+    /// Returns the combined requirements for a single-variant or no-variant package.
+    /// For multi-variant packages, returns only the base requires.
+    pub fn combined_requirements(&self) -> Vec<String> {
+        let mut deps = self.requires.clone();
+        if self.variants.len() == 1 {
+            deps.extend(self.variants[0].clone());
+        }
+        deps
+    }
+}
+
 pub struct LocalPackages {
     data: HashMap<String, HashMap<String, String>>,
     paths: Vec<PathBuf>,
+    /// Variant-aware package data: package_name → version → PackageData
+    package_data: HashMap<String, HashMap<String, PackageData>>,
 }
 
 impl LocalPackages {
@@ -44,6 +83,13 @@ impl LocalPackages {
         }
     }
     pub fn get_dependencies(&self, package_name: &str, version: &str) -> Requirements {
+        // First check variant-aware package data
+        if let Some(pkg_data) = self.get_package_data(package_name, version) {
+            let deps = pkg_data.combined_requirements();
+            if !deps.is_empty() {
+                return Requirements::from(deps.iter().map(|s| s.as_str()).collect());
+            }
+        }
         match self.data.get(package_name) {
             Some(versions) => match versions.get(version) {
                 Some(_path) => {
@@ -52,8 +98,21 @@ impl LocalPackages {
                 }
                 None => panic!("Path not found"),
             },
-            None => panic!("Package not found"),
+            None => {
+                // If not in filesystem data, check package_data
+                if self.package_data.contains_key(package_name) {
+                    return Requirements::empty();
+                }
+                panic!("Package not found")
+            }
         }
+    }
+    /// Get variant-aware package data for a specific package version.
+    pub fn get_package_data(&self, package_name: &str, version: &str) -> Option<PackageData> {
+        self.package_data
+            .get(package_name)
+            .and_then(|versions| versions.get(version))
+            .cloned()
     }
     pub fn build_from_json_path(path: &str) -> Self {
         let data_str = fs::read_to_string(path).expect("Unable to read file");
@@ -62,12 +121,36 @@ impl LocalPackages {
         LocalPackages {
             data,
             paths: Vec::new(),
+            package_data: HashMap::new(),
         }
     }
     pub fn lazy_paths(paths: Vec<PathBuf>) -> Self {
         LocalPackages {
             data: HashMap::new(),
             paths,
+            package_data: HashMap::new(),
+        }
+    }
+    /// Construct a `LocalPackages` from in-memory variant-aware package data.
+    ///
+    /// The input maps package names to their versions, where each version has
+    /// a `PackageData` containing base requirements and optional variants.
+    pub fn from_packages(
+        packages: HashMap<String, HashMap<String, PackageData>>,
+    ) -> Self {
+        // Also populate the `data` field with version→"" mapping for get_versions()
+        let mut data: HashMap<String, HashMap<String, String>> = HashMap::new();
+        for (pkg_name, versions) in &packages {
+            let version_map: HashMap<String, String> = versions
+                .keys()
+                .map(|v| (v.clone(), String::new()))
+                .collect();
+            data.insert(pkg_name.clone(), version_map);
+        }
+        LocalPackages {
+            data,
+            paths: Vec::new(),
+            package_data: packages,
         }
     }
 }
