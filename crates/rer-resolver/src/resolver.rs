@@ -1,16 +1,15 @@
 use crate::candidate_selector::{CandidateList, ResolutionMode};
-use pubgrub::range::Range;
-use pubgrub::solver::Dependencies;
-use pubgrub::solver::{DependencyConstraints, DependencyProvider};
+use pubgrub::{Dependencies, DependencyConstraints, DependencyProvider, PackageResolutionStatistics};
 use rer_version::Requirements;
 use rer_version::RerVersion;
-use std::borrow::Borrow;
+use std::cmp::Reverse;
 use std::error::Error;
-use std::fmt::Debug;
+use std::fmt;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
+use version_ranges::Ranges;
 
 #[derive(Debug, Clone, Default)]
 pub struct RerDependencyProvider {
@@ -70,7 +69,7 @@ impl RerDependencyProvider {
         &self,
         package: &str,
         version: &RerVersion,
-    ) -> Option<DependencyConstraints<String, RerVersion>> {
+    ) -> Option<DependencyConstraints<String, Ranges<RerVersion>>> {
         let r = self.fetch_dependencies(package, version.to_string().as_str())?;
         Some(
             r.into_iter()
@@ -81,7 +80,7 @@ impl RerDependencyProvider {
                 .collect(),
         )
     }
-    fn init_dependencies(&self) -> Option<DependencyConstraints<String, RerVersion>> {
+    fn init_dependencies(&self) -> Option<DependencyConstraints<String, Ranges<RerVersion>>> {
         let r: Requirements = self.init_request.clone();
         let (no_conflict, _conflict) = r.split_conflict();
         Some(
@@ -113,7 +112,7 @@ impl RerDependencyProvider {
     }
     fn candidat_selector(
         &self,
-        mut potential_packages: impl Iterator<Item = (String, Range<RerVersion>)>,
+        mut potential_packages: impl Iterator<Item = (String, Ranges<RerVersion>)>,
     ) -> (String, Option<RerVersion>) {
         let (pkg, range) = potential_packages.find(|_| true).unwrap();
         let package_paths: Vec<PathBuf> = self
@@ -142,56 +141,100 @@ impl RerDependencyProvider {
     }
 }
 
-impl DependencyProvider<String, RerVersion> for RerDependencyProvider {
-    fn choose_package_version<T: Borrow<String>, U: Borrow<Range<RerVersion>>>(
+/// Custom error type for the solver.
+#[derive(Debug)]
+pub struct RerSolverError(String);
+
+impl fmt::Display for RerSolverError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl Error for RerSolverError {}
+
+impl DependencyProvider for RerDependencyProvider {
+    type P = String;
+    type V = RerVersion;
+    type VS = Ranges<RerVersion>;
+    type M = String;
+    type Priority = Reverse<usize>;
+    type Err = RerSolverError;
+
+    fn prioritize(
         &self,
-        potential_packages: impl Iterator<Item = (T, U)>,
-    ) -> Result<(T, Option<RerVersion>), Box<dyn Error>> {
-        let mut potential_packages = potential_packages;
-        let (pkg, range) = potential_packages.find(|_| true).unwrap();
-        if pkg.borrow() == "init" {
-            let unique_version: RerVersion = RerVersion::try_from("1.0.0").unwrap();
-            return Ok((pkg, Some(unique_version)));
+        package: &Self::P,
+        range: &Self::VS,
+        _package_conflicts_counts: &PackageResolutionStatistics,
+    ) -> Self::Priority {
+        if package == "init" {
+            return Reverse(0);
         }
         let package_paths: Vec<PathBuf> = self
             .paths
             .iter()
             .map(|x| {
                 let mut p = x.clone();
-                p.push(pkg.borrow());
+                p.push(package);
+                p
+            })
+            .filter(|x| x.exists())
+            .collect();
+        let versions = Self::search_and_merge_simple_versions(package_paths);
+        let count = versions.iter().filter(|v| range.contains(v)).count();
+        Reverse(count)
+    }
+
+    fn choose_version(
+        &self,
+        package: &Self::P,
+        range: &Self::VS,
+    ) -> Result<Option<Self::V>, Self::Err> {
+        if package == "init" {
+            let unique_version: RerVersion = RerVersion::try_from("1.0.0").unwrap();
+            return Ok(Some(unique_version));
+        }
+        let package_paths: Vec<PathBuf> = self
+            .paths
+            .iter()
+            .map(|x| {
+                let mut p = x.clone();
+                p.push(package);
                 p
             })
             .filter(|x| x.exists())
             .collect();
         let mut t = self.conflicted.lock().unwrap();
-        let (range, requirements) = t.reduced(pkg.borrow(), range.borrow());
+        let (range, requirements) = t.reduced(package, range);
         t.switch(&requirements);
         drop(t);
         let v = CandidateList::new(Self::search_and_merge_simple_versions(package_paths))
-            .find_candidate(range.borrow(), ResolutionMode::Highest);
-        Ok((pkg, v))
+            .find_candidate(&range, ResolutionMode::Highest);
+        Ok(v)
     }
+
     fn get_dependencies(
         &self,
-        package: &String,
-        version: &RerVersion,
-    ) -> Result<Dependencies<String, RerVersion>, Box<dyn Error>> {
+        package: &Self::P,
+        version: &Self::V,
+    ) -> Result<Dependencies<Self::P, Self::VS, Self::M>, Self::Err> {
         if package == "init" {
             return Ok(match self.init_dependencies() {
-                None => Dependencies::Unknown,
-                Some(dependencies) => Dependencies::Known(dependencies),
+                None => Dependencies::Unavailable("dependencies unavailable".to_string()),
+                Some(dependencies) => Dependencies::Available(dependencies),
             });
         }
         self.should_cancel()?;
         Ok(match self.dependencies(package, version) {
-            None => Dependencies::Unknown,
-            Some(dependencies) => Dependencies::Known(dependencies),
+            None => Dependencies::Unavailable("dependencies unavailable".to_string()),
+            Some(dependencies) => Dependencies::Available(dependencies),
         })
     }
-    fn should_cancel(&self) -> Result<(), Box<dyn Error>> {
+
+    fn should_cancel(&self) -> Result<(), Self::Err> {
         let mut counter = self.counter.lock().unwrap();
         if *counter > 1000 {
-            return Err("Too many iterations".into());
+            return Err(RerSolverError("Too many iterations".to_string()));
         }
         *counter += 1;
         drop(counter);

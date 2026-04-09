@@ -1,7 +1,7 @@
 use crate::version::RerVersion;
 use lazy_static::lazy_static;
-use pubgrub::{range::Range, version::Version};
 use regex::Regex;
+use version_ranges::Ranges;
 
 fn get_regex() -> String {
     let version_group = r"([0-9a-zA-Z_]+(?:[.-][0-9a-zA-Z_]+)*)"; // Example version group regex pattern
@@ -157,111 +157,111 @@ impl VersionParsed<'_> {
     }
 }
 
-pub(crate) fn parse_version_range(input_str: &str) -> Range<RerVersion> {
+pub(crate) fn parse_version_range(input_str: &str) -> Ranges<RerVersion> {
     if input_str.is_empty() {
-        return Range::any();
+        return Ranges::full();
     }
     let parsed = VersionParsed::parse_str(input_str);
     if !parsed.is_range() {
         if parsed.exact_version.is_some() {
             let v: RerVersion = parsed.exact_version_group.unwrap().try_into().unwrap();
-            return Range::exact(v);
+            return Ranges::singleton(v);
         }
         let v: RerVersion = parsed.version.unwrap().try_into().unwrap();
-        return Range::between(v.clone(), v.bump());
+        return Ranges::between(v.clone(), v.bump());
     }
     if parsed.inclusive_bound.is_some() {
         let start: RerVersion = parsed.inclusive_lower_version.unwrap().try_into().unwrap();
         let end: RerVersion = parsed.inclusive_upper_version.unwrap().try_into().unwrap();
-        let b = Range::between(start, end.clone());
-        return b.union(&Range::exact(end));
+        let b = Ranges::between(start, end.clone());
+        return b.union(&Ranges::singleton(end));
     }
     if parsed.lower_bound.is_some() {
         let start: RerVersion = parsed.lower_version.unwrap().try_into().unwrap();
-        return Range::higher_than(start);
+        return Ranges::higher_than(start);
     }
     if parsed.upper_bound.is_some() {
         let end: RerVersion = parsed.upper_version.unwrap().try_into().unwrap();
         if parsed.upper_bound_prefix == Some("<") {
-            return Range::strictly_lower_than(end);
+            return Ranges::strictly_lower_than(end);
         }
-        return Range::strictly_lower_than(end.clone()).union(&Range::exact(end));
+        return Ranges::strictly_lower_than(end.clone()).union(&Ranges::singleton(end));
     }
     if parsed.range_asc.is_some() {
         let start: RerVersion = parsed.range_lower_asc_version.unwrap().try_into().unwrap();
         let end: RerVersion = parsed.range_upper_asc_version.unwrap().try_into().unwrap();
-        return Range::between(start, end);
+        return Ranges::between(start, end);
     }
     if parsed.range_desc.is_some() {
         let end: RerVersion = parsed.range_upper_desc_version.unwrap().try_into().unwrap();
         let start: RerVersion = parsed.range_lower_desc_version.unwrap().try_into().unwrap();
         if parsed.range_upper_desc_prefix == Some("<") {
-            return Range::between(start, end);
+            return Ranges::between(start, end);
         }
         // parsed.range_upper_desc_prefix should a +<
-        return Range::between(start, end.clone()).union(&Range::exact(end));
+        return Ranges::between(start, end.clone()).union(&Ranges::singleton(end));
     }
-    Range::any()
+    Ranges::full()
 }
 
 #[test]
 fn test_parse_version_range() {
     let input_str = "";
     let a = parse_version_range(input_str);
-    assert_eq!(a, Range::any());
+    assert_eq!(a, Ranges::full());
     let input_str = "1";
     let a = parse_version_range(input_str);
     let v: RerVersion = input_str.try_into().unwrap();
-    let r = Range::between(v.clone(), v.bump());
+    let r = Ranges::between(v.clone(), v.bump());
     assert_eq!(a, r);
     let v_sub_version: RerVersion = "1.0.0".try_into().unwrap();
     assert_eq!(a.contains(&v_sub_version), true);
     let input_str = "1.0.0";
     let a = parse_version_range(input_str);
     let v: RerVersion = input_str.try_into().unwrap();
-    assert_eq!(a, Range::between(v.clone(), v.bump()));
+    assert_eq!(a, Ranges::between(v.clone(), v.bump()));
     let input_str = "==1.0.0";
     let a = parse_version_range(input_str);
     let v: RerVersion = "1.0.0".try_into().unwrap();
-    assert_eq!(a, Range::exact(v));
+    assert_eq!(a, Ranges::singleton(v));
     let input_str = "1.0.0..2.0.0";
     let a = parse_version_range(input_str);
     let start: RerVersion = "1.0.0".try_into().unwrap();
-    let end: RerVersion = "2.0.0_".try_into().unwrap();
-    assert_eq!(a, Range::between(start, end));
+    let end: RerVersion = "2.0.0".try_into().unwrap();
+    assert_eq!(a, Ranges::between(start, end.clone()).union(&Ranges::singleton(end)));
     let input_str = "1.0.0+";
     let a = parse_version_range(input_str);
     let start: RerVersion = "1.0.0".try_into().unwrap();
-    assert_eq!(a, Range::higher_than(start));
+    assert_eq!(a, Ranges::higher_than(start));
     let input_str = "<=1.0.0";
     let a = parse_version_range(input_str);
     let end: RerVersion = "1.0.0".try_into().unwrap();
     assert_eq!(
         a,
-        Range::strictly_lower_than(end.clone()).union(&Range::exact(end))
+        Ranges::strictly_lower_than(end.clone()).union(&Ranges::singleton(end))
     );
     let input_str = "<1.0.0";
     let a = parse_version_range(input_str);
     let end: RerVersion = "1.0.0".try_into().unwrap();
-    assert_eq!(a, Range::strictly_lower_than(end));
+    assert_eq!(a, Ranges::strictly_lower_than(end));
     let input_str = "1.0.0+<2.0.0";
     let a = parse_version_range(input_str);
     let start: RerVersion = "1.0.0".try_into().unwrap();
     let end: RerVersion = "2.0.0".try_into().unwrap();
-    assert_eq!(a, Range::between(start, end));
+    assert_eq!(a, Ranges::between(start, end));
     let input_str = "<=2.0.0,1.0.0+";
     let a = parse_version_range(input_str);
     let end: RerVersion = "2.0.0".try_into().unwrap();
     let start: RerVersion = "1.0.0".try_into().unwrap();
     assert_eq!(
         a,
-        Range::between(start, end.clone()).union(&Range::exact(end))
+        Ranges::between(start, end.clone()).union(&Ranges::singleton(end))
     );
     let input_str = "<2.0.0,1.0.0+";
     let a = parse_version_range(input_str);
     let end: RerVersion = "2.0.0".try_into().unwrap();
     let start: RerVersion = "1.0.0".try_into().unwrap();
-    assert_eq!(a, Range::between(start, end));
+    assert_eq!(a, Ranges::between(start, end));
 }
 
 #[test]

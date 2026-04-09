@@ -1,4 +1,3 @@
-use pubgrub::version::Version;
 use rer_version::RerVersion;
 
 #[test]

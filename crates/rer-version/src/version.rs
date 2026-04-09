@@ -1,6 +1,5 @@
 use core::cmp::Ordering;
 use lazy_static::lazy_static;
-use pubgrub::version::Version;
 use rand::{distributions::Alphanumeric, Rng};
 use regex::Regex;
 use std::fmt;
@@ -150,7 +149,7 @@ impl fmt::Display for AlphanumericVersionToken {
     }
 }
 
-impl Version for AlphanumericVersionToken {
+impl AlphanumericVersionToken {
     fn lowest() -> Self {
         AlphanumericVersionToken {
             subtokens: vec![SubToken::new("_")],
@@ -241,14 +240,14 @@ impl RerVersion {
         }
     }
 }
-impl Version for RerVersion {
-    fn lowest() -> Self {
+impl RerVersion {
+    pub fn lowest() -> Self {
         RerVersion {
             tokens: vec![AlphanumericVersionToken::lowest()],
             seps: vec![],
         }
     }
-    fn bump(&self) -> Self {
+    pub fn bump(&self) -> Self {
         let mut next_tokens = self.tokens.clone();
         let last = next_tokens
             .pop()

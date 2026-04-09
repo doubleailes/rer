@@ -2,12 +2,10 @@ use crate::requirement::parser::parse_version_range;
 use crate::version::RerVersion;
 use core::fmt;
 use lazy_static::lazy_static;
-use pubgrub::range::Range;
-#[allow(unused_imports)] // Needed to import the Version trait
-use pubgrub::version::Version;
 use regex::Regex;
 use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
+use version_ranges::Ranges;
 
 lazy_static! {
     static ref SEP_REGEZ_STR: Regex =
@@ -25,7 +23,7 @@ lazy_static! {
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Requirement {
     pub name: String,
-    pub range: Option<Range<RerVersion>>,
+    pub range: Option<Ranges<RerVersion>>,
     weak_ref: bool,
     conflict: bool,
     sep: char,
@@ -64,7 +62,7 @@ impl Requirement {
                 sep = req_str.remove(0);
             }
             if req_str.contains('|') {
-                let reqs: Vec<Range<RerVersion>> =
+                let reqs: Vec<Ranges<RerVersion>> =
                     req_str.split('|').map(parse_version_range).collect();
                 for req in reqs {
                     if range.is_none() {
@@ -77,14 +75,14 @@ impl Requirement {
                 range = Some(parse_version_range(&req_str));
             }
             if conflict {
-                range = Some(range.unwrap().negate());
+                range = Some(range.unwrap().complement());
             }
             input_str[..m.start()].to_string()
         } else if conflict {
             input_str
             // '~foo' equates to no effect, so range remains None
         } else {
-            range = Some(Range::any());
+            range = Some(Ranges::full());
             input_str
         };
 
@@ -103,7 +101,7 @@ impl Requirement {
     ///
     /// Get the name and the range of the requirement in the pubgrub format.
     /// Use mainly to add a dependency in the pubgrub solver.
-    pub fn get_pubgrub(&self) -> (String, Range<RerVersion>) {
+    pub fn get_pubgrub(&self) -> (String, Ranges<RerVersion>) {
         (self.name.clone(), self.range.clone().unwrap())
     }
     /// # get_name
@@ -127,7 +125,7 @@ impl Requirement {
     /// ## Description
     ///
     /// Get the range of the requirement.
-    pub fn get_version_range(&self) -> Option<Range<RerVersion>> {
+    pub fn get_version_range(&self) -> Option<Ranges<RerVersion>> {
         self.range.clone()
     }
     /// # merge
@@ -167,8 +165,8 @@ impl Requirement {
             original_name: self.original_name.clone(), // Assuming a typo fix in field name
         })
     }
-    fn difference(a: &Range<RerVersion>, b: &Range<RerVersion>) -> Range<RerVersion> {
-        a.intersection(&b.negate())
+    fn difference(a: &Ranges<RerVersion>, b: &Ranges<RerVersion>) -> Ranges<RerVersion> {
+        a.intersection(&b.complement())
     }
     /// # is_weak_ref
     ///
@@ -178,7 +176,7 @@ impl Requirement {
     pub fn is_weak_ref(&self) -> bool {
         self.weak_ref
     }
-    fn from_pkg_and_range(name: String, range: Range<RerVersion>) -> Self {
+    fn from_pkg_and_range(name: String, range: Ranges<RerVersion>) -> Self {
         let original_name = format!("{}-{}", name, range);
         Requirement {
             name,
@@ -196,14 +194,14 @@ fn test_requierement() {
     let a = Requirement::from("voodoo-1");
     assert_eq!(a.name, "voodoo");
     let v: RerVersion = "1".try_into().unwrap();
-    assert_eq!(a.range, Some(Range::between(v.clone(), v.bump())));
+    assert_eq!(a.range, Some(Ranges::between(v.clone(), v.bump())));
     let a = Requirement::from("voodoo-1.13.0|2.1.0");
     assert_eq!(a.name, "voodoo");
     let v: RerVersion = "1.13.0".try_into().unwrap();
     let v2: RerVersion = "2.1.0".try_into().unwrap();
     assert_eq!(
         a.range,
-        Some(Range::between(v.clone(), v.bump()).union(&Range::between(v2.clone(), v2.bump())))
+        Some(Ranges::between(v.clone(), v.bump()).union(&Ranges::between(v2.clone(), v2.bump())))
     );
 }
 
@@ -250,20 +248,20 @@ fn test_merge_requirement() {
     let b = Requirement::from("foo==1.2.2");
     let c = a.merge(&b).unwrap();
     let v_start: RerVersion = "1.2.2".try_into().unwrap();
-    assert_eq!(c.get_version_range(), Some(Range::exact(v_start)));
+    assert_eq!(c.get_version_range(), Some(Ranges::singleton(v_start)));
     let a = Requirement::from("foo-1.2");
     let b = Requirement::from("~foo-1");
     let c = a.merge(&b).unwrap();
     let v_start: RerVersion = "1.2".try_into().unwrap();
     let v_end: RerVersion = "1.2_".try_into().unwrap();
-    assert_eq!(c.get_version_range(), Some(Range::between(v_start, v_end)));
+    assert_eq!(c.get_version_range(), Some(Ranges::between(v_start, v_end)));
     let a = Requirement::from("foo-1.2");
     let b = Requirement::from("!foo-1");
     let c = a.merge(&b).unwrap();
     let v_start: RerVersion = "1.2".try_into().unwrap();
     let v_end: RerVersion = "1.2_".try_into().unwrap();
     println!("{:?}", c.get_version_range().unwrap().to_string());
-    assert_eq!(c.get_version_range(), Some(Range::between(v_start, v_end)));
+    assert_eq!(c.get_version_range(), Some(Ranges::between(v_start, v_end)));
 }
 
 /// # Requirements
@@ -328,7 +326,7 @@ impl Requirements {
     /// ## Description
     ///
     /// Convert the requirements into a list of tuple of name and range.
-    pub fn to_pubgrub(&self) -> Vec<(String, Range<RerVersion>)> {
+    pub fn to_pubgrub(&self) -> Vec<(String, Ranges<RerVersion>)> {
         self.0.iter().map(|x| x.get_pubgrub()).collect()
     }
     /// # is_empty
@@ -375,8 +373,8 @@ impl Requirements {
     pub fn reduced(
         &mut self,
         package_name: &String,
-        range: &Range<RerVersion>,
-    ) -> (Range<RerVersion>, Self) {
+        range: &Ranges<RerVersion>,
+    ) -> (Ranges<RerVersion>, Self) {
         let new_req = Requirement::from_pkg_and_range(package_name.clone(), range.clone());
         let requierements: Requirements = Requirements(vec![new_req]);
         self.extend(&requierements);
@@ -440,8 +438,8 @@ fn test_reduce() {
     let requirements_str = vec!["~foo-1.0.5"];
     let mut requirements = Requirements::from(requirements_str);
     let v: RerVersion = "1".try_into().unwrap();
-    let (range, _toto) = requirements.reduced(&"foo".to_string(), &Range::exact(v.clone()));
+    let (range, _toto) = requirements.reduced(&"foo".to_string(), &Ranges::between(v.clone(), v.bump()));
     let v_req: RerVersion = "1.0.5".try_into().unwrap();
-    let req_range: Range<RerVersion> = Range::exact(v_req);
+    let req_range: Ranges<RerVersion> = Ranges::between(v_req.clone(), v_req.bump());
     assert_eq!(range, req_range);
 }

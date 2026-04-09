@@ -1,6 +1,4 @@
-use pubgrub::error::PubGrubError;
-use pubgrub::report::{DefaultStringReporter, Reporter};
-use pubgrub::solver::resolve;
+use pubgrub::{resolve, DefaultStringReporter, PubGrubError, Reporter};
 use rer_resolver::resolver::RerDependencyProvider;
 use rer_version::RerVersion;
 use serde::Deserialize;

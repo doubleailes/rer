@@ -16,7 +16,8 @@ license-file = "LICENSE"
 repository = "https://github.com/doubleailes/rer"
 
 [workspace.dependencies]
-pubgrub = "0.2.1"
+pubgrub = "0.3.0"
+version-ranges = "0.1"
 regex = "1.10.5"
 lazy_static = "1.5.0"
 rand = "0.8.5"
