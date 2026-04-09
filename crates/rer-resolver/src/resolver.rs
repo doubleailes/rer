@@ -11,7 +11,6 @@ use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
-use test_rust_python::Package;
 
 #[derive(Debug, Clone, Default)]
 pub struct RerDependencyProvider {
