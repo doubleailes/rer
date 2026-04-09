@@ -10,9 +10,13 @@ use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 use version_ranges::Ranges;
 
-/// Naming convention for variant selector packages: `{package_name}[v]`
+/// Reserved prefix for internal variant selector packages, chosen to avoid
+/// collisions with any real package name.
+const VARIANT_SELECTOR_PREFIX: &str = "__rer_internal_variant_selector__::";
+
+/// Naming convention for variant selector packages.
 fn variant_selector_name(package_name: &str) -> String {
-    format!("{}[v]", package_name)
+    format!("{}{}", VARIANT_SELECTOR_PREFIX, package_name)
 }
 
 /// Create a variant-encoded version: `{base_version}.{variant_index}`
@@ -22,9 +26,9 @@ fn variant_version(base: &RerVersion, variant_index: usize) -> RerVersion {
         .unwrap_or_else(|_| panic!("Failed to create variant version {}", s))
 }
 
-/// Returns true if a package name is a variant selector (contains `[v]` suffix).
+/// Returns true if a package name is an internal variant selector.
 fn is_variant_selector(name: &str) -> bool {
-    name.ends_with("[v]")
+    name.starts_with(VARIANT_SELECTOR_PREFIX)
 }
 
 fn check_version<'a>(
@@ -43,11 +47,13 @@ fn check_version<'a>(
 /// Register a multi-variant package into the dependency provider.
 ///
 /// For a package `foo/1.0.0` with requires=["python-3"] and variants=[["maya-2024"], ["maya-2025"]]:
-/// - Registers `foo/1.0.0` → deps: python-3, foo[v] ∈ [1.0.0, 1.0.0_)
-/// - Registers `foo[v]/1.0.0.0` → deps: maya-2024
-/// - Registers `foo[v]/1.0.0.1` → deps: maya-2025
+/// - Registers `foo/1.0.0` → deps: python-3, selector ∈ {1.0.0.0, 1.0.0.1}
+/// - Registers selector/`1.0.0.0` → deps: maya-2024
+/// - Registers selector/`1.0.0.1` → deps: maya-2025
 ///
-/// Pubgrub picks one variant version of `foo[v]` via version selection and backtracking.
+/// The selector constraint is a union of singleton ranges so that `foo/X` can only
+/// select among the variant versions created for `foo/X`, not for any other base version.
+/// Pubgrub picks one variant version via version selection and backtracking.
 fn register_multi_variant(
     dependency_provider: &Arc<Mutex<OfflineDependencyProvider<String, Ranges<RerVersion>>>>,
     package_name: &str,
@@ -65,11 +71,19 @@ fn register_multi_variant(
             .collect(),
     );
     let mut base_deps: Vec<(String, Ranges<RerVersion>)> = requires_reqs.to_pubgrub();
-    // Add dependency on variant selector with range [version, version.bump())
-    base_deps.push((
-        selector_name.clone(),
-        Ranges::between(version.clone(), version.bump()),
-    ));
+    // Build a union of singleton ranges for exactly the variant versions of this base version.
+    // This ensures foo/X can only select among the selector versions created for foo/X.
+    let mut selector_range: Option<Ranges<RerVersion>> = None;
+    for i in 0..package_data.variants.len() {
+        let vv = variant_version(version, i);
+        selector_range = Some(match selector_range {
+            None => Ranges::singleton(vv),
+            Some(r) => r.union(&Ranges::singleton(vv)),
+        });
+    }
+    if let Some(range) = selector_range {
+        base_deps.push((selector_name.clone(), range));
+    }
 
     // Register base package
     let mut dp = dependency_provider.lock().unwrap();

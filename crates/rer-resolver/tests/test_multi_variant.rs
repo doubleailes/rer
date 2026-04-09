@@ -333,10 +333,10 @@ fn test_variant_selector_not_in_output() {
     let mut lp = LocalPackages::from_packages(packages);
     let result = solver_with_packages(vec!["tool-1.0.0"], &mut lp).unwrap();
 
-    // No entry should contain "[v]" — those are internal variant selectors
+    // No entry should contain the internal variant selector prefix
     for entry in &result {
         assert!(
-            !entry.contains("[v]"),
+            !entry.contains("__rer_internal_variant_selector__"),
             "Variant selector '{}' should not appear in output",
             entry
         );
