@@ -1,4 +1,5 @@
 use crate::candidate_selector::{CandidateList, ResolutionMode};
+use crate::package_id::PackageId;
 use pubgrub::{Dependencies, DependencyConstraints, DependencyProvider, PackageResolutionStatistics};
 use rer_version::Requirements;
 use rer_version::RerVersion;
@@ -67,20 +68,21 @@ impl RerDependencyProvider {
     }
     fn dependencies(
         &self,
-        package: &str,
+        package: &PackageId,
         version: &RerVersion,
-    ) -> Option<DependencyConstraints<String, Ranges<RerVersion>>> {
-        let r = self.fetch_dependencies(package, version.to_string().as_str())?;
+    ) -> Option<DependencyConstraints<PackageId, Ranges<RerVersion>>> {
+        let name = package.name()?;
+        let r = self.fetch_dependencies(name, version.to_string().as_str())?;
         Some(
             r.into_iter()
                 .map(|x| {
-                    let (name, range) = x.get_pubgrub();
-                    (name, range)
+                    let (dep_name, range) = x.get_pubgrub();
+                    (PackageId::Base(dep_name), range)
                 })
                 .collect(),
         )
     }
-    fn init_dependencies(&self) -> Option<DependencyConstraints<String, Ranges<RerVersion>>> {
+    fn init_dependencies(&self) -> Option<DependencyConstraints<PackageId, Ranges<RerVersion>>> {
         let r: Requirements = self.init_request.clone();
         let (no_conflict, _conflict) = r.split_conflict();
         Some(
@@ -88,22 +90,23 @@ impl RerDependencyProvider {
                 .into_iter()
                 .map(|x| {
                     let (name, range) = x.get_pubgrub();
-                    (name, range)
+                    (PackageId::Base(name), range)
                 })
                 .collect(),
         )
     }
-    fn get_potential_versions(&self, package: &String) -> impl Iterator<Item = RerVersion> {
-        if package == "init" {
+    fn get_potential_versions(&self, package: &PackageId) -> impl Iterator<Item = RerVersion> {
+        if package.is_root() {
             let unique_versions: Vec<RerVersion> = vec![RerVersion::try_from("1.0.0").unwrap()];
             return unique_versions.into_iter();
         }
+        let name = package.name().unwrap_or("");
         let package_paths: Vec<PathBuf> = self
             .paths
             .iter()
             .map(|x| {
                 let mut p = x.clone();
-                p.push(package);
+                p.push(name);
                 p
             })
             .filter(|x| x.exists())
@@ -112,21 +115,22 @@ impl RerDependencyProvider {
     }
     fn candidat_selector(
         &self,
-        mut potential_packages: impl Iterator<Item = (String, Ranges<RerVersion>)>,
-    ) -> (String, Option<RerVersion>) {
+        mut potential_packages: impl Iterator<Item = (PackageId, Ranges<RerVersion>)>,
+    ) -> (PackageId, Option<RerVersion>) {
         let (pkg, range) = potential_packages.find(|_| true).unwrap();
+        let name = pkg.name().unwrap_or("").to_string();
         let package_paths: Vec<PathBuf> = self
             .paths
             .iter()
             .map(|x| {
                 let mut p = x.clone();
-                p.push(pkg.clone());
+                p.push(&name);
                 p
             })
             .filter(|x| x.exists())
             .collect();
         let mut t = self.conflicted.lock().unwrap();
-        let (range, requirements) = t.reduced(&pkg, &range);
+        let (range, requirements) = t.reduced(&name, &range);
         t.switch(&requirements);
         drop(t);
         let v = CandidateList::new(Self::search_and_merge_simple_versions(package_paths))
@@ -154,7 +158,7 @@ impl fmt::Display for RerSolverError {
 impl Error for RerSolverError {}
 
 impl DependencyProvider for RerDependencyProvider {
-    type P = String;
+    type P = PackageId;
     type V = RerVersion;
     type VS = Ranges<RerVersion>;
     type M = String;
@@ -167,15 +171,16 @@ impl DependencyProvider for RerDependencyProvider {
         range: &Self::VS,
         _package_conflicts_counts: &PackageResolutionStatistics,
     ) -> Self::Priority {
-        if package == "init" {
+        if package.is_root() {
             return Reverse(0);
         }
+        let name = package.name().unwrap_or("");
         let package_paths: Vec<PathBuf> = self
             .paths
             .iter()
             .map(|x| {
                 let mut p = x.clone();
-                p.push(package);
+                p.push(name);
                 p
             })
             .filter(|x| x.exists())
@@ -190,22 +195,23 @@ impl DependencyProvider for RerDependencyProvider {
         package: &Self::P,
         range: &Self::VS,
     ) -> Result<Option<Self::V>, Self::Err> {
-        if package == "init" {
+        if package.is_root() {
             let unique_version: RerVersion = RerVersion::try_from("1.0.0").unwrap();
             return Ok(Some(unique_version));
         }
+        let name = package.name().unwrap_or("");
         let package_paths: Vec<PathBuf> = self
             .paths
             .iter()
             .map(|x| {
                 let mut p = x.clone();
-                p.push(package);
+                p.push(name);
                 p
             })
             .filter(|x| x.exists())
             .collect();
         let mut t = self.conflicted.lock().unwrap();
-        let (range, requirements) = t.reduced(package, range);
+        let (range, requirements) = t.reduced(&name.to_string(), range);
         t.switch(&requirements);
         drop(t);
         let v = CandidateList::new(Self::search_and_merge_simple_versions(package_paths))
@@ -218,7 +224,7 @@ impl DependencyProvider for RerDependencyProvider {
         package: &Self::P,
         version: &Self::V,
     ) -> Result<Dependencies<Self::P, Self::VS, Self::M>, Self::Err> {
-        if package == "init" {
+        if package.is_root() {
             return Ok(match self.init_dependencies() {
                 None => Dependencies::Unavailable("dependencies unavailable".to_string()),
                 Some(dependencies) => Dependencies::Available(dependencies),
