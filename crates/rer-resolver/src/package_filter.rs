@@ -1,5 +1,6 @@
 use regex::Regex;
 use rer_version::RerVersion;
+use std::fmt;
 
 /// Trait for filtering packages during dependency resolution.
 ///
@@ -206,6 +207,14 @@ impl PackageFilter for TimestampFilter {
 /// assert!(filters.excludes("prod_foo", &v, None).is_none());
 /// ```
 pub struct FilterList(Vec<Box<dyn PackageFilter>>);
+
+impl fmt::Debug for FilterList {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("FilterList")
+            .field(&format!("[{} filter(s)]", self.0.len()))
+            .finish()
+    }
+}
 
 impl FilterList {
     /// Create an empty `FilterList`.
