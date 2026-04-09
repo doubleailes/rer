@@ -1,5 +1,6 @@
 use crate::candidate_selector::CandidateList;
 use crate::local_package::PackageData;
+use crate::package_id::PackageId;
 use crate::LocalPackages;
 use pubgrub::{resolve, OfflineDependencyProvider, PubGrubError};
 use rer_version::{Requirement, Requirements, RerVersion};
@@ -7,17 +8,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use uuid::Uuid;
 use version_ranges::Ranges;
-
-/// Reserved prefix for internal variant selector packages, chosen to avoid
-/// collisions with any real package name.
-const VARIANT_SELECTOR_PREFIX: &str = "__rer_internal_variant_selector__::";
-
-/// Naming convention for variant selector packages.
-fn variant_selector_name(package_name: &str) -> String {
-    format!("{}{}", VARIANT_SELECTOR_PREFIX, package_name)
-}
 
 /// Create a variant-encoded version: `{base_version}.{variant_index}`
 fn variant_version(base: &RerVersion, variant_index: usize) -> RerVersion {
@@ -26,18 +17,13 @@ fn variant_version(base: &RerVersion, variant_index: usize) -> RerVersion {
         .unwrap_or_else(|_| panic!("Failed to create variant version {}", s))
 }
 
-/// Returns true if a package name is an internal variant selector.
-fn is_variant_selector(name: &str) -> bool {
-    name.starts_with(VARIANT_SELECTOR_PREFIX)
-}
-
-fn check_version<'a>(
-    dependency_provider: &'a Arc<Mutex<OfflineDependencyProvider<String, Ranges<RerVersion>>>>,
-    package_name: &'a String,
-    version: &'a RerVersion,
+fn check_version(
+    dependency_provider: &Arc<Mutex<OfflineDependencyProvider<PackageId, Ranges<RerVersion>>>>,
+    package_id: &PackageId,
+    version: &RerVersion,
 ) -> bool {
     let versions_package: Vec<RerVersion> =
-        match dependency_provider.lock().unwrap().versions(package_name) {
+        match dependency_provider.lock().unwrap().versions(package_id) {
             Some(versions_package) => versions_package.into_iter().cloned().collect(),
             None => Vec::new(),
         };
@@ -47,20 +33,20 @@ fn check_version<'a>(
 /// Register a multi-variant package into the dependency provider.
 ///
 /// For a package `foo/1.0.0` with requires=["python-3"] and variants=[["maya-2024"], ["maya-2025"]]:
-/// - Registers `foo/1.0.0` → deps: python-3, selector ∈ {1.0.0.0, 1.0.0.1}
-/// - Registers selector/`1.0.0.0` → deps: maya-2024
-/// - Registers selector/`1.0.0.1` → deps: maya-2025
+/// - Registers `Base("foo")/1.0.0` → deps: python-3, Variant("foo", 0) ∈ {1.0.0.0, 1.0.0.1}
+/// - Registers `Variant("foo", 0)/1.0.0.0` → deps: maya-2024
+/// - Registers `Variant("foo", 0)/1.0.0.1` → deps: maya-2025
 ///
-/// The selector constraint is a union of singleton ranges so that `foo/X` can only
-/// select among the variant versions created for `foo/X`, not for any other base version.
+/// The variant selector (`Variant(name, 0)`) uses a union of singleton ranges so that
+/// `Base("foo")/X` can only select among the variant versions created for `X`.
 /// Pubgrub picks one variant version via version selection and backtracking.
 fn register_multi_variant(
-    dependency_provider: &Arc<Mutex<OfflineDependencyProvider<String, Ranges<RerVersion>>>>,
+    dependency_provider: &Arc<Mutex<OfflineDependencyProvider<PackageId, Ranges<RerVersion>>>>,
     package_name: &str,
     version: &RerVersion,
     package_data: &PackageData,
 ) {
-    let selector_name = variant_selector_name(package_name);
+    let selector_id = PackageId::Variant(package_name.to_string(), 0);
 
     // Build base package deps: requires + dependency on variant selector
     let requires_reqs = Requirements::from(
@@ -70,9 +56,13 @@ fn register_multi_variant(
             .map(|s| s.as_str())
             .collect(),
     );
-    let mut base_deps: Vec<(String, Ranges<RerVersion>)> = requires_reqs.to_pubgrub();
+    let mut base_deps: Vec<(PackageId, Ranges<RerVersion>)> = requires_reqs
+        .to_pubgrub()
+        .into_iter()
+        .map(|(name, range)| (PackageId::Base(name), range))
+        .collect();
     // Build a union of singleton ranges for exactly the variant versions of this base version.
-    // This ensures foo/X can only select among the selector versions created for foo/X.
+    // This ensures Base("foo")/X can only select among the selector versions created for X.
     let mut selector_range: Option<Ranges<RerVersion>> = None;
     for i in 0..package_data.variants.len() {
         let vv = variant_version(version, i);
@@ -82,25 +72,33 @@ fn register_multi_variant(
         });
     }
     if let Some(range) = selector_range {
-        base_deps.push((selector_name.clone(), range));
+        base_deps.push((selector_id.clone(), range));
     }
 
     // Register base package
     let mut dp = dependency_provider.lock().unwrap();
-    dp.add_dependencies(package_name.to_string(), version.clone(), base_deps);
+    dp.add_dependencies(
+        PackageId::Base(package_name.to_string()),
+        version.clone(),
+        base_deps,
+    );
 
     // Register each variant as a version of the selector package
     for (i, variant_deps) in package_data.variants.iter().enumerate() {
         let v_version = variant_version(version, i);
         let variant_reqs =
             Requirements::from(variant_deps.iter().map(|s| s.as_str()).collect());
-        let variant_pubgrub: Vec<(String, Ranges<RerVersion>)> = variant_reqs.to_pubgrub();
-        dp.add_dependencies(selector_name.clone(), v_version, variant_pubgrub);
+        let variant_pubgrub: Vec<(PackageId, Ranges<RerVersion>)> = variant_reqs
+            .to_pubgrub()
+            .into_iter()
+            .map(|(name, range)| (PackageId::Base(name), range))
+            .collect();
+        dp.add_dependencies(selector_id.clone(), v_version, variant_pubgrub);
     }
 }
 
 fn recursive(
-    dependency_provider: &Arc<Mutex<OfflineDependencyProvider<String, Ranges<RerVersion>>>>,
+    dependency_provider: &Arc<Mutex<OfflineDependencyProvider<PackageId, Ranges<RerVersion>>>>,
     local_packages: &mut LocalPackages,
     dependencies: Requirements,
     cache_requierements: &Arc<Mutex<HashSet<Requirement>>>,
@@ -133,8 +131,9 @@ fn recursive(
         let candidates = CandidateList::from_vec_str(versions.iter().map(|x| x.as_str()).collect());
         let range = dependency.get_version_range().unwrap_or(Ranges::full());
         let candidates = candidates.find_candidates(&range);
+        let base_id = PackageId::Base(package_name.clone());
         for candidate in candidates {
-            if check_version(dependency_provider, &package_name, candidate) {
+            if check_version(dependency_provider, &base_id, candidate) {
                 continue;
             }
 
@@ -186,10 +185,14 @@ fn recursive(
             // No variants or single variant: use combined dependencies
             let dependencies =
                 local_packages.get_dependencies(&package_name, &candidate.to_string());
-            let dependencies_pubgrub: Vec<(String, Ranges<RerVersion>)> = dependencies.to_pubgrub();
+            let dependencies_pubgrub: Vec<(PackageId, Ranges<RerVersion>)> = dependencies
+                .to_pubgrub()
+                .into_iter()
+                .map(|(name, range)| (PackageId::Base(name), range))
+                .collect();
             let mut dependency_provider_guard = dependency_provider.lock().unwrap();
             dependency_provider_guard.add_dependencies(
-                package_name.to_string(),
+                PackageId::Base(package_name.to_string()),
                 candidate.clone(),
                 dependencies_pubgrub,
             );
@@ -211,7 +214,7 @@ fn recursive(
 pub fn solver(
     requirements_str: Vec<&str>,
     paths: Vec<PathBuf>,
-) -> Result<Vec<String>, PubGrubError<OfflineDependencyProvider<String, Ranges<RerVersion>>>> {
+) -> Result<Vec<String>, PubGrubError<OfflineDependencyProvider<PackageId, Ranges<RerVersion>>>> {
     let mut packages = LocalPackages::lazy_paths(paths);
     solver_with_packages(requirements_str, &mut packages)
 }
@@ -220,16 +223,15 @@ pub fn solver(
 pub fn solver_with_packages(
     requirements_str: Vec<&str>,
     packages: &mut LocalPackages,
-) -> Result<Vec<String>, PubGrubError<OfflineDependencyProvider<String, Ranges<RerVersion>>>> {
-    let dependency_provider: Arc<Mutex<OfflineDependencyProvider<String, Ranges<RerVersion>>>> = Arc::new(
-        Mutex::new(OfflineDependencyProvider::<String, Ranges<RerVersion>>::new()),
-    );
+) -> Result<Vec<String>, PubGrubError<OfflineDependencyProvider<PackageId, Ranges<RerVersion>>>> {
+    let dependency_provider: Arc<Mutex<OfflineDependencyProvider<PackageId, Ranges<RerVersion>>>> =
+        Arc::new(Mutex::new(
+            OfflineDependencyProvider::<PackageId, Ranges<RerVersion>>::new(),
+        ));
     let cache_requierements: Arc<Mutex<HashSet<Requirement>>> =
         Arc::new(Mutex::new(HashSet::new()));
     let weak_references: Arc<Mutex<HashMap<String, Ranges<RerVersion>>>> =
         Arc::new(Mutex::new(HashMap::new()));
-    // Create a uuid to represent the current request
-    let context_name = Uuid::new_v4().to_string();
     // Transform the list of str into a list of Requirement and merge if possible
     let dependencies: Requirements = Requirements::from(requirements_str).merge();
     let mut new_deps = Requirements::empty();
@@ -252,12 +254,17 @@ pub fn solver_with_packages(
     }
     let dependencies = new_deps;
     // Convert list of str into list of Requirement
-    let dependencies_pubgrub: Vec<(String, Ranges<RerVersion>)> = dependencies.to_pubgrub();
+    let dependencies_pubgrub: Vec<(PackageId, Ranges<RerVersion>)> = dependencies
+        .to_pubgrub()
+        .into_iter()
+        .map(|(name, range)| (PackageId::Base(name), range))
+        .collect();
     // clone the current version
     let v: RerVersion = "1.0.0".try_into().unwrap();
+    let root = PackageId::Root;
     // grab the mutex
     dependency_provider.lock().unwrap().add_dependencies(
-        context_name.clone(),
+        root.clone(),
         v.clone(),
         dependencies_pubgrub,
     );
@@ -268,16 +275,19 @@ pub fn solver_with_packages(
         &cache_requierements,
         &weak_references,
     );
-    let p: OfflineDependencyProvider<String, Ranges<RerVersion>> =
+    let p: OfflineDependencyProvider<PackageId, Ranges<RerVersion>> =
         dependency_provider.lock().unwrap().clone();
-    match resolve(&p, context_name.clone(), v) {
+    match resolve(&p, root.clone(), v) {
         Ok(mut solution) => {
-            solution.remove(&context_name);
+            solution.remove(&root);
             let resolves: Vec<String> = solution
                 .into_iter()
-                // Filter out variant selector packages from the output
-                .filter(|(name, _)| !is_variant_selector(name))
-                .map(|(x, y)| format!("{}/{}/package.py", x, y))
+                // Filter out variant selector packages and Root from the output
+                .filter(|(id, _)| matches!(id, PackageId::Base(_)))
+                .map(|(id, version)| {
+                    let name = id.name().expect("Base always has a name");
+                    format!("{}/{}/package.py", name, version)
+                })
                 .collect();
             Ok(resolves)
         }

@@ -333,11 +333,16 @@ fn test_variant_selector_not_in_output() {
     let mut lp = LocalPackages::from_packages(packages);
     let result = solver_with_packages(vec!["tool-1.0.0"], &mut lp).unwrap();
 
-    // No entry should contain the internal variant selector prefix
+    // No entry should contain variant selector artifacts in the output
     for entry in &result {
         assert!(
             !entry.contains("__rer_internal_variant_selector__"),
             "Variant selector '{}' should not appear in output",
+            entry
+        );
+        assert!(
+            !entry.contains("__root__"),
+            "Root package '{}' should not appear in output",
             entry
         );
     }

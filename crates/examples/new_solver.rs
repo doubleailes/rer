@@ -1,5 +1,6 @@
 use pubgrub::{resolve, DefaultStringReporter, PubGrubError, Reporter};
 use rer_resolver::resolver::RerDependencyProvider;
+use rer_resolver::PackageId;
 use rer_version::RerVersion;
 use serde::Deserialize;
 use serde_json;
@@ -35,11 +36,16 @@ fn main() {
         println!("Request: {:?}", resolved.request);
         dependency_provider.add_init_request(resolved.request);
         let version: RerVersion = "1.0.0".try_into().unwrap();
-        match resolve(&dependency_provider, "init".to_string(), version) {
+        let root = PackageId::Root;
+        match resolve(&dependency_provider, root, version) {
             Ok(solution) => {
                 let mut solution_str: Vec<String> = solution
                     .into_iter()
-                    .map(|(x, y)| format!("{}/{}/package.py", x, y))
+                    .filter(|(id, _)| matches!(id, PackageId::Base(_)))
+                    .map(|(id, version)| {
+                        let name = id.name().expect("Base always has a name");
+                        format!("{}/{}/package.py", name, version)
+                    })
                     .collect();
                 solution_str.sort();
                 println!("{:#?}", solution_str);
