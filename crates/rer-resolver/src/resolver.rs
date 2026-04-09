@@ -1,4 +1,5 @@
 use crate::candidate_selector::{CandidateList, ResolutionMode};
+use crate::package_filter::{FilterList, PackageFilter};
 use crate::package_id::PackageId;
 use pubgrub::{Dependencies, DependencyConstraints, DependencyProvider, PackageResolutionStatistics};
 use rer_version::Requirements;
@@ -12,17 +13,22 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use version_ranges::Ranges;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Default)]
 pub struct RerDependencyProvider {
     paths: Vec<PathBuf>,
     init_request: Requirements,
     conflicted: Arc<Mutex<Requirements>>,
     counter: Arc<Mutex<u32>>,
+    filters: FilterList,
 }
 
 impl RerDependencyProvider {
     pub fn new() -> Self {
         Self::default()
+    }
+    /// Set the filters to apply during resolution.
+    pub fn set_filters(&mut self, filters: FilterList) {
+        self.filters = filters;
     }
     pub fn add_init_request(&mut self, init_request: Vec<String>) {
         let reduced = Requirements::from(init_request.iter().map(|x| x.as_str()).collect());
@@ -186,7 +192,11 @@ impl DependencyProvider for RerDependencyProvider {
             .filter(|x| x.exists())
             .collect();
         let versions = Self::search_and_merge_simple_versions(package_paths);
-        let count = versions.iter().filter(|v| range.contains(v)).count();
+        let filters = &self.filters;
+        let count = versions
+            .iter()
+            .filter(|v| range.contains(v) && filters.excludes(name, v, None).is_none())
+            .count();
         Reverse(count)
     }
 
@@ -214,7 +224,13 @@ impl DependencyProvider for RerDependencyProvider {
         let (range, requirements) = t.reduced(&name.to_string(), range);
         t.switch(&requirements);
         drop(t);
-        let v = CandidateList::new(Self::search_and_merge_simple_versions(package_paths))
+        let all_versions = Self::search_and_merge_simple_versions(package_paths);
+        let filters = &self.filters;
+        let filtered_versions: Vec<RerVersion> = all_versions
+            .into_iter()
+            .filter(|v| filters.excludes(name, v, None).is_none())
+            .collect();
+        let v = CandidateList::new(filtered_versions)
             .find_candidate(&range, ResolutionMode::Highest);
         Ok(v)
     }

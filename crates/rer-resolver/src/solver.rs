@@ -1,5 +1,6 @@
 use crate::candidate_selector::CandidateList;
 use crate::local_package::PackageData;
+use crate::package_filter::{FilterList, PackageFilter};
 use crate::package_id::PackageId;
 use crate::LocalPackages;
 use pubgrub::{resolve, OfflineDependencyProvider, PubGrubError};
@@ -103,6 +104,7 @@ fn recursive(
     dependencies: Requirements,
     cache_requierements: &Arc<Mutex<HashSet<Requirement>>>,
     weak_references: &Arc<Mutex<HashMap<String, Ranges<RerVersion>>>>,
+    filters: &FilterList,
 ) {
     for dependency in dependencies {
         // Acquire the mutex
@@ -137,6 +139,11 @@ fn recursive(
                 continue;
             }
 
+            // Apply package filters: skip excluded versions
+            if filters.excludes(&package_name, candidate, None).is_some() {
+                continue;
+            }
+
             // Check for multi-variant package data
             let pkg_data = local_packages.get_package_data(&package_name, &candidate.to_string());
             if let Some(ref data) = pkg_data {
@@ -160,6 +167,7 @@ fn recursive(
                             requires,
                             cache_requierements,
                             weak_references,
+                            filters,
                         );
                     }
 
@@ -175,6 +183,7 @@ fn recursive(
                                 variant_reqs,
                                 cache_requierements,
                                 weak_references,
+                                filters,
                             );
                         }
                     }
@@ -206,6 +215,7 @@ fn recursive(
                 dependencies,
                 cache_requierements,
                 weak_references,
+                filters,
             );
         }
     }
@@ -223,6 +233,18 @@ pub fn solver(
 pub fn solver_with_packages(
     requirements_str: Vec<&str>,
     packages: &mut LocalPackages,
+) -> Result<Vec<String>, PubGrubError<OfflineDependencyProvider<PackageId, Ranges<RerVersion>>>> {
+    solver_with_packages_filtered(requirements_str, packages, &FilterList::default())
+}
+
+/// Solve with a pre-built `LocalPackages` instance and package filters.
+///
+/// Filters are applied during candidate selection: any package version excluded
+/// by a filter in the `FilterList` is skipped by the solver.
+pub fn solver_with_packages_filtered(
+    requirements_str: Vec<&str>,
+    packages: &mut LocalPackages,
+    filters: &FilterList,
 ) -> Result<Vec<String>, PubGrubError<OfflineDependencyProvider<PackageId, Ranges<RerVersion>>>> {
     let dependency_provider: Arc<Mutex<OfflineDependencyProvider<PackageId, Ranges<RerVersion>>>> =
         Arc::new(Mutex::new(
@@ -274,6 +296,7 @@ pub fn solver_with_packages(
         dependencies,
         &cache_requierements,
         &weak_references,
+        filters,
     );
     let p: OfflineDependencyProvider<PackageId, Ranges<RerVersion>> =
         dependency_provider.lock().unwrap().clone();
