@@ -2,7 +2,6 @@ use rer_version::Requirements;
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
-use test_rust_python::Package;
 
 pub struct LocalPackages {
     data: HashMap<String, HashMap<String, String>>,
