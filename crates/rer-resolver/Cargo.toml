@@ -11,6 +11,7 @@ name = "rer_resolver"
 
 [dependencies]
 pubgrub = { workspace = true }
+version-ranges = { workspace = true }
 rer-version = { workspace = true }
 rayon = { workspace = true }
 serde = { workspace = true }

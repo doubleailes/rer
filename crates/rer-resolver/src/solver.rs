@@ -1,17 +1,16 @@
 use crate::candidate_selector::CandidateList;
 use crate::LocalPackages;
-use pubgrub::error::PubGrubError;
-use pubgrub::range::Range;
-use pubgrub::solver::{resolve, OfflineDependencyProvider};
+use pubgrub::{resolve, OfflineDependencyProvider, PubGrubError};
 use rer_version::{Requirement, Requirements, RerVersion};
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use uuid::Uuid;
+use version_ranges::Ranges;
 
 fn check_version<'a>(
-    dependency_provider: &'a Arc<Mutex<OfflineDependencyProvider<String, RerVersion>>>,
+    dependency_provider: &'a Arc<Mutex<OfflineDependencyProvider<String, Ranges<RerVersion>>>>,
     package_name: &'a String,
     version: &'a RerVersion,
 ) -> bool {
@@ -24,11 +23,11 @@ fn check_version<'a>(
 }
 
 fn recursive(
-    dependency_provider: &Arc<Mutex<OfflineDependencyProvider<String, RerVersion>>>,
+    dependency_provider: &Arc<Mutex<OfflineDependencyProvider<String, Ranges<RerVersion>>>>,
     local_packages: &mut LocalPackages,
     dependencies: Requirements,
     cache_requierements: &Arc<Mutex<HashSet<Requirement>>>,
-    weak_references: &Arc<Mutex<HashMap<String, Range<RerVersion>>>>,
+    weak_references: &Arc<Mutex<HashMap<String, Ranges<RerVersion>>>>,
 ) {
     for dependency in dependencies {
         // Acquire the mutex
@@ -42,7 +41,7 @@ fn recursive(
         drop(cache_requi);
         let package_name = dependency.get_name().to_string();
         if dependency.is_weak_ref() {
-            let range = dependency.get_version_range().unwrap_or(Range::any());
+            let range = dependency.get_version_range().unwrap_or(Ranges::full());
             let mut weak_references_guard = weak_references.lock().unwrap();
             if !weak_references_guard.contains_key(&package_name) {
                 weak_references_guard.insert(package_name.clone(), range);
@@ -55,7 +54,7 @@ fn recursive(
         }
         let versions = local_packages.get_versions(&package_name);
         let candidates = CandidateList::from_vec_str(versions.iter().map(|x| x.as_str()).collect());
-        let range = dependency.get_version_range().unwrap_or(Range::any());
+        let range = dependency.get_version_range().unwrap_or(Ranges::full());
         let candidates = candidates.find_candidates(&range);
         for candidate in candidates {
             if check_version(dependency_provider, &package_name, candidate) {
@@ -63,7 +62,7 @@ fn recursive(
             }
             let dependencies =
                 local_packages.get_dependencies(&package_name, &candidate.to_string());
-            let dependencies_pubgrub: Vec<(String, Range<RerVersion>)> = dependencies.to_pubgrub();
+            let dependencies_pubgrub: Vec<(String, Ranges<RerVersion>)> = dependencies.to_pubgrub();
             let mut dependency_provider_guard = dependency_provider.lock().unwrap();
             dependency_provider_guard.add_dependencies(
                 package_name.to_string(),
@@ -88,13 +87,13 @@ fn recursive(
 pub fn solver(
     requirements_str: Vec<&str>,
     paths: Vec<PathBuf>,
-) -> Result<Vec<String>, PubGrubError<String, RerVersion>> {
-    let dependency_provider: Arc<Mutex<OfflineDependencyProvider<String, RerVersion>>> = Arc::new(
-        Mutex::new(OfflineDependencyProvider::<String, RerVersion>::new()),
+) -> Result<Vec<String>, PubGrubError<OfflineDependencyProvider<String, Ranges<RerVersion>>>> {
+    let dependency_provider: Arc<Mutex<OfflineDependencyProvider<String, Ranges<RerVersion>>>> = Arc::new(
+        Mutex::new(OfflineDependencyProvider::<String, Ranges<RerVersion>>::new()),
     );
     let cache_requierements: Arc<Mutex<HashSet<Requirement>>> =
         Arc::new(Mutex::new(HashSet::new()));
-    let weak_references: Arc<Mutex<HashMap<String, Range<RerVersion>>>> =
+    let weak_references: Arc<Mutex<HashMap<String, Ranges<RerVersion>>>> =
         Arc::new(Mutex::new(HashMap::new()));
     let mut packages = LocalPackages::lazy_paths(paths);
     // Create a uuid to represent the current request
@@ -105,7 +104,7 @@ pub fn solver(
     for dependency in dependencies {
         if dependency.is_weak_ref() {
             let name = dependency.get_name().to_string();
-            let range = dependency.get_version_range().unwrap_or(Range::any());
+            let range = dependency.get_version_range().unwrap_or(Ranges::full());
             let mut weak_references_guard = weak_references.lock().unwrap();
             if !weak_references_guard.contains_key(&name) {
                 weak_references_guard.insert(name, range);
@@ -121,7 +120,7 @@ pub fn solver(
     }
     let dependencies = new_deps;
     // Convert list of str into list of Requirement
-    let dependencies_pubgrub: Vec<(String, Range<RerVersion>)> = dependencies.to_pubgrub();
+    let dependencies_pubgrub: Vec<(String, Ranges<RerVersion>)> = dependencies.to_pubgrub();
     // clone the current version
     let v: RerVersion = "1.0.0".try_into().unwrap();
     // grab the mutex
@@ -137,7 +136,7 @@ pub fn solver(
         &cache_requierements,
         &weak_references,
     );
-    let p: OfflineDependencyProvider<String, RerVersion> =
+    let p: OfflineDependencyProvider<String, Ranges<RerVersion>> =
         dependency_provider.lock().unwrap().clone();
     match resolve(&p, context_name.clone(), v) {
         Ok(mut solution) => {

@@ -11,7 +11,7 @@ name = "rer_version"
 
 
 [dependencies]
-pubgrub = { workspace = true }
+version-ranges = { workspace = true }
 regex = { workspace = true }
 lazy_static = { workspace = true }
 rand = { workspace = true }
