@@ -438,7 +438,8 @@ fn test_reduce() {
     let requirements_str = vec!["~foo-1.0.5"];
     let mut requirements = Requirements::from(requirements_str);
     let v: RerVersion = "1".try_into().unwrap();
-    let (range, _toto) = requirements.reduced(&"foo".to_string(), &Ranges::between(v.clone(), v.bump()));
+    let (range, _toto) =
+        requirements.reduced(&"foo".to_string(), &Ranges::between(v.clone(), v.bump()));
     let v_req: RerVersion = "1.0.5".try_into().unwrap();
     let req_range: Ranges<RerVersion> = Ranges::between(v_req.clone(), v_req.bump());
     assert_eq!(range, req_range);

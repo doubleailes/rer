@@ -135,9 +135,7 @@ impl LocalPackages {
     ///
     /// The input maps package names to their versions, where each version has
     /// a `PackageData` containing base requirements and optional variants.
-    pub fn from_packages(
-        packages: HashMap<String, HashMap<String, PackageData>>,
-    ) -> Self {
+    pub fn from_packages(packages: HashMap<String, HashMap<String, PackageData>>) -> Self {
         // Also populate the `data` field with version→"" mapping for get_versions()
         let mut data: HashMap<String, HashMap<String, String>> = HashMap::new();
         for (pkg_name, versions) in &packages {

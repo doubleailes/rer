@@ -44,8 +44,7 @@ impl CandidateList {
                     return high_candidate;
                 }
                 // Fall back to the "second" strategy on versions < pivot
-                let low_range =
-                    range.intersection(&Ranges::strictly_lower_than(pivot.clone()));
+                let low_range = range.intersection(&Ranges::strictly_lower_than(pivot.clone()));
                 if !low_range.is_empty() {
                     self.find_candidate(&low_range, second)
                 } else {
@@ -56,6 +55,49 @@ impl CandidateList {
     }
     pub fn find_candidates(&self, range: &Ranges<RerVersion>) -> Vec<&RerVersion> {
         self.0.iter().filter(|&x| range.contains(x)).collect()
+    }
+}
+
+/// Select the best version from an arbitrary iterator without requiring a pre-sorted input.
+///
+/// For `Highest`/`Lowest`, performs a single linear scan using `max()`/`min()`.
+/// For `VersionSplit`, collects matching versions once and recurses on sub-slices.
+/// Only the single chosen version is cloned.
+///
+/// Use this in hot paths (e.g., `DependencyProvider::choose_version`) instead of
+/// constructing a `CandidateList` just to call `find_candidate` once.
+pub fn find_best_candidate<'a, I>(
+    versions: I,
+    range: &Ranges<RerVersion>,
+    mode: &ResolutionMode,
+) -> Option<RerVersion>
+where
+    I: Iterator<Item = &'a RerVersion>,
+{
+    match mode {
+        ResolutionMode::Highest => versions.filter(|v| range.contains(v)).max().cloned(),
+        ResolutionMode::Lowest => versions.filter(|v| range.contains(v)).min().cloned(),
+        ResolutionMode::VersionSplit {
+            pivot,
+            first,
+            second,
+        } => {
+            let high_range = range.intersection(&Ranges::higher_than(pivot.clone()));
+            let low_range = range.intersection(&Ranges::strictly_lower_than(pivot.clone()));
+            // Collect matching versions once to allow two passes without re-iterating.
+            let matching: Vec<&RerVersion> = versions.filter(|v| range.contains(v)).collect();
+            if !high_range.is_empty() {
+                let candidate = find_best_candidate(matching.iter().copied(), &high_range, first);
+                if candidate.is_some() {
+                    return candidate;
+                }
+            }
+            if !low_range.is_empty() {
+                find_best_candidate(matching.iter().copied(), &low_range, second)
+            } else {
+                None
+            }
+        }
     }
 }
 
@@ -123,11 +165,8 @@ impl PackageOrderConfig {
     /// Get the resolution mode for a given package family.
     ///
     /// Returns the per-family override if one exists, otherwise the default.
-    pub fn mode_for(&self, family: &str) -> ResolutionMode {
-        self.per_family
-            .get(family)
-            .cloned()
-            .unwrap_or_else(|| self.default.clone())
+    pub fn mode_for(&self, family: &str) -> &ResolutionMode {
+        self.per_family.get(family).unwrap_or(&self.default)
     }
 }
 
@@ -232,7 +271,10 @@ fn test_version_split_lowest_on_high_side() {
 #[test]
 fn test_package_order_config_default() {
     let config = PackageOrderConfig::new(ResolutionMode::Highest);
-    assert!(matches!(config.mode_for("anything"), ResolutionMode::Highest));
+    assert!(matches!(
+        config.mode_for("anything"),
+        ResolutionMode::Highest
+    ));
 }
 
 #[test]

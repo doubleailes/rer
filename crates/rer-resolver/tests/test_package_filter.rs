@@ -1,6 +1,6 @@
+use regex::Regex;
 use rer_resolver::package_filter::{FilterList, GlobFilter, RegexFilter};
 use rer_resolver::{solver_with_packages_filtered, LocalPackages, PackageData};
-use regex::Regex;
 use std::collections::HashMap;
 
 /// Helper to build package data for tests.
@@ -46,7 +46,8 @@ fn test_filter_excludes_version_solver_picks_next() {
 
     // Without filters: picks 2.0.0
     let mut lp = LocalPackages::from_packages(packages.clone());
-    let result = solver_with_packages_filtered(vec!["tool"], &mut lp, &FilterList::default()).unwrap();
+    let result =
+        solver_with_packages_filtered(vec!["tool"], &mut lp, &FilterList::default()).unwrap();
     assert_eq!(
         sorted(result),
         sorted(vec!["tool/2.0.0/package.py".to_string()])
@@ -135,7 +136,8 @@ fn test_multiple_filters_or_semantics() {
     filters.add(Box::new(GlobFilter::new("alpha").unwrap()));
     filters.add(Box::new(GlobFilter::new("beta").unwrap()));
     let mut lp = LocalPackages::from_packages(packages);
-    let result = solver_with_packages_filtered(vec!["alpha-1.0.0", "beta-1.0.0"], &mut lp, &filters);
+    let result =
+        solver_with_packages_filtered(vec!["alpha-1.0.0", "beta-1.0.0"], &mut lp, &filters);
     assert!(
         result.is_err(),
         "Should fail when all versions of requested packages are excluded"

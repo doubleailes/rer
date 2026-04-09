@@ -228,7 +228,10 @@ fn test_parse_version_range() {
     let a = parse_version_range(input_str);
     let start: RerVersion = "1.0.0".try_into().unwrap();
     let end: RerVersion = "2.0.0".try_into().unwrap();
-    assert_eq!(a, Ranges::between(start, end.clone()).union(&Ranges::singleton(end)));
+    assert_eq!(
+        a,
+        Ranges::between(start, end.clone()).union(&Ranges::singleton(end))
+    );
     let input_str = "1.0.0+";
     let a = parse_version_range(input_str);
     let start: RerVersion = "1.0.0".try_into().unwrap();
