@@ -228,7 +228,14 @@ impl DependencyProvider for RerDependencyProvider {
         let filters = &self.filters;
         let filtered_versions: Vec<RerVersion> = all_versions
             .into_iter()
-            .filter(|v| filters.excludes(name, v, None).is_none())
+            .filter(|v| {
+                if let Some(reason) = filters.excludes(name, v, None) {
+                    log::debug!("Package {}/{} excluded: {}", name, v, reason);
+                    false
+                } else {
+                    true
+                }
+            })
             .collect();
         let v = CandidateList::new(filtered_versions)
             .find_candidate(&range, ResolutionMode::Highest);

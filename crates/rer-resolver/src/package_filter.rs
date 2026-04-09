@@ -58,12 +58,11 @@ pub struct RegexFilter {
 
 impl PackageFilter for RegexFilter {
     fn excludes(&self, name: &str, version: &RerVersion, _timestamp: Option<u64>) -> Option<String> {
-        let version_str = version.to_string();
         let family_matches = self.family.as_ref().map_or(true, |re| re.is_match(name));
-        let version_matches = self
-            .version
-            .as_ref()
-            .map_or(true, |re| re.is_match(&version_str));
+        let version_matches = match &self.version {
+            None => true,
+            Some(re) => re.is_match(&version.to_string()),
+        };
 
         // If both fields are None, nothing to match — don't exclude
         if self.family.is_none() && self.version.is_none() {
@@ -155,11 +154,11 @@ fn glob_to_regex(pattern: &str) -> String {
     regex
 }
 
-/// Stub filter for timestamp-based exclusion.
+/// Filter that excludes packages based on a Unix timestamp cutoff.
 ///
-/// Requires package timestamp data which is not yet available. This filter
-/// currently never excludes any package. A follow-up issue will add timestamp
-/// support once `PackageData` includes timestamps.
+/// When `timestamp` is `None` (i.e. no timestamp data is available for the
+/// package), the filter is a no-op and the package is never excluded.
+/// When `timestamp` is `Some(ts)` and `ts < before`, the package is excluded.
 ///
 /// # Examples
 ///
@@ -243,7 +242,6 @@ impl PackageFilter for FilterList {
     fn excludes(&self, name: &str, version: &RerVersion, timestamp: Option<u64>) -> Option<String> {
         for filter in &self.0 {
             if let Some(reason) = filter.excludes(name, version, timestamp) {
-                log::debug!("Package {}/{} excluded: {}", name, version, reason);
                 return Some(reason);
             }
         }
