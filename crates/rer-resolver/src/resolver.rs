@@ -100,7 +100,7 @@ impl RerDependencyProvider {
             let unique_versions: Vec<RerVersion> = vec![RerVersion::try_from("1.0.0").unwrap()];
             return unique_versions.into_iter();
         }
-        let name = package.name().unwrap_or("");
+        let name = package.name().expect("non-root package must have a name");
         let package_paths: Vec<PathBuf> = self
             .paths
             .iter()
@@ -118,7 +118,7 @@ impl RerDependencyProvider {
         mut potential_packages: impl Iterator<Item = (PackageId, Ranges<RerVersion>)>,
     ) -> (PackageId, Option<RerVersion>) {
         let (pkg, range) = potential_packages.find(|_| true).unwrap();
-        let name = pkg.name().unwrap_or("").to_string();
+        let name = pkg.name().expect("non-root package must have a name").to_string();
         let package_paths: Vec<PathBuf> = self
             .paths
             .iter()
@@ -174,7 +174,7 @@ impl DependencyProvider for RerDependencyProvider {
         if package.is_root() {
             return Reverse(0);
         }
-        let name = package.name().unwrap_or("");
+        let name = package.name().expect("non-root package must have a name");
         let package_paths: Vec<PathBuf> = self
             .paths
             .iter()
@@ -199,7 +199,7 @@ impl DependencyProvider for RerDependencyProvider {
             let unique_version: RerVersion = RerVersion::try_from("1.0.0").unwrap();
             return Ok(Some(unique_version));
         }
-        let name = package.name().unwrap_or("");
+        let name = package.name().expect("non-root package must have a name");
         let package_paths: Vec<PathBuf> = self
             .paths
             .iter()

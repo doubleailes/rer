@@ -282,11 +282,12 @@ pub fn solver_with_packages(
             solution.remove(&root);
             let resolves: Vec<String> = solution
                 .into_iter()
-                // Filter out variant selector packages and Root from the output
-                .filter(|(id, _)| matches!(id, PackageId::Base(_)))
-                .map(|(id, version)| {
-                    let name = id.name().expect("Base always has a name");
-                    format!("{}/{}/package.py", name, version)
+                .filter_map(|(id, version)| {
+                    if let PackageId::Base(name) = id {
+                        Some(format!("{}/{}/package.py", name, version))
+                    } else {
+                        None
+                    }
                 })
                 .collect();
             Ok(resolves)
