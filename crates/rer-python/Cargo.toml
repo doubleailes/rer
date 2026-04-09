@@ -1,0 +1,16 @@
+[package]
+name = "rer-python"
+version = "0.0.1"
+edition = { workspace = true }
+repository = { workspace = true }
+authors = { workspace = true }
+license-file = { workspace = true }
+publish = false
+
+[lib]
+name = "rer_solver"
+crate-type = ["cdylib", "lib"]
+
+[dependencies]
+pyo3 = { workspace = true }
+rer-resolver = { workspace = true }

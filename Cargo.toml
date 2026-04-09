@@ -30,3 +30,4 @@ uuid = { version = "1.9.1", features = ["v4", "fast-rng"] }
 itertools = "0.13.0"
 log = "0.4.20"
 log4rs = { version = "1.2.0", features = ["gzip"] }
+pyo3 = { version = "0.23.5", features = ["extension-module"] }
