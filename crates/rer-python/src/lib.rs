@@ -72,9 +72,11 @@ fn solve(
             let resolved: Vec<(String, String, usize)> = solution
                 .iter()
                 .filter_map(|entry| {
-                    // Entries are in the format "name/version/package.py"
+                    // Split "name/version/package.py" into at most 3 parts
                     let parts: Vec<&str> = entry.splitn(3, '/').collect();
                     if parts.len() >= 2 {
+                        // TODO(Phase 1): extract actual variant index once multi-variant
+                        // support encodes it in the solver output.
                         Some((parts[0].to_string(), parts[1].to_string(), 0))
                     } else {
                         None
