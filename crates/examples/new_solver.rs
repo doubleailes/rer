@@ -41,10 +41,12 @@ fn main() {
             Ok(solution) => {
                 let mut solution_str: Vec<String> = solution
                     .into_iter()
-                    .filter(|(id, _)| matches!(id, PackageId::Base(_)))
-                    .map(|(id, version)| {
-                        let name = id.name().expect("Base always has a name");
-                        format!("{}/{}/package.py", name, version)
+                    .filter_map(|(id, version)| {
+                        if let PackageId::Base(name) = id {
+                            Some(format!("{}/{}/package.py", name, version))
+                        } else {
+                            None
+                        }
                     })
                     .collect();
                 solution_str.sort();
