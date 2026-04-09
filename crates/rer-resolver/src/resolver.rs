@@ -62,21 +62,9 @@ impl RerDependencyProvider {
             .find(|p| p.exists())
             .and_then(|p| p.to_str().map(String::from))
             .unwrap_or_default();
-        let package = Package::from_file(&format!("{}/package.py", path)).ok()?;
-        // Rough implementation of the logic to get the variants
-        let mut deps: Vec<String> = package.get_dependencies();
-        if package.is_variant_unique() {
-            println!("Variant unique");
-            let var = package.get_variant(0).unwrap();
-            deps.extend(var);
-        }
-        // A first reduction of the requierement appears here
-        let r = Requirements::from(deps.iter().map(|x| x.as_str()).collect()).merge();
-        if r.is_empty() {
-            Some(r)
-        } else {
-            Some(self.fetch_and_merge_conflict(r))
-        }
+        // Legacy Python package.py parsing has been removed
+        let _ = path;
+        Some(Requirements::empty())
     }
     fn dependencies(
         &self,
