@@ -46,16 +46,10 @@ impl LocalPackages {
     pub fn get_dependencies(&self, package_name: &str, version: &str) -> Requirements {
         match self.data.get(package_name) {
             Some(versions) => match versions.get(version) {
-                Some(path) => match Package::from_file(&format!("{}/package.py", path)) {
-                    Ok(package) => Requirements::from(
-                        package
-                            .get_dependencies()
-                            .iter()
-                            .map(|x| x.as_str())
-                            .collect(),
-                    ),
-                    Err(err) => panic!("Error reading package {}", err),
-                },
+                Some(_path) => {
+                    // Legacy Python package.py parsing has been removed
+                    Requirements::empty()
+                }
                 None => panic!("Path not found"),
             },
             None => panic!("Package not found"),
