@@ -74,22 +74,25 @@ impl LocalPackages {
 
 #[test]
 fn test_search_package() {
-    let path = "/home/philippe.llerena/workspace/github.com/doubleailes/rer-bkp/data_set/packages";
-    let expected = path.to_string() + "/many";
-    let local_packages = LocalPackages::lazy_paths(vec![PathBuf::from(path)]);
+    let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/packages");
+    let expected = base.join("many");
+    let local_packages = LocalPackages::lazy_paths(vec![base]);
     let result = local_packages.search_package("many");
-    assert_eq!(result, vec![PathBuf::from(expected)]);
+    assert_eq!(result, vec![expected]);
 }
 
 #[test]
 fn test_search_and_merge_versions() {
-    let path = "/home/philippe.llerena/workspace/github.com/doubleailes/rer-bkp/data_set/packages";
-    let local_packages = LocalPackages::lazy_paths(vec![PathBuf::from(path)]);
-    let result =
-        local_packages.search_and_merge_versions(vec![PathBuf::from(path.to_string() + "/many")]);
+    let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/packages");
+    let many_path = base.join("many");
+    let local_packages = LocalPackages::lazy_paths(vec![base]);
+    let result = local_packages.search_and_merge_versions(vec![many_path.clone()]);
     assert_eq!(result, {
         let mut map = HashMap::new();
-        map.insert("1.2.0".to_string(), path.to_string() + "/many/1.2.0");
+        map.insert(
+            "1.2.0".to_string(),
+            many_path.join("1.2.0").to_str().unwrap().to_string(),
+        );
         map
     });
 }
