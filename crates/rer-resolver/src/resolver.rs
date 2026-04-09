@@ -1,4 +1,4 @@
-use crate::candidate_selector::{CandidateList, ResolutionMode};
+use crate::candidate_selector::{CandidateList, PackageOrderConfig};
 use crate::package_filter::{FilterList, PackageFilter};
 use crate::package_id::PackageId;
 use pubgrub::{Dependencies, DependencyConstraints, DependencyProvider, PackageResolutionStatistics};
@@ -20,6 +20,7 @@ pub struct RerDependencyProvider {
     conflicted: Arc<Mutex<Requirements>>,
     counter: Arc<Mutex<u32>>,
     filters: FilterList,
+    ordering: PackageOrderConfig,
 }
 
 impl RerDependencyProvider {
@@ -29,6 +30,10 @@ impl RerDependencyProvider {
     /// Set the filters to apply during resolution.
     pub fn set_filters(&mut self, filters: FilterList) {
         self.filters = filters;
+    }
+    /// Set the package ordering configuration.
+    pub fn set_ordering(&mut self, ordering: PackageOrderConfig) {
+        self.ordering = ordering;
     }
     pub fn add_init_request(&mut self, init_request: Vec<String>) {
         let reduced = Requirements::from(init_request.iter().map(|x| x.as_str()).collect());
@@ -140,7 +145,7 @@ impl RerDependencyProvider {
         t.switch(&requirements);
         drop(t);
         let v = CandidateList::new(Self::search_and_merge_simple_versions(package_paths))
-            .find_candidate(&range, ResolutionMode::Highest);
+            .find_candidate(&range, &self.ordering.mode_for(&name));
         (pkg, v)
     }
     pub fn lazy_paths(paths: Vec<PathBuf>) -> Self {
@@ -237,8 +242,9 @@ impl DependencyProvider for RerDependencyProvider {
                 }
             })
             .collect();
+        let mode = self.ordering.mode_for(name);
         let v = CandidateList::new(filtered_versions)
-            .find_candidate(&range, ResolutionMode::Highest);
+            .find_candidate(&range, &mode);
         Ok(v)
     }
 

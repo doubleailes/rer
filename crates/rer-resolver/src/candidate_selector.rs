@@ -1,4 +1,5 @@
 use rer_version::RerVersion;
+use std::collections::HashMap;
 use version_ranges::Ranges;
 
 pub struct CandidateList(Vec<RerVersion>);
@@ -22,15 +23,111 @@ impl CandidateList {
     pub fn find_candidate(
         &self,
         range: &Ranges<RerVersion>,
-        strategy_mode: ResolutionMode,
+        strategy_mode: &ResolutionMode,
     ) -> Option<RerVersion> {
         match strategy_mode {
             ResolutionMode::Highest => self.0.iter().rev().find(|&x| range.contains(x)).cloned(),
             ResolutionMode::Lowest => self.0.iter().find(|&x| range.contains(x)).cloned(),
+            ResolutionMode::VersionSplit {
+                pivot,
+                first,
+                second,
+            } => {
+                // Try the "first" strategy on versions >= pivot
+                let high_range = range.intersection(&Ranges::higher_than(pivot.clone()));
+                let high_candidate = if !high_range.is_empty() {
+                    self.find_candidate(&high_range, first)
+                } else {
+                    None
+                };
+                if high_candidate.is_some() {
+                    return high_candidate;
+                }
+                // Fall back to the "second" strategy on versions < pivot
+                let low_range =
+                    range.intersection(&Ranges::strictly_lower_than(pivot.clone()));
+                if !low_range.is_empty() {
+                    self.find_candidate(&low_range, second)
+                } else {
+                    None
+                }
+            }
         }
     }
     pub fn find_candidates(&self, range: &Ranges<RerVersion>) -> Vec<&RerVersion> {
         self.0.iter().filter(|&x| range.contains(x)).collect()
+    }
+}
+
+/// Resolution strategy for selecting package versions.
+#[derive(Debug, Default, Clone)]
+pub enum ResolutionMode {
+    /// Resolve the highest compatible version of each package.
+    #[default]
+    Highest,
+    /// Resolve the lowest compatible version of each package.
+    Lowest,
+    /// Split versions around a pivot point.
+    ///
+    /// Versions >= pivot are tried first using the `first` strategy,
+    /// then versions < pivot are tried using the `second` strategy.
+    /// This mirrors rez's `VersionSplitPackageOrder`.
+    VersionSplit {
+        /// The version to split around.
+        pivot: RerVersion,
+        /// Strategy for versions >= pivot (tried first).
+        first: Box<ResolutionMode>,
+        /// Strategy for versions < pivot (tried second).
+        second: Box<ResolutionMode>,
+    },
+}
+
+/// Per-family package ordering configuration.
+///
+/// Allows specifying a default resolution mode and per-family overrides,
+/// mirroring rez's `PackageOrder` and `PerFamilyOrder` strategies.
+///
+/// # Examples
+///
+/// ```
+/// use rer_resolver::{PackageOrderConfig, ResolutionMode};
+///
+/// let mut config = PackageOrderConfig::new(ResolutionMode::Highest);
+/// config.set_family_mode("python".to_string(), ResolutionMode::Lowest);
+///
+/// assert!(matches!(config.mode_for("python"), ResolutionMode::Lowest));
+/// assert!(matches!(config.mode_for("maya"), ResolutionMode::Highest));
+/// ```
+#[derive(Debug, Clone, Default)]
+pub struct PackageOrderConfig {
+    /// The default resolution mode for all packages.
+    pub default: ResolutionMode,
+    /// Per-family resolution mode overrides.
+    pub per_family: HashMap<String, ResolutionMode>,
+}
+
+impl PackageOrderConfig {
+    /// Create a new `PackageOrderConfig` with the given default mode and no per-family overrides.
+    pub fn new(default: ResolutionMode) -> Self {
+        Self {
+            default,
+            per_family: HashMap::new(),
+        }
+    }
+
+    /// Set a per-family resolution mode override.
+    pub fn set_family_mode(&mut self, family: String, mode: ResolutionMode) {
+        self.per_family.insert(family, mode);
+    }
+
+    /// Get the resolution mode for a given package family.
+    ///
+    /// Returns the per-family override if one exists, otherwise the default.
+    pub fn mode_for(&self, family: &str) -> ResolutionMode {
+        self.per_family
+            .get(family)
+            .cloned()
+            .unwrap_or_else(|| self.default.clone())
     }
 }
 
@@ -42,12 +139,12 @@ fn test_candidate_list() {
     let range = Ranges::between(v1, v2);
     let v3: RerVersion = "1.1.0".try_into().unwrap();
     assert_eq!(
-        list.find_candidate(&range, ResolutionMode::Highest),
+        list.find_candidate(&range, &ResolutionMode::Highest),
         Some(v3)
     );
     let v3: RerVersion = "1.0.0".try_into().unwrap();
     assert_eq!(
-        list.find_candidate(&range, ResolutionMode::Lowest),
+        list.find_candidate(&range, &ResolutionMode::Lowest),
         Some(v3)
     );
 }
@@ -70,15 +167,78 @@ fn test_candidates_list() {
     let range = Ranges::between(v1.clone(), v1.bump());
     let v2: RerVersion = "4.8.6.m3".try_into().unwrap();
     assert_eq!(
-        list.find_candidate(&range, ResolutionMode::Highest),
+        list.find_candidate(&range, &ResolutionMode::Highest),
         Some(v2)
     );
 }
-#[derive(Debug, Default)]
-pub enum ResolutionMode {
-    /// Resolve the highest compatible version of each package.
-    #[default]
-    Highest,
-    /// Resolve the lowest compatible version of each package.
-    Lowest,
+
+#[test]
+fn test_version_split_prefers_high_side() {
+    // Versions: 1.0.0, 2.0.0, 3.0.0, 4.0.0
+    // Pivot at 3.0.0: first=Highest (>=3), second=Highest (<3)
+    // Should pick 4.0.0 (highest on the high side)
+    let list = CandidateList::from_vec_str(vec!["1.0.0", "2.0.0", "3.0.0", "4.0.0"]);
+    let range = Ranges::full();
+    let pivot: RerVersion = "3.0.0".try_into().unwrap();
+    let mode = ResolutionMode::VersionSplit {
+        pivot,
+        first: Box::new(ResolutionMode::Highest),
+        second: Box::new(ResolutionMode::Highest),
+    };
+    assert_eq!(
+        list.find_candidate(&range, &mode),
+        Some("4.0.0".try_into().unwrap())
+    );
+}
+
+#[test]
+fn test_version_split_falls_back_to_low_side() {
+    // Versions: 1.0.0, 2.0.0
+    // Pivot at 3.0.0: first=Highest (>=3, empty), second=Highest (<3)
+    // Should fall back to 2.0.0 (highest on the low side)
+    let list = CandidateList::from_vec_str(vec!["1.0.0", "2.0.0"]);
+    let range = Ranges::full();
+    let pivot: RerVersion = "3.0.0".try_into().unwrap();
+    let mode = ResolutionMode::VersionSplit {
+        pivot,
+        first: Box::new(ResolutionMode::Highest),
+        second: Box::new(ResolutionMode::Highest),
+    };
+    assert_eq!(
+        list.find_candidate(&range, &mode),
+        Some("2.0.0".try_into().unwrap())
+    );
+}
+
+#[test]
+fn test_version_split_lowest_on_high_side() {
+    // Versions: 1.0.0, 2.0.0, 3.0.0, 4.0.0
+    // Pivot at 2.5.0: first=Lowest (>=2.5), second=Lowest (<2.5)
+    // Should pick 3.0.0 (lowest on the high side)
+    let list = CandidateList::from_vec_str(vec!["1.0.0", "2.0.0", "3.0.0", "4.0.0"]);
+    let range = Ranges::full();
+    let pivot: RerVersion = "2.5.0".try_into().unwrap();
+    let mode = ResolutionMode::VersionSplit {
+        pivot: pivot.clone(),
+        first: Box::new(ResolutionMode::Lowest),
+        second: Box::new(ResolutionMode::Lowest),
+    };
+    assert_eq!(
+        list.find_candidate(&range, &mode),
+        Some("3.0.0".try_into().unwrap())
+    );
+}
+
+#[test]
+fn test_package_order_config_default() {
+    let config = PackageOrderConfig::new(ResolutionMode::Highest);
+    assert!(matches!(config.mode_for("anything"), ResolutionMode::Highest));
+}
+
+#[test]
+fn test_package_order_config_per_family() {
+    let mut config = PackageOrderConfig::new(ResolutionMode::Highest);
+    config.set_family_mode("python".to_string(), ResolutionMode::Lowest);
+    assert!(matches!(config.mode_for("python"), ResolutionMode::Lowest));
+    assert!(matches!(config.mode_for("maya"), ResolutionMode::Highest));
 }
