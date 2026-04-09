@@ -1,5 +1,5 @@
 mod candidate_selector;
-pub use candidate_selector::{CandidateList, ResolutionMode};
+pub use candidate_selector::{CandidateList, PackageOrderConfig, ResolutionMode};
 mod local_package;
 pub use local_package::{LocalPackages, PackageData};
 pub mod package_filter;
@@ -7,5 +7,5 @@ pub use package_filter::{FilterList, GlobFilter, PackageFilter, RegexFilter, Tim
 mod package_id;
 pub use package_id::PackageId;
 mod solver;
-pub use solver::{solver, solver_with_packages, solver_with_packages_filtered};
+pub use solver::{solver, solver_with_packages, solver_with_packages_filtered, solver_with_packages_ordered};
 pub mod resolver;

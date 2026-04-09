@@ -1,12 +1,14 @@
 use crate::candidate_selector::CandidateList;
+use crate::candidate_selector::PackageOrderConfig;
 use crate::local_package::PackageData;
 use crate::package_filter::{FilterList, PackageFilter};
 use crate::package_id::PackageId;
 use crate::LocalPackages;
-use pubgrub::{resolve, OfflineDependencyProvider, PubGrubError};
+use pubgrub::{resolve, Dependencies, DependencyProvider, OfflineDependencyProvider, PackageResolutionStatistics, PubGrubError};
 use rer_version::{Requirement, Requirements, RerVersion};
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::convert::Infallible;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use version_ranges::Ranges;
@@ -301,6 +303,140 @@ pub fn solver_with_packages_filtered(
     let p: OfflineDependencyProvider<PackageId, Ranges<RerVersion>> =
         dependency_provider.lock().unwrap().clone();
     match resolve(&p, root.clone(), v) {
+        Ok(mut solution) => {
+            solution.remove(&root);
+            let resolves: Vec<String> = solution
+                .into_iter()
+                .filter_map(|(id, version)| {
+                    if let PackageId::Base(name) = id {
+                        Some(format!("{}/{}/package.py", name, version))
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            Ok(resolves)
+        }
+        Err(e) => Err(e),
+    }
+}
+
+/// A wrapper around `OfflineDependencyProvider` that uses `PackageOrderConfig`
+/// for version selection instead of always picking the highest version.
+///
+/// This is used internally by [`solver_with_packages_ordered`] and exposed
+/// only because it appears in the `PubGrubError` return type.
+pub struct OrderedDependencyProvider {
+    inner: OfflineDependencyProvider<PackageId, Ranges<RerVersion>>,
+    ordering: PackageOrderConfig,
+}
+
+impl DependencyProvider for OrderedDependencyProvider {
+    type P = PackageId;
+    type V = RerVersion;
+    type VS = Ranges<RerVersion>;
+    type M = String;
+    type Priority = <OfflineDependencyProvider<PackageId, Ranges<RerVersion>> as DependencyProvider>::Priority;
+    type Err = Infallible;
+
+    fn prioritize(
+        &self,
+        package: &Self::P,
+        range: &Self::VS,
+        package_statistics: &PackageResolutionStatistics,
+    ) -> Self::Priority {
+        self.inner.prioritize(package, range, package_statistics)
+    }
+
+    fn choose_version(
+        &self,
+        package: &Self::P,
+        range: &Self::VS,
+    ) -> Result<Option<Self::V>, Self::Err> {
+        let versions: Vec<RerVersion> = match self.inner.versions(package) {
+            Some(versions) => versions.cloned().collect(),
+            None => return Ok(None),
+        };
+        let mode = match package.name() {
+            Some(name) => self.ordering.mode_for(name),
+            None => self.ordering.default.clone(),
+        };
+        Ok(CandidateList::new(versions).find_candidate(range, &mode))
+    }
+
+    fn get_dependencies(
+        &self,
+        package: &Self::P,
+        version: &Self::V,
+    ) -> Result<Dependencies<Self::P, Self::VS, Self::M>, Self::Err> {
+        self.inner.get_dependencies(package, version)
+    }
+}
+
+/// Solve with a pre-built `LocalPackages` instance, package filters, and ordering config.
+///
+/// Combines filtering (exclude certain package versions) with ordering
+/// (control which version is preferred per package family).
+pub fn solver_with_packages_ordered(
+    requirements_str: Vec<&str>,
+    packages: &mut LocalPackages,
+    filters: &FilterList,
+    ordering: &PackageOrderConfig,
+) -> Result<Vec<String>, PubGrubError<OrderedDependencyProvider>> {
+    let dependency_provider: Arc<Mutex<OfflineDependencyProvider<PackageId, Ranges<RerVersion>>>> =
+        Arc::new(Mutex::new(
+            OfflineDependencyProvider::<PackageId, Ranges<RerVersion>>::new(),
+        ));
+    let cache_requierements: Arc<Mutex<HashSet<Requirement>>> =
+        Arc::new(Mutex::new(HashSet::new()));
+    let weak_references: Arc<Mutex<HashMap<String, Ranges<RerVersion>>>> =
+        Arc::new(Mutex::new(HashMap::new()));
+    let dependencies: Requirements = Requirements::from(requirements_str).merge();
+    let mut new_deps = Requirements::empty();
+    for dependency in dependencies {
+        if dependency.is_weak_ref() {
+            let name = dependency.get_name().to_string();
+            let range = dependency.get_version_range().unwrap_or(Ranges::full());
+            let mut weak_references_guard = weak_references.lock().unwrap();
+            if !weak_references_guard.contains_key(&name) {
+                weak_references_guard.insert(name, range);
+            } else {
+                let current_range = weak_references_guard.get(&name).unwrap();
+                let new_range = current_range.union(&range);
+                weak_references_guard.insert(name, new_range);
+            }
+            drop(weak_references_guard);
+        } else {
+            new_deps.add(dependency);
+        }
+    }
+    let dependencies = new_deps;
+    let dependencies_pubgrub: Vec<(PackageId, Ranges<RerVersion>)> = dependencies
+        .to_pubgrub()
+        .into_iter()
+        .map(|(name, range)| (PackageId::Base(name), range))
+        .collect();
+    let v: RerVersion = "1.0.0".try_into().unwrap();
+    let root = PackageId::Root;
+    dependency_provider.lock().unwrap().add_dependencies(
+        root.clone(),
+        v.clone(),
+        dependencies_pubgrub,
+    );
+    recursive(
+        &dependency_provider,
+        packages,
+        dependencies,
+        &cache_requierements,
+        &weak_references,
+        filters,
+    );
+    let inner = dependency_provider.lock().unwrap().clone();
+    let provider = OrderedDependencyProvider {
+        inner,
+        ordering: ordering.clone(),
+    };
+    match resolve(&provider, root.clone(), v) {
         Ok(mut solution) => {
             solution.remove(&root);
             let resolves: Vec<String> = solution
