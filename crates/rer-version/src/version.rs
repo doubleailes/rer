@@ -199,7 +199,7 @@ fn test_bump_alpha_num() {
 ///
 /// ## Examples
 /// ```
-/// use rer_version::description::RerVersion;
+/// use rer_version::RerVersion;
 /// let v: RerVersion = "1.2.3-alpha+beta".try_into().unwrap();
 /// assert_eq!(v.to_string(), "1.2.3-alpha+beta");
 /// ```
@@ -217,7 +217,7 @@ impl RerVersion {
     /// contain any character except for whitespace.
     /// ## Examples
     /// ```
-    /// use rer_version::description::RerVersion;
+    /// use rer_version::RerVersion;
     /// let v: RerVersion = "1.2.3-alpha+beta".try_into().unwrap();
     /// assert_eq!(v.to_string(), "1.2.3-alpha+beta");
     /// ```

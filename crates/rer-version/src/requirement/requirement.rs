@@ -115,7 +115,7 @@ impl Requirement {
     /// ## Example
     ///
     /// ```rust
-    /// use rer_version::requirement::Requirement;
+    /// use rer_version::Requirement;
     /// let a = Requirement::from("maya-1.2.3+<2.0.0");
     /// assert_eq!(a.get_name(), "maya");
     /// ```
