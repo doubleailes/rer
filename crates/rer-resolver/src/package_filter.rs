@@ -57,7 +57,12 @@ pub struct RegexFilter {
 }
 
 impl PackageFilter for RegexFilter {
-    fn excludes(&self, name: &str, version: &RerVersion, _timestamp: Option<u64>) -> Option<String> {
+    fn excludes(
+        &self,
+        name: &str,
+        version: &RerVersion,
+        _timestamp: Option<u64>,
+    ) -> Option<String> {
         let family_matches = self.family.as_ref().map_or(true, |re| re.is_match(name));
         let version_matches = match &self.version {
             None => true,
@@ -121,7 +126,12 @@ impl GlobFilter {
 }
 
 impl PackageFilter for GlobFilter {
-    fn excludes(&self, name: &str, _version: &RerVersion, _timestamp: Option<u64>) -> Option<String> {
+    fn excludes(
+        &self,
+        name: &str,
+        _version: &RerVersion,
+        _timestamp: Option<u64>,
+    ) -> Option<String> {
         if self.compiled.is_match(name) {
             Some(format!(
                 "excluded by glob filter: family matches '{}'",

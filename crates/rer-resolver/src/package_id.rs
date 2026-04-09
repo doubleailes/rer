@@ -90,10 +90,7 @@ mod tests {
     #[test]
     fn test_name() {
         assert_eq!(PackageId::Base("foo".to_string()).name(), Some("foo"));
-        assert_eq!(
-            PackageId::Variant("bar".to_string(), 1).name(),
-            Some("bar")
-        );
+        assert_eq!(PackageId::Variant("bar".to_string(), 1).name(), Some("bar"));
         assert_eq!(PackageId::Root.name(), None);
     }
 

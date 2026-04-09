@@ -1,10 +1,13 @@
-use crate::candidate_selector::CandidateList;
 use crate::candidate_selector::PackageOrderConfig;
+use crate::candidate_selector::{find_best_candidate, CandidateList};
 use crate::local_package::PackageData;
 use crate::package_filter::{FilterList, PackageFilter};
 use crate::package_id::PackageId;
 use crate::LocalPackages;
-use pubgrub::{resolve, Dependencies, DependencyProvider, OfflineDependencyProvider, PackageResolutionStatistics, PubGrubError};
+use pubgrub::{
+    resolve, Dependencies, DependencyProvider, OfflineDependencyProvider,
+    PackageResolutionStatistics, PubGrubError,
+};
 use rer_version::{Requirement, Requirements, RerVersion};
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -52,13 +55,8 @@ fn register_multi_variant(
     let selector_id = PackageId::Variant(package_name.to_string(), 0);
 
     // Build base package deps: requires + dependency on variant selector
-    let requires_reqs = Requirements::from(
-        package_data
-            .requires
-            .iter()
-            .map(|s| s.as_str())
-            .collect(),
-    );
+    let requires_reqs =
+        Requirements::from(package_data.requires.iter().map(|s| s.as_str()).collect());
     let mut base_deps: Vec<(PackageId, Ranges<RerVersion>)> = requires_reqs
         .to_pubgrub()
         .into_iter()
@@ -89,8 +87,7 @@ fn register_multi_variant(
     // Register each variant as a version of the selector package
     for (i, variant_deps) in package_data.variants.iter().enumerate() {
         let v_version = variant_version(version, i);
-        let variant_reqs =
-            Requirements::from(variant_deps.iter().map(|s| s.as_str()).collect());
+        let variant_reqs = Requirements::from(variant_deps.iter().map(|s| s.as_str()).collect());
         let variant_pubgrub: Vec<(PackageId, Ranges<RerVersion>)> = variant_reqs
             .to_pubgrub()
             .into_iter()
@@ -151,17 +148,11 @@ fn recursive(
             if let Some(ref data) = pkg_data {
                 if data.is_multi_variant() {
                     // Register using variant selector encoding
-                    register_multi_variant(
-                        dependency_provider,
-                        &package_name,
-                        candidate,
-                        data,
-                    );
+                    register_multi_variant(dependency_provider, &package_name, candidate, data);
 
                     // Recursively explore requires deps
-                    let requires = Requirements::from(
-                        data.requires.iter().map(|s| s.as_str()).collect(),
-                    );
+                    let requires =
+                        Requirements::from(data.requires.iter().map(|s| s.as_str()).collect());
                     if !requires.is_empty() {
                         recursive(
                             dependency_provider,
@@ -175,9 +166,8 @@ fn recursive(
 
                     // Recursively explore ALL variant deps (to build complete graph)
                     for variant_deps in &data.variants {
-                        let variant_reqs = Requirements::from(
-                            variant_deps.iter().map(|s| s.as_str()).collect(),
-                        );
+                        let variant_reqs =
+                            Requirements::from(variant_deps.iter().map(|s| s.as_str()).collect());
                         if !variant_reqs.is_empty() {
                             recursive(
                                 dependency_provider,
@@ -249,9 +239,10 @@ pub fn solver_with_packages_filtered(
     filters: &FilterList,
 ) -> Result<Vec<String>, PubGrubError<OfflineDependencyProvider<PackageId, Ranges<RerVersion>>>> {
     let dependency_provider: Arc<Mutex<OfflineDependencyProvider<PackageId, Ranges<RerVersion>>>> =
-        Arc::new(Mutex::new(
-            OfflineDependencyProvider::<PackageId, Ranges<RerVersion>>::new(),
-        ));
+        Arc::new(Mutex::new(OfflineDependencyProvider::<
+            PackageId,
+            Ranges<RerVersion>,
+        >::new()));
     let cache_requierements: Arc<Mutex<HashSet<Requirement>>> =
         Arc::new(Mutex::new(HashSet::new()));
     let weak_references: Arc<Mutex<HashMap<String, Ranges<RerVersion>>>> =
@@ -336,7 +327,8 @@ impl DependencyProvider for OrderedDependencyProvider {
     type V = RerVersion;
     type VS = Ranges<RerVersion>;
     type M = String;
-    type Priority = <OfflineDependencyProvider<PackageId, Ranges<RerVersion>> as DependencyProvider>::Priority;
+    type Priority =
+        <OfflineDependencyProvider<PackageId, Ranges<RerVersion>> as DependencyProvider>::Priority;
     type Err = Infallible;
 
     fn prioritize(
@@ -353,15 +345,14 @@ impl DependencyProvider for OrderedDependencyProvider {
         package: &Self::P,
         range: &Self::VS,
     ) -> Result<Option<Self::V>, Self::Err> {
-        let versions: Vec<RerVersion> = match self.inner.versions(package) {
-            Some(versions) => versions.cloned().collect(),
-            None => return Ok(None),
-        };
         let mode = match package.name() {
             Some(name) => self.ordering.mode_for(name),
-            None => self.ordering.default.clone(),
+            None => &self.ordering.default,
         };
-        Ok(CandidateList::new(versions).find_candidate(range, &mode))
+        Ok(match self.inner.versions(package) {
+            Some(versions) => find_best_candidate(versions, range, mode),
+            None => None,
+        })
     }
 
     fn get_dependencies(
@@ -384,9 +375,10 @@ pub fn solver_with_packages_ordered(
     ordering: &PackageOrderConfig,
 ) -> Result<Vec<String>, PubGrubError<OrderedDependencyProvider>> {
     let dependency_provider: Arc<Mutex<OfflineDependencyProvider<PackageId, Ranges<RerVersion>>>> =
-        Arc::new(Mutex::new(
-            OfflineDependencyProvider::<PackageId, Ranges<RerVersion>>::new(),
-        ));
+        Arc::new(Mutex::new(OfflineDependencyProvider::<
+            PackageId,
+            Ranges<RerVersion>,
+        >::new()));
     let cache_requierements: Arc<Mutex<HashSet<Requirement>>> =
         Arc::new(Mutex::new(HashSet::new()));
     let weak_references: Arc<Mutex<HashMap<String, Ranges<RerVersion>>>> =

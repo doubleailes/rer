@@ -128,11 +128,7 @@ fn test_multi_variant_three_variants_one_compatible() {
             "maya_utils",
             "1.0.0",
             vec!["python-3"],
-            vec![
-                vec!["maya-2023"],
-                vec!["maya-2024"],
-                vec!["maya-2025"],
-            ],
+            vec![vec!["maya-2023"], vec!["maya-2024"], vec!["maya-2025"]],
         ),
     ]);
     let mut lp = LocalPackages::from_packages(packages);
@@ -255,19 +251,13 @@ fn test_two_packages_only_one_cross_compatible_combination() {
             "renderer",
             "1.0.0",
             vec![],
-            vec![
-                vec!["maya-2024", "opengl-4"],
-                vec!["maya-2025", "vulkan-1"],
-            ],
+            vec![vec!["maya-2024", "opengl-4"], vec!["maya-2025", "vulkan-1"]],
         ),
         (
             "shader",
             "2.0.0",
             vec![],
-            vec![
-                vec!["maya-2024", "vulkan-1"],
-                vec!["maya-2025", "opengl-4"],
-            ],
+            vec![vec!["maya-2024", "vulkan-1"], vec!["maya-2025", "opengl-4"]],
         ),
     ]);
     let mut lp = LocalPackages::from_packages(packages);
@@ -281,11 +271,12 @@ fn test_two_packages_only_one_cross_compatible_combination() {
     assert!(result.contains(&"shader/2.0.0/package.py".to_string()));
 
     // Check that exactly one maya version is in the solution
-    let maya_entries: Vec<&String> = result
-        .iter()
-        .filter(|s| s.starts_with("maya/"))
-        .collect();
-    assert_eq!(maya_entries.len(), 1, "Should have exactly one maya version");
+    let maya_entries: Vec<&String> = result.iter().filter(|s| s.starts_with("maya/")).collect();
+    assert_eq!(
+        maya_entries.len(),
+        1,
+        "Should have exactly one maya version"
+    );
 
     // Verify opengl and vulkan are present (both combinations need both)
     assert!(result.contains(&"opengl/4.0.0/package.py".to_string()));
@@ -311,7 +302,10 @@ fn test_multi_variant_no_compatible_variant() {
     ]);
     let mut lp = LocalPackages::from_packages(packages);
     let result = solver_with_packages(vec!["maya_utils-1.0.0"], &mut lp);
-    assert!(result.is_err(), "Should fail when no variant is satisfiable");
+    assert!(
+        result.is_err(),
+        "Should fail when no variant is satisfiable"
+    );
 }
 
 // ---------------------------------------------------------------------------

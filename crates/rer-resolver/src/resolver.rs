@@ -1,7 +1,9 @@
-use crate::candidate_selector::{CandidateList, PackageOrderConfig};
+use crate::candidate_selector::{find_best_candidate, CandidateList, PackageOrderConfig};
 use crate::package_filter::{FilterList, PackageFilter};
 use crate::package_id::PackageId;
-use pubgrub::{Dependencies, DependencyConstraints, DependencyProvider, PackageResolutionStatistics};
+use pubgrub::{
+    Dependencies, DependencyConstraints, DependencyProvider, PackageResolutionStatistics,
+};
 use rer_version::Requirements;
 use rer_version::RerVersion;
 use std::cmp::Reverse;
@@ -129,7 +131,10 @@ impl RerDependencyProvider {
         mut potential_packages: impl Iterator<Item = (PackageId, Ranges<RerVersion>)>,
     ) -> (PackageId, Option<RerVersion>) {
         let (pkg, range) = potential_packages.find(|_| true).unwrap();
-        let name = pkg.name().expect("non-root package must have a name").to_string();
+        let name = pkg
+            .name()
+            .expect("non-root package must have a name")
+            .to_string();
         let package_paths: Vec<PathBuf> = self
             .paths
             .iter()
@@ -145,7 +150,7 @@ impl RerDependencyProvider {
         t.switch(&requirements);
         drop(t);
         let v = CandidateList::new(Self::search_and_merge_simple_versions(package_paths))
-            .find_candidate(&range, &self.ordering.mode_for(&name));
+            .find_candidate(&range, self.ordering.mode_for(&name));
         (pkg, v)
     }
     pub fn lazy_paths(paths: Vec<PathBuf>) -> Self {
@@ -243,8 +248,7 @@ impl DependencyProvider for RerDependencyProvider {
             })
             .collect();
         let mode = self.ordering.mode_for(name);
-        let v = CandidateList::new(filtered_versions)
-            .find_candidate(&range, &mode);
+        let v = find_best_candidate(filtered_versions.iter(), &range, mode);
         Ok(v)
     }
 

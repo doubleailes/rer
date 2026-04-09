@@ -81,13 +81,9 @@ fn test_default_lowest_mode() {
     let config = PackageOrderConfig::new(ResolutionMode::Lowest);
 
     let mut lp = LocalPackages::from_packages(packages);
-    let result = solver_with_packages_ordered(
-        vec!["tool"],
-        &mut lp,
-        &FilterList::default(),
-        &config,
-    )
-    .unwrap();
+    let result =
+        solver_with_packages_ordered(vec!["tool"], &mut lp, &FilterList::default(), &config)
+            .unwrap();
     assert_eq!(
         sorted(result),
         sorted(vec!["tool/1.0.0/package.py".to_string()])
@@ -116,13 +112,9 @@ fn test_version_split_picks_from_high_side() {
     });
 
     let mut lp = LocalPackages::from_packages(packages);
-    let result = solver_with_packages_ordered(
-        vec!["tool"],
-        &mut lp,
-        &FilterList::default(),
-        &config,
-    )
-    .unwrap();
+    let result =
+        solver_with_packages_ordered(vec!["tool"], &mut lp, &FilterList::default(), &config)
+            .unwrap();
     assert_eq!(
         sorted(result),
         sorted(vec!["tool/3.0.0/package.py".to_string()])
@@ -149,13 +141,9 @@ fn test_version_split_falls_back_to_low_side() {
     });
 
     let mut lp = LocalPackages::from_packages(packages);
-    let result = solver_with_packages_ordered(
-        vec!["tool"],
-        &mut lp,
-        &FilterList::default(),
-        &config,
-    )
-    .unwrap();
+    let result =
+        solver_with_packages_ordered(vec!["tool"], &mut lp, &FilterList::default(), &config)
+            .unwrap();
     assert_eq!(
         sorted(result),
         sorted(vec!["tool/2.0.0/package.py".to_string()])
