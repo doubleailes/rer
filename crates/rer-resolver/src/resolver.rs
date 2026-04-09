@@ -13,7 +13,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use version_ranges::Ranges;
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct RerDependencyProvider {
     paths: Vec<PathBuf>,
     init_request: Requirements,
