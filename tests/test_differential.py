@@ -98,6 +98,11 @@ def _parse_resolved(result) -> set[tuple[str, str]]:
 # ---------------------------------------------------------------------------
 
 
+# Categories where packages have no transitive dependencies, so the
+# filesystem solver (which lacks dependency data) can still validate results.
+_NO_DEPS_CATEGORIES = frozenset({"leaf", "multi_leaf", "exact_version", "missing", "conflict"})
+
+
 def _case_id(case: dict) -> str:
     return case["id"]
 
@@ -135,9 +140,9 @@ def test_rer_solver_status(case: dict, tmp_path: pathlib.Path):
 
     expected = case["expected_status"]
 
-    # Leaf/multi-leaf/exact_version/missing/conflict cases can be validated
-    # through the filesystem solver because they have no transitive deps.
-    if case["category"] in ("leaf", "multi_leaf", "exact_version", "missing", "conflict"):
+    # Categories that have no transitive deps and can be fully validated
+    # through the filesystem solver (no dependency data needed).
+    if case["category"] in _NO_DEPS_CATEGORIES:
         assert result.status == expected, (
             f"[{case['id']}] expected status '{expected}', got '{result.status}'"
         )
@@ -223,13 +228,17 @@ def test_rer_vs_rez(case: dict, tmp_path: pathlib.Path):
             extra = rust_set - rez_set
             missing = rez_set - rust_set
             pytest.xfail(
-                f"[{case['id']}] Acceptable divergence: "
-                f"rer_extra={extra}, rez_extra={missing}"
+                reason=(
+                    f"[{case['id']}] Acceptable divergence: "
+                    f"rer_extra={extra}, rez_extra={missing}"
+                ),
             )
     elif rust_result.status != rez_status:
         pytest.xfail(
-            f"[{case['id']}] Status divergence: "
-            f"rer={rust_result.status}, rez={rez_status}"
+            reason=(
+                f"[{case['id']}] Status divergence: "
+                f"rer={rust_result.status}, rez={rez_status}"
+            ),
         )
 
 
