@@ -21,3 +21,7 @@ Cargo.lock
 .venv
 .env
 data_set_private
+
+# Pytest cache
+.pytest_cache
+__pycache__

@@ -36,6 +36,26 @@ jobs:
         run: cargo build
       - name: ✔️ Tests
         run: cargo test
+  differential_test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: 🧪 Rust differential tests
+        run: cargo test -p rer-resolver --test test_differential
+      - name: 📦 Build rer_solver Python module
+        run: |
+          python -m venv .venv
+          . .venv/bin/activate
+          pip install maturin pytest
+          cd crates/rer-python && maturin develop
+      - name: 🔍 Python differential tests
+        run: |
+          . .venv/bin/activate
+          pytest tests/test_differential.py -v
   bench:
     runs-on: ubuntu-latest
     steps:
