@@ -1,0 +1,3631 @@
+{
+  "description": "Differential test cases for rer vs rez solver comparison",
+  "source": "Generated from data_set/rez_lib_caviar.json",
+  "notes": [
+    "Cases with expected_resolved=null only verify solved/failed status",
+    "Cases with expected_resolved set verify exact package selection",
+    "Cases with expected_status='solved_or_failed' accept either (baseline TBD)",
+    "Known divergence 1: pubgrub may select different but equally valid solutions vs rez",
+    "Known divergence 2: Version ordering (char-by-char) may affect range matching",
+    "Known divergence 3: Self-dependencies handled differently"
+  ],
+  "cases": [
+    {
+      "id": "leaf_bownnalfmo",
+      "description": "Leaf package bownnalfmo (no deps), highest version",
+      "requests": [
+        "bownnalfmo"
+      ],
+      "packages": {
+        "bownnalfmo": {
+          "0.10.2": []
+        }
+      },
+      "expected_status": "solved",
+      "expected_resolved": [
+        [
+          "bownnalfmo",
+          "0.10.2"
+        ]
+      ],
+      "notes": "",
+      "category": "leaf"
+    },
+    {
+      "id": "leaf_efmurxeknk",
+      "description": "Leaf package efmurxeknk (no deps), highest version",
+      "requests": [
+        "efmurxeknk"
+      ],
+      "packages": {
+        "efmurxeknk": {
+          "0.19.0": []
+        }
+      },
+      "expected_status": "solved",
+      "expected_resolved": [
+        [
+          "efmurxeknk",
+          "0.19.0"
+        ]
+      ],
+      "notes": "",
+      "category": "leaf"
+    },
+    {
+      "id": "leaf_ffmpeg_giklodhirl",
+      "description": "Leaf package ffmpeg_giklodhirl (no deps), highest version",
+      "requests": [
+        "ffmpeg_giklodhirl"
+      ],
+      "packages": {
+        "ffmpeg_giklodhirl": {
+          "0.2.0": []
+        }
+      },
+      "expected_status": "solved",
+      "expected_resolved": [
+        [
+          "ffmpeg_giklodhirl",
+          "0.2.0"
+        ]
+      ],
+      "notes": "",
+      "category": "leaf"
+    },
+    {
+      "id": "leaf_hadevqavse",
+      "description": "Leaf package hadevqavse (no deps), highest version",
+      "requests": [
+        "hadevqavse"
+      ],
+      "packages": {
+        "hadevqavse": {
+          "1.1.0": [],
+          "1.1.1": [],
+          "1.1.2": [],
+          "1.1.3": []
+        }
+      },
+      "expected_status": "solved",
+      "expected_resolved": [
+        [
+          "hadevqavse",
+          "1.1.3"
+        ]
+      ],
+      "notes": "",
+      "category": "leaf"
+    },
+    {
+      "id": "leaf_jpxgeolupr",
+      "description": "Leaf package jpxgeolupr (no deps), highest version",
+      "requests": [
+        "jpxgeolupr"
+      ],
+      "packages": {
+        "jpxgeolupr": {
+          "2.10": [],
+          "2.11.3": []
+        }
+      },
+      "expected_status": "solved",
+      "expected_resolved": [
+        [
+          "jpxgeolupr",
+          "2.11.3"
+        ]
+      ],
+      "notes": "",
+      "category": "leaf"
+    },
+    {
+      "id": "leaf_mpijfddmqk",
+      "description": "Leaf package mpijfddmqk (no deps), highest version",
+      "requests": [
+        "mpijfddmqk"
+      ],
+      "packages": {
+        "mpijfddmqk": {
+          "0.13.1": []
+        }
+      },
+      "expected_status": "solved",
+      "expected_resolved": [
+        [
+          "mpijfddmqk",
+          "0.13.1"
+        ]
+      ],
+      "notes": "",
+      "category": "leaf"
+    },
+    {
+      "id": "leaf_naxmpufkaz",
+      "description": "Leaf package naxmpufkaz (no deps), highest version",
+      "requests": [
+        "naxmpufkaz"
+      ],
+      "packages": {
+        "naxmpufkaz": {
+          "2.6.2": []
+        }
+      },
+      "expected_status": "solved",
+      "expected_resolved": [
+        [
+          "naxmpufkaz",
+          "2.6.2"
+        ]
+      ],
+      "notes": "",
+      "category": "leaf"
+    },
+    {
+      "id": "leaf_nnfhylqczy",
+      "description": "Leaf package nnfhylqczy (no deps), highest version",
+      "requests": [
+        "nnfhylqczy"
+      ],
+      "packages": {
+        "nnfhylqczy": {
+          "0.1.0": [],
+          "0.2.0": [],
+          "0.2.2": []
+        }
+      },
+      "expected_status": "solved",
+      "expected_resolved": [
+        [
+          "nnfhylqczy",
+          "0.2.2"
+        ]
+      ],
+      "notes": "",
+      "category": "leaf"
+    },
+    {
+      "id": "leaf_nynmzqlojr",
+      "description": "Leaf package nynmzqlojr (no deps), highest version",
+      "requests": [
+        "nynmzqlojr"
+      ],
+      "packages": {
+        "nynmzqlojr": {
+          "3.3.1": []
+        }
+      },
+      "expected_status": "solved",
+      "expected_resolved": [
+        [
+          "nynmzqlojr",
+          "3.3.1"
+        ]
+      ],
+      "notes": "",
+      "category": "leaf"
+    },
+    {
+      "id": "leaf_otsnrbfqjn",
+      "description": "Leaf package otsnrbfqjn (no deps), highest version",
+      "requests": [
+        "otsnrbfqjn"
+      ],
+      "packages": {
+        "otsnrbfqjn": {
+          "1.18.1": [],
+          "1.19.0": [],
+          "1.19.1": [],
+          "1.20.0": [],
+          "1.20.1": [],
+          "1.20.2": [],
+          "1.21.0": [],
+          "1.22.0": [],
+          "1.22.1": []
+        }
+      },
+      "expected_status": "solved",
+      "expected_resolved": [
+        [
+          "otsnrbfqjn",
+          "1.22.1"
+        ]
+      ],
+      "notes": "",
+      "category": "leaf"
+    },
+    {
+      "id": "leaf_pgunaghujl",
+      "description": "Leaf package pgunaghujl (no deps), highest version",
+      "requests": [
+        "pgunaghujl"
+      ],
+      "packages": {
+        "pgunaghujl": {
+          "3.7.0": []
+        }
+      },
+      "expected_status": "solved",
+      "expected_resolved": [
+        [
+          "pgunaghujl",
+          "3.7.0"
+        ]
+      ],
+      "notes": "",
+      "category": "leaf"
+    },
+    {
+      "id": "leaf_rkbokscgum",
+      "description": "Leaf package rkbokscgum (no deps), highest version",
+      "requests": [
+        "rkbokscgum"
+      ],
+      "packages": {
+        "rkbokscgum": {
+          "0.18.0": []
+        }
+      },
+      "expected_status": "solved",
+      "expected_resolved": [
+        [
+          "rkbokscgum",
+          "0.18.0"
+        ]
+      ],
+      "notes": "",
+      "category": "leaf"
+    },
+    {
+      "id": "leaf_rvutfdoguf",
+      "description": "Leaf package rvutfdoguf (no deps), highest version",
+      "requests": [
+        "rvutfdoguf"
+      ],
+      "packages": {
+        "rvutfdoguf": {
+          "0.8.0": []
+        }
+      },
+      "expected_status": "solved",
+      "expected_resolved": [
+        [
+          "rvutfdoguf",
+          "0.8.0"
+        ]
+      ],
+      "notes": "",
+      "category": "leaf"
+    },
+    {
+      "id": "leaf_rwbwpddcdatest",
+      "description": "Leaf package rwbwpddcdatest (no deps), highest version",
+      "requests": [
+        "rwbwpddcdatest"
+      ],
+      "packages": {
+        "rwbwpddcdatest": {
+          "4.6.9": []
+        }
+      },
+      "expected_status": "solved",
+      "expected_resolved": [
+        [
+          "rwbwpddcdatest",
+          "4.6.9"
+        ]
+      ],
+      "notes": "",
+      "category": "leaf"
+    },
+    {
+      "id": "leaf_vlfdyfozpo",
+      "description": "Leaf package vlfdyfozpo (no deps), highest version",
+      "requests": [
+        "vlfdyfozpo"
+      ],
+      "packages": {
+        "vlfdyfozpo": {
+          "3.4.5": []
+        }
+      },
+      "expected_status": "solved",
+      "expected_resolved": [
+        [
+          "vlfdyfozpo",
+          "3.4.5"
+        ]
+      ],
+      "notes": "",
+      "category": "leaf"
+    },
+    {
+      "id": "leaf_xrnzvnjkuw",
+      "description": "Leaf package xrnzvnjkuw (no deps), highest version",
+      "requests": [
+        "xrnzvnjkuw"
+      ],
+      "packages": {
+        "xrnzvnjkuw": {
+          "21.4.0": []
+        }
+      },
+      "expected_status": "solved",
+      "expected_resolved": [
+        [
+          "xrnzvnjkuw",
+          "21.4.0"
+        ]
+      ],
+      "notes": "",
+      "category": "leaf"
+    },
+    {
+      "id": "missing_nonexistent_pkg_0",
+      "description": "Nonexistent package nonexistent_pkg_0",
+      "requests": [
+        "nonexistent_pkg_0"
+      ],
+      "packages": {},
+      "expected_status": "failed",
+      "expected_resolved": null,
+      "notes": "Package does not exist, solver should fail",
+      "category": "missing"
+    },
+    {
+      "id": "missing_nonexistent_pkg_1",
+      "description": "Nonexistent package nonexistent_pkg_1",
+      "requests": [
+        "nonexistent_pkg_1"
+      ],
+      "packages": {},
+      "expected_status": "failed",
+      "expected_resolved": null,
+      "notes": "Package does not exist, solver should fail",
+      "category": "missing"
+    },
+    {
+      "id": "missing_nonexistent_pkg_2",
+      "description": "Nonexistent package nonexistent_pkg_2",
+      "requests": [
+        "nonexistent_pkg_2"
+      ],
+      "packages": {},
+      "expected_status": "failed",
+      "expected_resolved": null,
+      "notes": "Package does not exist, solver should fail",
+      "category": "missing"
+    },
+    {
+      "id": "missing_nonexistent_pkg_3",
+      "description": "Nonexistent package nonexistent_pkg_3",
+      "requests": [
+        "nonexistent_pkg_3"
+      ],
+      "packages": {},
+      "expected_status": "failed",
+      "expected_resolved": null,
+      "notes": "Package does not exist, solver should fail",
+      "category": "missing"
+    },
+    {
+      "id": "missing_nonexistent_pkg_4",
+      "description": "Nonexistent package nonexistent_pkg_4",
+      "requests": [
+        "nonexistent_pkg_4"
+      ],
+      "packages": {},
+      "expected_status": "failed",
+      "expected_resolved": null,
+      "notes": "Package does not exist, solver should fail",
+      "category": "missing"
+    },
+    {
+      "id": "multi_leaf_bownnalfmo_efmurxeknk",
+      "description": "Multi-leaf: bownnalfmo + efmurxeknk",
+      "requests": [
+        "bownnalfmo",
+        "efmurxeknk"
+      ],
+      "packages": {
+        "bownnalfmo": {
+          "0.10.2": []
+        },
+        "efmurxeknk": {
+          "0.19.0": []
+        }
+      },
+      "expected_status": "solved",
+      "expected_resolved": [
+        [
+          "bownnalfmo",
+          "0.10.2"
+        ],
+        [
+          "efmurxeknk",
+          "0.19.0"
+        ]
+      ],
+      "notes": "Independent leaf packages, both should resolve to highest",
+      "category": "multi_leaf"
+    },
+    {
+      "id": "multi_leaf_ffmpeg_giklodhirl_hadevqavse",
+      "description": "Multi-leaf: ffmpeg_giklodhirl + hadevqavse",
+      "requests": [
+        "ffmpeg_giklodhirl",
+        "hadevqavse"
+      ],
+      "packages": {
+        "ffmpeg_giklodhirl": {
+          "0.2.0": []
+        },
+        "hadevqavse": {
+          "1.1.0": [],
+          "1.1.3": [],
+          "1.1.1": [],
+          "1.1.2": []
+        }
+      },
+      "expected_status": "solved",
+      "expected_resolved": [
+        [
+          "ffmpeg_giklodhirl",
+          "0.2.0"
+        ],
+        [
+          "hadevqavse",
+          "1.1.3"
+        ]
+      ],
+      "notes": "Independent leaf packages, both should resolve to highest",
+      "category": "multi_leaf"
+    },
+    {
+      "id": "multi_leaf_jpxgeolupr_mpijfddmqk",
+      "description": "Multi-leaf: jpxgeolupr + mpijfddmqk",
+      "requests": [
+        "jpxgeolupr",
+        "mpijfddmqk"
+      ],
+      "packages": {
+        "jpxgeolupr": {
+          "2.11.3": [],
+          "2.10": []
+        },
+        "mpijfddmqk": {
+          "0.13.1": []
+        }
+      },
+      "expected_status": "solved",
+      "expected_resolved": [
+        [
+          "jpxgeolupr",
+          "2.11.3"
+        ],
+        [
+          "mpijfddmqk",
+          "0.13.1"
+        ]
+      ],
+      "notes": "Independent leaf packages, both should resolve to highest",
+      "category": "multi_leaf"
+    },
+    {
+      "id": "multi_leaf_naxmpufkaz_nnfhylqczy",
+      "description": "Multi-leaf: naxmpufkaz + nnfhylqczy",
+      "requests": [
+        "naxmpufkaz",
+        "nnfhylqczy"
+      ],
+      "packages": {
+        "naxmpufkaz": {
+          "2.6.2": []
+        },
+        "nnfhylqczy": {
+          "0.2.2": [],
+          "0.1.0": [],
+          "0.2.0": []
+        }
+      },
+      "expected_status": "solved",
+      "expected_resolved": [
+        [
+          "naxmpufkaz",
+          "2.6.2"
+        ],
+        [
+          "nnfhylqczy",
+          "0.2.2"
+        ]
+      ],
+      "notes": "Independent leaf packages, both should resolve to highest",
+      "category": "multi_leaf"
+    },
+    {
+      "id": "multi_leaf_nynmzqlojr_otsnrbfqjn",
+      "description": "Multi-leaf: nynmzqlojr + otsnrbfqjn",
+      "requests": [
+        "nynmzqlojr",
+        "otsnrbfqjn"
+      ],
+      "packages": {
+        "nynmzqlojr": {
+          "3.3.1": []
+        },
+        "otsnrbfqjn": {
+          "1.20.0": [],
+          "1.21.0": [],
+          "1.19.0": [],
+          "1.22.0": [],
+          "1.20.1": [],
+          "1.19.1": [],
+          "1.22.1": [],
+          "1.20.2": [],
+          "1.18.1": []
+        }
+      },
+      "expected_status": "solved",
+      "expected_resolved": [
+        [
+          "nynmzqlojr",
+          "3.3.1"
+        ],
+        [
+          "otsnrbfqjn",
+          "1.22.1"
+        ]
+      ],
+      "notes": "Independent leaf packages, both should resolve to highest",
+      "category": "multi_leaf"
+    },
+    {
+      "id": "multi_leaf_pgunaghujl_rkbokscgum",
+      "description": "Multi-leaf: pgunaghujl + rkbokscgum",
+      "requests": [
+        "pgunaghujl",
+        "rkbokscgum"
+      ],
+      "packages": {
+        "pgunaghujl": {
+          "3.7.0": []
+        },
+        "rkbokscgum": {
+          "0.18.0": []
+        }
+      },
+      "expected_status": "solved",
+      "expected_resolved": [
+        [
+          "pgunaghujl",
+          "3.7.0"
+        ],
+        [
+          "rkbokscgum",
+          "0.18.0"
+        ]
+      ],
+      "notes": "Independent leaf packages, both should resolve to highest",
+      "category": "multi_leaf"
+    },
+    {
+      "id": "multi_leaf_rvutfdoguf_rwbwpddcdatest",
+      "description": "Multi-leaf: rvutfdoguf + rwbwpddcdatest",
+      "requests": [
+        "rvutfdoguf",
+        "rwbwpddcdatest"
+      ],
+      "packages": {
+        "rvutfdoguf": {
+          "0.8.0": []
+        },
+        "rwbwpddcdatest": {
+          "4.6.9": []
+        }
+      },
+      "expected_status": "solved",
+      "expected_resolved": [
+        [
+          "rvutfdoguf",
+          "0.8.0"
+        ],
+        [
+          "rwbwpddcdatest",
+          "4.6.9"
+        ]
+      ],
+      "notes": "Independent leaf packages, both should resolve to highest",
+      "category": "multi_leaf"
+    },
+    {
+      "id": "multi_leaf_vlfdyfozpo_xrnzvnjkuw",
+      "description": "Multi-leaf: vlfdyfozpo + xrnzvnjkuw",
+      "requests": [
+        "vlfdyfozpo",
+        "xrnzvnjkuw"
+      ],
+      "packages": {
+        "vlfdyfozpo": {
+          "3.4.5": []
+        },
+        "xrnzvnjkuw": {
+          "21.4.0": []
+        }
+      },
+      "expected_status": "solved",
+      "expected_resolved": [
+        [
+          "vlfdyfozpo",
+          "3.4.5"
+        ],
+        [
+          "xrnzvnjkuw",
+          "21.4.0"
+        ]
+      ],
+      "notes": "Independent leaf packages, both should resolve to highest",
+      "category": "multi_leaf"
+    },
+    {
+      "id": "exact_leaf_bownnalfmo_0_10_2",
+      "description": "Exact version: bownnalfmo-0.10.2",
+      "requests": [
+        "bownnalfmo-0.10.2"
+      ],
+      "packages": {
+        "bownnalfmo": {
+          "0.10.2": []
+        }
+      },
+      "expected_status": "solved",
+      "expected_resolved": [
+        [
+          "bownnalfmo",
+          "0.10.2"
+        ]
+      ],
+      "notes": "Exact version constraint on leaf package",
+      "category": "exact_version"
+    },
+    {
+      "id": "exact_leaf_efmurxeknk_0_19_0",
+      "description": "Exact version: efmurxeknk-0.19.0",
+      "requests": [
+        "efmurxeknk-0.19.0"
+      ],
+      "packages": {
+        "efmurxeknk": {
+          "0.19.0": []
+        }
+      },
+      "expected_status": "solved",
+      "expected_resolved": [
+        [
+          "efmurxeknk",
+          "0.19.0"
+        ]
+      ],
+      "notes": "Exact version constraint on leaf package",
+      "category": "exact_version"
+    },
+    {
+      "id": "exact_leaf_ffmpeg_giklodhirl_0_2_0",
+      "description": "Exact version: ffmpeg_giklodhirl-0.2.0",
+      "requests": [
+        "ffmpeg_giklodhirl-0.2.0"
+      ],
+      "packages": {
+        "ffmpeg_giklodhirl": {
+          "0.2.0": []
+        }
+      },
+      "expected_status": "solved",
+      "expected_resolved": [
+        [
+          "ffmpeg_giklodhirl",
+          "0.2.0"
+        ]
+      ],
+      "notes": "Exact version constraint on leaf package",
+      "category": "exact_version"
+    },
+    {
+      "id": "exact_leaf_hadevqavse_1_1_2",
+      "description": "Exact version: hadevqavse-1.1.2",
+      "requests": [
+        "hadevqavse-1.1.2"
+      ],
+      "packages": {
+        "hadevqavse": {
+          "1.1.0": [],
+          "1.1.1": [],
+          "1.1.2": [],
+          "1.1.3": []
+        }
+      },
+      "expected_status": "solved",
+      "expected_resolved": [
+        [
+          "hadevqavse",
+          "1.1.2"
+        ]
+      ],
+      "notes": "Exact version constraint on leaf package",
+      "category": "exact_version"
+    },
+    {
+      "id": "exact_leaf_jpxgeolupr_2_11_3",
+      "description": "Exact version: jpxgeolupr-2.11.3",
+      "requests": [
+        "jpxgeolupr-2.11.3"
+      ],
+      "packages": {
+        "jpxgeolupr": {
+          "2.10": [],
+          "2.11.3": []
+        }
+      },
+      "expected_status": "solved",
+      "expected_resolved": [
+        [
+          "jpxgeolupr",
+          "2.11.3"
+        ]
+      ],
+      "notes": "Exact version constraint on leaf package",
+      "category": "exact_version"
+    },
+    {
+      "id": "conflict_hadevqavse",
+      "description": "Conflicting versions: hadevqavse-1.1.0 and hadevqavse-1.1.3",
+      "requests": [
+        "hadevqavse-1.1.0+<1.1.0_",
+        "hadevqavse-1.1.3+<1.1.3_"
+      ],
+      "packages": {
+        "hadevqavse": {
+          "1.1.0": [],
+          "1.1.1": [],
+          "1.1.2": [],
+          "1.1.3": []
+        }
+      },
+      "expected_status": "failed",
+      "expected_resolved": null,
+      "notes": "Mutually exclusive version constraints on same package should fail",
+      "category": "conflict"
+    },
+    {
+      "id": "conflict_nnfhylqczy",
+      "description": "Conflicting versions: nnfhylqczy-0.1.0 and nnfhylqczy-0.2.2",
+      "requests": [
+        "nnfhylqczy-0.1.0+<0.1.0_",
+        "nnfhylqczy-0.2.2+<0.2.2_"
+      ],
+      "packages": {
+        "nnfhylqczy": {
+          "0.1.0": [],
+          "0.2.0": [],
+          "0.2.2": []
+        }
+      },
+      "expected_status": "failed",
+      "expected_resolved": null,
+      "notes": "Mutually exclusive version constraints on same package should fail",
+      "category": "conflict"
+    },
+    {
+      "id": "conflict_otsnrbfqjn",
+      "description": "Conflicting versions: otsnrbfqjn-1.18.1 and otsnrbfqjn-1.22.1",
+      "requests": [
+        "otsnrbfqjn-1.18.1+<1.18.1_",
+        "otsnrbfqjn-1.22.1+<1.22.1_"
+      ],
+      "packages": {
+        "otsnrbfqjn": {
+          "1.18.1": [],
+          "1.19.0": [],
+          "1.19.1": [],
+          "1.20.0": [],
+          "1.20.1": [],
+          "1.20.2": [],
+          "1.21.0": [],
+          "1.22.0": [],
+          "1.22.1": []
+        }
+      },
+      "expected_status": "failed",
+      "expected_resolved": null,
+      "notes": "Mutually exclusive version constraints on same package should fail",
+      "category": "conflict"
+    },
+    {
+      "id": "real_opencv_giklodhirl",
+      "description": "Real package opencv_giklodhirl with deps from rez_lib_caviar",
+      "requests": [
+        "opencv_giklodhirl"
+      ],
+      "packages": {
+        "naxmpufkaz": {
+          "2.6.2": []
+        },
+        "yjibkdxrjm": {
+          "1.4.1": [
+            "jwofhdjaap"
+          ]
+        },
+        "uhkknokpwi": {
+          "2021.10.8": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2023.5.7": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2022.12.7": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2022.5.18.1": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2024.6.2": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ]
+        },
+        "naxmpufkaz_kncmeshzly": {
+          "0.1.0": [
+            "naxmpufkaz",
+            "kncmeshzly-0.15.0+",
+            "ibgesjugxt"
+          ]
+        },
+        "jwofhdjaap": {
+          "1.3.1": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ]
+        },
+        "kncmeshzly": {
+          "0.20.4": [
+            "giklodhirl_dateutil-2.4+",
+            "ibgesjugxt-1.10+",
+            "ugwkkporua-1.2+<1.2.1"
+          ],
+          "0.11.3": [
+            "giklodhirl_dateutil-2.4+",
+            "ibgesjugxt-1.10+",
+            "ugwkkporua-1.2+<1.2.1"
+          ]
+        },
+        "ibgesjugxt": {
+          "1.16.0": [
+            "khaejsorof-2.4.2+",
+            "ibgesjugxt"
+          ],
+          "1.11.0": [
+            "khaejsorof-2.4.2+",
+            "ibgesjugxt"
+          ]
+        },
+        "ugwkkporua": {
+          "1.2": [
+            "kncmeshzly-0.9.2+<1.dev0",
+            "naxmpufkaz-1.4.1+",
+            "naxmpufkaz_kncmeshzly-0.0.3+",
+            "ibgesjugxt-1.6.1+<2.dev0",
+            "hwbislecpw-3.0.0+<4.dev0"
+          ]
+        },
+        "fywdyqpenm": {
+          "3.0.5": [
+            "ibgesjugxt"
+          ]
+        },
+        "rmlxjsjhwz": {
+          "1.0.1": [
+            "fywdyqpenm2-2.0.0+"
+          ],
+          "1.1.0": [
+            "fywdyqpenm2-2.0.0+"
+          ]
+        },
+        "hwbislecpw": {
+          "3.0.1": [
+            "jwofhdjaap"
+          ]
+        },
+        "opencv_giklodhirl": {
+          "4.7.0.72": [
+            "jwofhdjaap"
+          ],
+          "4.1.0.25": [
+            "numrwbwpddcda-1.11.1+"
+          ]
+        },
+        "rwbwpddcdacparser": {
+          "2.21": [
+            "yjibkdxrjm",
+            "rmlxjsjhwz"
+          ]
+        },
+        "vapnnqxdoj": {
+          "2.0.7": [],
+          "1.26.12": [
+            "rwbwpddcdacparser"
+          ],
+          "1.26.15": [],
+          "2.2.2": [],
+          "1.26.9": [
+            "rwbwpddcdacparser"
+          ]
+        },
+        "giklodhirl_dateutil": {
+          "2.8.2": [
+            "ibgesjugxt-1.5+"
+          ]
+        },
+        "fywdyqpenm2": {
+          "3.0.1": [
+            "fywdyqpenm-3.0.1+"
+          ]
+        },
+        "khaejsorof": {
+          "2.31.0": [],
+          "2.32.3": [],
+          "2.30.0": [],
+          "2.27.1": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2.13.0": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2.28.2": []
+        },
+        "numrwbwpddcda": {
+          "1.16.6": [
+            "naxmpufkaz",
+            "kncmeshzly-0.15.0+",
+            "ibgesjugxt"
+          ],
+          "1.16.4": [
+            "naxmpufkaz",
+            "kncmeshzly-0.15.0+",
+            "ibgesjugxt"
+          ],
+          "1.21.6": [
+            "naxmpufkaz",
+            "kncmeshzly-0.15.0+",
+            "ibgesjugxt"
+          ]
+        }
+      },
+      "expected_status": "solved",
+      "expected_resolved": null,
+      "notes": "Baseline locked from initial solver run.",
+      "category": "real_deps"
+    },
+    {
+      "id": "real_xzcxmbpius",
+      "description": "Real package xzcxmbpius with deps from rez_lib_caviar",
+      "requests": [
+        "xzcxmbpius"
+      ],
+      "packages": {
+        "yjibkdxrjm": {
+          "1.4.1": [
+            "jwofhdjaap"
+          ]
+        },
+        "uhkknokpwi": {
+          "2021.10.8": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2023.5.7": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2022.12.7": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2022.5.18.1": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2024.6.2": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ]
+        },
+        "jwofhdjaap": {
+          "1.3.1": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ]
+        },
+        "fywdyqpenm": {
+          "3.0.5": [
+            "ibgesjugxt"
+          ]
+        },
+        "ibgesjugxt": {
+          "1.16.0": [
+            "khaejsorof-2.4.2+",
+            "ibgesjugxt"
+          ],
+          "1.11.0": [
+            "khaejsorof-2.4.2+",
+            "ibgesjugxt"
+          ]
+        },
+        "rmlxjsjhwz": {
+          "1.0.1": [
+            "fywdyqpenm2-2.0.0+"
+          ],
+          "1.1.0": [
+            "fywdyqpenm2-2.0.0+"
+          ]
+        },
+        "vapnnqxdoj": {
+          "2.0.7": [],
+          "1.26.12": [
+            "rwbwpddcdacparser"
+          ],
+          "1.26.15": [],
+          "2.2.2": [],
+          "1.26.9": [
+            "rwbwpddcdacparser"
+          ]
+        },
+        "fywdyqpenm2": {
+          "3.0.1": [
+            "fywdyqpenm-3.0.1+"
+          ]
+        },
+        "khaejsorof": {
+          "2.31.0": [],
+          "2.32.3": [],
+          "2.30.0": [],
+          "2.27.1": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2.13.0": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2.28.2": []
+        },
+        "rwbwpddcdacparser": {
+          "2.21": [
+            "yjibkdxrjm",
+            "rmlxjsjhwz"
+          ]
+        },
+        "xzcxmbpius": {
+          "4.0.0": [
+            "khaejsorof-2.0.1+<3.0.0"
+          ]
+        }
+      },
+      "expected_status": "solved",
+      "expected_resolved": null,
+      "notes": "Baseline locked from initial solver run.",
+      "category": "real_deps"
+    },
+    {
+      "id": "real_rknuaqvyfr_yeti",
+      "description": "Real package rknuaqvyfr_yeti with deps from rez_lib_caviar",
+      "requests": [
+        "rknuaqvyfr_yeti"
+      ],
+      "packages": {
+        "rknuaqvyfr_yeti": {
+          "2.2.10-pkg.0": [
+            "naxmpufkaz",
+            "kncmeshzly-0.15.0+",
+            "ibgesjugxt"
+          ]
+        },
+        "naxmpufkaz": {
+          "2.6.2": []
+        },
+        "yjibkdxrjm": {
+          "1.4.1": [
+            "jwofhdjaap"
+          ]
+        },
+        "uhkknokpwi": {
+          "2021.10.8": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2023.5.7": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2022.12.7": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2022.5.18.1": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2024.6.2": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ]
+        },
+        "naxmpufkaz_kncmeshzly": {
+          "0.1.0": [
+            "naxmpufkaz",
+            "kncmeshzly-0.15.0+",
+            "ibgesjugxt"
+          ]
+        },
+        "jwofhdjaap": {
+          "1.3.1": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ]
+        },
+        "kncmeshzly": {
+          "0.20.4": [
+            "giklodhirl_dateutil-2.4+",
+            "ibgesjugxt-1.10+",
+            "ugwkkporua-1.2+<1.2.1"
+          ],
+          "0.11.3": [
+            "giklodhirl_dateutil-2.4+",
+            "ibgesjugxt-1.10+",
+            "ugwkkporua-1.2+<1.2.1"
+          ]
+        },
+        "ibgesjugxt": {
+          "1.16.0": [
+            "khaejsorof-2.4.2+",
+            "ibgesjugxt"
+          ],
+          "1.11.0": [
+            "khaejsorof-2.4.2+",
+            "ibgesjugxt"
+          ]
+        },
+        "ugwkkporua": {
+          "1.2": [
+            "kncmeshzly-0.9.2+<1.dev0",
+            "naxmpufkaz-1.4.1+",
+            "naxmpufkaz_kncmeshzly-0.0.3+",
+            "ibgesjugxt-1.6.1+<2.dev0",
+            "hwbislecpw-3.0.0+<4.dev0"
+          ]
+        },
+        "fywdyqpenm": {
+          "3.0.5": [
+            "ibgesjugxt"
+          ]
+        },
+        "hwbislecpw": {
+          "3.0.1": [
+            "jwofhdjaap"
+          ]
+        },
+        "rmlxjsjhwz": {
+          "1.0.1": [
+            "fywdyqpenm2-2.0.0+"
+          ],
+          "1.1.0": [
+            "fywdyqpenm2-2.0.0+"
+          ]
+        },
+        "vapnnqxdoj": {
+          "2.0.7": [],
+          "1.26.12": [
+            "rwbwpddcdacparser"
+          ],
+          "1.26.15": [],
+          "2.2.2": [],
+          "1.26.9": [
+            "rwbwpddcdacparser"
+          ]
+        },
+        "giklodhirl_dateutil": {
+          "2.8.2": [
+            "ibgesjugxt-1.5+"
+          ]
+        },
+        "fywdyqpenm2": {
+          "3.0.1": [
+            "fywdyqpenm-3.0.1+"
+          ]
+        },
+        "khaejsorof": {
+          "2.31.0": [],
+          "2.32.3": [],
+          "2.30.0": [],
+          "2.27.1": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2.13.0": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2.28.2": []
+        },
+        "rwbwpddcdacparser": {
+          "2.21": [
+            "yjibkdxrjm",
+            "rmlxjsjhwz"
+          ]
+        }
+      },
+      "expected_status": "failed",
+      "expected_resolved": null,
+      "notes": "Known divergence: solver fails on this case. May succeed in rez due to different resolution strategy. Baseline locked from initial solver run.",
+      "category": "real_deps"
+    },
+    {
+      "id": "real_kcjbafgysf",
+      "description": "Real package kcjbafgysf with deps from rez_lib_caviar",
+      "requests": [
+        "kcjbafgysf"
+      ],
+      "packages": {
+        "yjibkdxrjm": {
+          "1.4.1": [
+            "jwofhdjaap"
+          ]
+        },
+        "uhkknokpwi": {
+          "2021.10.8": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2023.5.7": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2022.12.7": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2022.5.18.1": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2024.6.2": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ]
+        },
+        "jwofhdjaap": {
+          "1.3.1": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ]
+        },
+        "phnetklwii": {
+          "0.18.2": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "0.16.0": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "0.18.3": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ]
+        },
+        "fywdyqpenm": {
+          "3.0.5": [
+            "ibgesjugxt"
+          ]
+        },
+        "ibgesjugxt": {
+          "1.16.0": [
+            "khaejsorof-2.4.2+",
+            "ibgesjugxt"
+          ],
+          "1.11.0": [
+            "khaejsorof-2.4.2+",
+            "ibgesjugxt"
+          ]
+        },
+        "rmlxjsjhwz": {
+          "1.0.1": [
+            "fywdyqpenm2-2.0.0+"
+          ],
+          "1.1.0": [
+            "fywdyqpenm2-2.0.0+"
+          ]
+        },
+        "giklodhirl_patch2run3": {
+          "1.7.3": [
+            "phnetklwii"
+          ],
+          "1.4.0": [
+            "phnetklwii"
+          ],
+          "1.3.1": [
+            "phnetklwii"
+          ],
+          "1.2.1": [
+            "phnetklwii"
+          ],
+          "1.5.0": [
+            "phnetklwii"
+          ],
+          "1.7.0": [
+            "phnetklwii"
+          ],
+          "1.3.2": [
+            "phnetklwii"
+          ],
+          "1.2.2": [
+            "phnetklwii"
+          ],
+          "1.6.0": [
+            "phnetklwii"
+          ],
+          "1.2.0": [
+            "phnetklwii"
+          ],
+          "1.6.2": [
+            "phnetklwii"
+          ],
+          "1.7.2": [
+            "phnetklwii"
+          ],
+          "1.4.1": [
+            "phnetklwii"
+          ],
+          "1.3.0": [
+            "phnetklwii"
+          ],
+          "1.1.0": [
+            "phnetklwii"
+          ],
+          "1.6.1": [
+            "phnetklwii"
+          ],
+          "1.7.1": [
+            "phnetklwii"
+          ],
+          "1.0.0": [
+            "phnetklwii"
+          ]
+        },
+        "kcjbafgysf": {
+          "1.2.0": [
+            "giklodhirl_patch2run3-1"
+          ],
+          "1.1.0": [
+            "giklodhirl_patch2run3-1"
+          ],
+          "1.0.0": [
+            "giklodhirl_patch2run3-1"
+          ],
+          "2.0.0": [
+            "giklodhirl_patch2run3-1"
+          ],
+          "1.2.1": [
+            "giklodhirl_patch2run3-1"
+          ],
+          "1.0.1": [
+            "giklodhirl_patch2run3-1"
+          ]
+        },
+        "vapnnqxdoj": {
+          "2.0.7": [],
+          "1.26.12": [
+            "rwbwpddcdacparser"
+          ],
+          "1.26.15": [],
+          "2.2.2": [],
+          "1.26.9": [
+            "rwbwpddcdacparser"
+          ]
+        },
+        "fywdyqpenm2": {
+          "3.0.1": [
+            "fywdyqpenm-3.0.1+"
+          ]
+        },
+        "khaejsorof": {
+          "2.31.0": [],
+          "2.32.3": [],
+          "2.30.0": [],
+          "2.27.1": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2.13.0": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2.28.2": []
+        },
+        "rwbwpddcdacparser": {
+          "2.21": [
+            "yjibkdxrjm",
+            "rmlxjsjhwz"
+          ]
+        }
+      },
+      "expected_status": "solved",
+      "expected_resolved": null,
+      "notes": "Baseline locked from initial solver run.",
+      "category": "real_deps"
+    },
+    {
+      "id": "real_jdqabynppx",
+      "description": "Real package jdqabynppx with deps from rez_lib_caviar",
+      "requests": [
+        "jdqabynppx"
+      ],
+      "packages": {
+        "vkahewtwun": {
+          "5.1.1": [
+            "rwbwpddcdacparser"
+          ],
+          "4.4.2": [
+            "rwbwpddcdacparser"
+          ]
+        },
+        "yjibkdxrjm": {
+          "1.4.1": [
+            "jwofhdjaap"
+          ]
+        },
+        "jwofhdjaap": {
+          "1.3.1": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ]
+        },
+        "phnetklwii": {
+          "0.18.2": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "0.16.0": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "0.18.3": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ]
+        },
+        "fywdyqpenm": {
+          "3.0.5": [
+            "ibgesjugxt"
+          ]
+        },
+        "kwmwtzprlb": {
+          "1.6.0": [
+            "zkgbclqtce-0.5+"
+          ],
+          "2.1.3": [
+            "zkgbclqtce-0.5+"
+          ],
+          "1.7.0": []
+        },
+        "rvutfdoguf": {
+          "0.8.0": []
+        },
+        "zkgbclqtce": {
+          "3.15.0": [],
+          "1.2.0": [
+            "rwbwpddcdacparser"
+          ]
+        },
+        "khaejsorof": {
+          "2.31.0": [],
+          "2.32.3": [],
+          "2.30.0": [],
+          "2.27.1": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2.13.0": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2.28.2": []
+        },
+        "ibgesjugxt": {
+          "1.16.0": [
+            "khaejsorof-2.4.2+",
+            "ibgesjugxt"
+          ],
+          "1.11.0": [
+            "khaejsorof-2.4.2+",
+            "ibgesjugxt"
+          ]
+        },
+        "ccvavtlufg": {
+          "5.0.0": [
+            "ibgesjugxt-1.0.0+<2.0.0"
+          ],
+          "4.1.0": [
+            "ibgesjugxt-1.0.0+<2.0.0"
+          ]
+        },
+        "fywdyqpenm2": {
+          "3.0.1": [
+            "fywdyqpenm-3.0.1+"
+          ]
+        },
+        "uhkknokpwi": {
+          "2021.10.8": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2023.5.7": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2022.12.7": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2022.5.18.1": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2024.6.2": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ]
+        },
+        "rmlxjsjhwz": {
+          "1.0.1": [
+            "fywdyqpenm2-2.0.0+"
+          ],
+          "1.1.0": [
+            "fywdyqpenm2-2.0.0+"
+          ]
+        },
+        "vapnnqxdoj": {
+          "2.0.7": [],
+          "1.26.12": [
+            "rwbwpddcdacparser"
+          ],
+          "1.26.15": [],
+          "2.2.2": [],
+          "1.26.9": [
+            "rwbwpddcdacparser"
+          ]
+        },
+        "mphorhyvdc": {
+          "2.2": [],
+          "2.6.3": [],
+          "1.11": [
+            "vkahewtwun-3.4.0+"
+          ],
+          "2.8.8": []
+        },
+        "jdqabynppx": {
+          "1.3.0": [
+            "mphorhyvdc-1.11+<3",
+            "ccvavtlufg-4.1.0+<5",
+            "kwmwtzprlb-1.6.0+<2",
+            "giklodhirl_patch2run3-1.0.0+<2",
+            "rwbwpddcdayed-1.4.3+<2",
+            "rwbwpddcdadeps-1.10.12+<1.10.12.1"
+          ]
+        },
+        "rwbwpddcdaasn1": {
+          "0.4.8": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ]
+        },
+        "rwbwpddcdadeps": {
+          "1.10.12": [
+            "rvutfdoguf"
+          ]
+        },
+        "rwbwpddcdayed": {
+          "1.4.3": [
+            "rwbwpddcdaasn1-0.1.3+"
+          ],
+          "1.5.0": [
+            "rwbwpddcdaasn1-0.1.3+"
+          ]
+        },
+        "giklodhirl_patch2run3": {
+          "1.7.3": [
+            "phnetklwii"
+          ],
+          "1.4.0": [
+            "phnetklwii"
+          ],
+          "1.3.1": [
+            "phnetklwii"
+          ],
+          "1.2.1": [
+            "phnetklwii"
+          ],
+          "1.5.0": [
+            "phnetklwii"
+          ],
+          "1.7.0": [
+            "phnetklwii"
+          ],
+          "1.3.2": [
+            "phnetklwii"
+          ],
+          "1.2.2": [
+            "phnetklwii"
+          ],
+          "1.6.0": [
+            "phnetklwii"
+          ],
+          "1.2.0": [
+            "phnetklwii"
+          ],
+          "1.6.2": [
+            "phnetklwii"
+          ],
+          "1.7.2": [
+            "phnetklwii"
+          ],
+          "1.4.1": [
+            "phnetklwii"
+          ],
+          "1.3.0": [
+            "phnetklwii"
+          ],
+          "1.1.0": [
+            "phnetklwii"
+          ],
+          "1.6.1": [
+            "phnetklwii"
+          ],
+          "1.7.1": [
+            "phnetklwii"
+          ],
+          "1.0.0": [
+            "phnetklwii"
+          ]
+        },
+        "rwbwpddcdacparser": {
+          "2.21": [
+            "yjibkdxrjm",
+            "rmlxjsjhwz"
+          ]
+        }
+      },
+      "expected_status": "failed",
+      "expected_resolved": null,
+      "notes": "Known divergence: solver fails on this case. May succeed in rez due to different resolution strategy. Baseline locked from initial solver run.",
+      "category": "real_deps"
+    },
+    {
+      "id": "real_dzwtlsnsfr",
+      "description": "Real package dzwtlsnsfr with deps from rez_lib_caviar",
+      "requests": [
+        "dzwtlsnsfr"
+      ],
+      "packages": {
+        "yjibkdxrjm": {
+          "1.4.1": [
+            "jwofhdjaap"
+          ]
+        },
+        "uhkknokpwi": {
+          "2021.10.8": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2023.5.7": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2022.12.7": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2022.5.18.1": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2024.6.2": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ]
+        },
+        "jwofhdjaap": {
+          "1.3.1": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ]
+        },
+        "fywdyqpenm": {
+          "3.0.5": [
+            "ibgesjugxt"
+          ]
+        },
+        "ibgesjugxt": {
+          "1.16.0": [
+            "khaejsorof-2.4.2+",
+            "ibgesjugxt"
+          ],
+          "1.11.0": [
+            "khaejsorof-2.4.2+",
+            "ibgesjugxt"
+          ]
+        },
+        "rmlxjsjhwz": {
+          "1.0.1": [
+            "fywdyqpenm2-2.0.0+"
+          ],
+          "1.1.0": [
+            "fywdyqpenm2-2.0.0+"
+          ]
+        },
+        "dzwtlsnsfr": {
+          "3.1.1": [
+            "yjibkdxrjm",
+            "rmlxjsjhwz"
+          ]
+        },
+        "vapnnqxdoj": {
+          "2.0.7": [],
+          "1.26.12": [
+            "rwbwpddcdacparser"
+          ],
+          "1.26.15": [],
+          "2.2.2": [],
+          "1.26.9": [
+            "rwbwpddcdacparser"
+          ]
+        },
+        "fywdyqpenm2": {
+          "3.0.1": [
+            "fywdyqpenm-3.0.1+"
+          ]
+        },
+        "khaejsorof": {
+          "2.31.0": [],
+          "2.32.3": [],
+          "2.30.0": [],
+          "2.27.1": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2.13.0": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2.28.2": []
+        },
+        "rwbwpddcdacparser": {
+          "2.21": [
+            "yjibkdxrjm",
+            "rmlxjsjhwz"
+          ]
+        }
+      },
+      "expected_status": "failed",
+      "expected_resolved": null,
+      "notes": "Known divergence: solver fails on this case. May succeed in rez due to different resolution strategy. Baseline locked from initial solver run.",
+      "category": "real_deps"
+    },
+    {
+      "id": "real_rvpoxqjvpr",
+      "description": "Real package rvpoxqjvpr with deps from rez_lib_caviar",
+      "requests": [
+        "rvpoxqjvpr"
+      ],
+      "packages": {
+        "yjibkdxrjm": {
+          "1.4.1": [
+            "jwofhdjaap"
+          ]
+        },
+        "uhkknokpwi": {
+          "2021.10.8": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2023.5.7": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2022.12.7": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2022.5.18.1": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2024.6.2": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ]
+        },
+        "jwofhdjaap": {
+          "1.3.1": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ]
+        },
+        "phnetklwii": {
+          "0.18.2": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "0.16.0": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "0.18.3": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ]
+        },
+        "fywdyqpenm": {
+          "3.0.5": [
+            "ibgesjugxt"
+          ]
+        },
+        "ibgesjugxt": {
+          "1.16.0": [
+            "khaejsorof-2.4.2+",
+            "ibgesjugxt"
+          ],
+          "1.11.0": [
+            "khaejsorof-2.4.2+",
+            "ibgesjugxt"
+          ]
+        },
+        "rvpoxqjvpr": {
+          "1.1.2": [
+            "giklodhirl_patch2run3-1.0.0+<2"
+          ],
+          "2.0.0": [
+            "giklodhirl_patch2run3-1.0.0+<2"
+          ],
+          "1.1.1": [
+            "giklodhirl_patch2run3-1.0.0+<2"
+          ],
+          "1.0.0": [
+            "giklodhirl_patch2run3-1.0.0+<2"
+          ],
+          "1.1.0": [
+            "giklodhirl_patch2run3-1.0.0+<2"
+          ]
+        },
+        "rmlxjsjhwz": {
+          "1.0.1": [
+            "fywdyqpenm2-2.0.0+"
+          ],
+          "1.1.0": [
+            "fywdyqpenm2-2.0.0+"
+          ]
+        },
+        "giklodhirl_patch2run3": {
+          "1.7.3": [
+            "phnetklwii"
+          ],
+          "1.4.0": [
+            "phnetklwii"
+          ],
+          "1.3.1": [
+            "phnetklwii"
+          ],
+          "1.2.1": [
+            "phnetklwii"
+          ],
+          "1.5.0": [
+            "phnetklwii"
+          ],
+          "1.7.0": [
+            "phnetklwii"
+          ],
+          "1.3.2": [
+            "phnetklwii"
+          ],
+          "1.2.2": [
+            "phnetklwii"
+          ],
+          "1.6.0": [
+            "phnetklwii"
+          ],
+          "1.2.0": [
+            "phnetklwii"
+          ],
+          "1.6.2": [
+            "phnetklwii"
+          ],
+          "1.7.2": [
+            "phnetklwii"
+          ],
+          "1.4.1": [
+            "phnetklwii"
+          ],
+          "1.3.0": [
+            "phnetklwii"
+          ],
+          "1.1.0": [
+            "phnetklwii"
+          ],
+          "1.6.1": [
+            "phnetklwii"
+          ],
+          "1.7.1": [
+            "phnetklwii"
+          ],
+          "1.0.0": [
+            "phnetklwii"
+          ]
+        },
+        "vapnnqxdoj": {
+          "2.0.7": [],
+          "1.26.12": [
+            "rwbwpddcdacparser"
+          ],
+          "1.26.15": [],
+          "2.2.2": [],
+          "1.26.9": [
+            "rwbwpddcdacparser"
+          ]
+        },
+        "fywdyqpenm2": {
+          "3.0.1": [
+            "fywdyqpenm-3.0.1+"
+          ]
+        },
+        "khaejsorof": {
+          "2.31.0": [],
+          "2.32.3": [],
+          "2.30.0": [],
+          "2.27.1": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2.13.0": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2.28.2": []
+        },
+        "rwbwpddcdacparser": {
+          "2.21": [
+            "yjibkdxrjm",
+            "rmlxjsjhwz"
+          ]
+        }
+      },
+      "expected_status": "solved",
+      "expected_resolved": null,
+      "notes": "Baseline locked from initial solver run.",
+      "category": "real_deps"
+    },
+    {
+      "id": "real_rwbwpddcdaasn1_modules",
+      "description": "Real package rwbwpddcdaasn1_modules with deps from rez_lib_caviar",
+      "requests": [
+        "rwbwpddcdaasn1_modules"
+      ],
+      "packages": {
+        "yjibkdxrjm": {
+          "1.4.1": [
+            "jwofhdjaap"
+          ]
+        },
+        "uhkknokpwi": {
+          "2021.10.8": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2023.5.7": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2022.12.7": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2022.5.18.1": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2024.6.2": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ]
+        },
+        "rwbwpddcdaasn1": {
+          "0.4.8": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ]
+        },
+        "jwofhdjaap": {
+          "1.3.1": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ]
+        },
+        "fywdyqpenm": {
+          "3.0.5": [
+            "ibgesjugxt"
+          ]
+        },
+        "ibgesjugxt": {
+          "1.16.0": [
+            "khaejsorof-2.4.2+",
+            "ibgesjugxt"
+          ],
+          "1.11.0": [
+            "khaejsorof-2.4.2+",
+            "ibgesjugxt"
+          ]
+        },
+        "rmlxjsjhwz": {
+          "1.0.1": [
+            "fywdyqpenm2-2.0.0+"
+          ],
+          "1.1.0": [
+            "fywdyqpenm2-2.0.0+"
+          ]
+        },
+        "rwbwpddcdaasn1_modules": {
+          "0.2.8": [
+            "rwbwpddcdaasn1-0.4.6+<0.5.0"
+          ]
+        },
+        "vapnnqxdoj": {
+          "2.0.7": [],
+          "1.26.12": [
+            "rwbwpddcdacparser"
+          ],
+          "1.26.15": [],
+          "2.2.2": [],
+          "1.26.9": [
+            "rwbwpddcdacparser"
+          ]
+        },
+        "fywdyqpenm2": {
+          "3.0.1": [
+            "fywdyqpenm-3.0.1+"
+          ]
+        },
+        "khaejsorof": {
+          "2.31.0": [],
+          "2.32.3": [],
+          "2.30.0": [],
+          "2.27.1": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2.13.0": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2.28.2": []
+        },
+        "rwbwpddcdacparser": {
+          "2.21": [
+            "yjibkdxrjm",
+            "rmlxjsjhwz"
+          ]
+        }
+      },
+      "expected_status": "solved",
+      "expected_resolved": null,
+      "notes": "Baseline locked from initial solver run.",
+      "category": "real_deps"
+    },
+    {
+      "id": "real_sedvfekzhf",
+      "description": "Real package sedvfekzhf with deps from rez_lib_caviar",
+      "requests": [
+        "sedvfekzhf"
+      ],
+      "packages": {
+        "yjibkdxrjm": {
+          "1.4.1": [
+            "jwofhdjaap"
+          ]
+        },
+        "uhkknokpwi": {
+          "2021.10.8": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2023.5.7": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2022.12.7": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2022.5.18.1": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2024.6.2": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ]
+        },
+        "jwofhdjaap": {
+          "1.3.1": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ]
+        },
+        "fywdyqpenm": {
+          "3.0.5": [
+            "ibgesjugxt"
+          ]
+        },
+        "ibgesjugxt": {
+          "1.16.0": [
+            "khaejsorof-2.4.2+",
+            "ibgesjugxt"
+          ],
+          "1.11.0": [
+            "khaejsorof-2.4.2+",
+            "ibgesjugxt"
+          ]
+        },
+        "rmlxjsjhwz": {
+          "1.0.1": [
+            "fywdyqpenm2-2.0.0+"
+          ],
+          "1.1.0": [
+            "fywdyqpenm2-2.0.0+"
+          ]
+        },
+        "khaejsorof": {
+          "2.31.0": [],
+          "2.32.3": [],
+          "2.30.0": [],
+          "2.27.1": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2.13.0": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2.28.2": []
+        },
+        "vapnnqxdoj": {
+          "2.0.7": [],
+          "1.26.12": [
+            "rwbwpddcdacparser"
+          ],
+          "1.26.15": [],
+          "2.2.2": [],
+          "1.26.9": [
+            "rwbwpddcdacparser"
+          ]
+        },
+        "fywdyqpenm2": {
+          "3.0.1": [
+            "fywdyqpenm-3.0.1+"
+          ]
+        },
+        "sedvfekzhf": {
+          "1.15.0": [
+            "rwbwpddcdacparser"
+          ],
+          "1.15.1": [
+            "rwbwpddcdacparser"
+          ]
+        },
+        "rwbwpddcdacparser": {
+          "2.21": [
+            "yjibkdxrjm",
+            "rmlxjsjhwz"
+          ]
+        }
+      },
+      "expected_status": "failed",
+      "expected_resolved": null,
+      "notes": "Known divergence: solver fails on this case. May succeed in rez due to different resolution strategy. Baseline locked from initial solver run.",
+      "category": "real_deps"
+    },
+    {
+      "id": "real_njeprnqfru",
+      "description": "Real package njeprnqfru with deps from rez_lib_caviar",
+      "requests": [
+        "njeprnqfru"
+      ],
+      "packages": {
+        "yjibkdxrjm": {
+          "1.4.1": [
+            "jwofhdjaap"
+          ]
+        },
+        "uhkknokpwi": {
+          "2021.10.8": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2023.5.7": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2022.12.7": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2022.5.18.1": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2024.6.2": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ]
+        },
+        "jwofhdjaap": {
+          "1.3.1": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ]
+        },
+        "fywdyqpenm": {
+          "3.0.5": [
+            "ibgesjugxt"
+          ]
+        },
+        "ibgesjugxt": {
+          "1.16.0": [
+            "khaejsorof-2.4.2+",
+            "ibgesjugxt"
+          ],
+          "1.11.0": [
+            "khaejsorof-2.4.2+",
+            "ibgesjugxt"
+          ]
+        },
+        "rmlxjsjhwz": {
+          "1.0.1": [
+            "fywdyqpenm2-2.0.0+"
+          ],
+          "1.1.0": [
+            "fywdyqpenm2-2.0.0+"
+          ]
+        },
+        "njeprnqfru": {
+          "3.0.1": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2.2.2": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ]
+        },
+        "vapnnqxdoj": {
+          "2.0.7": [],
+          "1.26.12": [
+            "rwbwpddcdacparser"
+          ],
+          "1.26.15": [],
+          "2.2.2": [],
+          "1.26.9": [
+            "rwbwpddcdacparser"
+          ]
+        },
+        "fywdyqpenm2": {
+          "3.0.1": [
+            "fywdyqpenm-3.0.1+"
+          ]
+        },
+        "khaejsorof": {
+          "2.31.0": [],
+          "2.32.3": [],
+          "2.30.0": [],
+          "2.27.1": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2.13.0": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2.28.2": []
+        },
+        "rwbwpddcdacparser": {
+          "2.21": [
+            "yjibkdxrjm",
+            "rmlxjsjhwz"
+          ]
+        }
+      },
+      "expected_status": "solved",
+      "expected_resolved": null,
+      "notes": "Baseline locked from initial solver run.",
+      "category": "real_deps"
+    },
+    {
+      "id": "real_gymyobgscf",
+      "description": "Real package gymyobgscf with deps from rez_lib_caviar",
+      "requests": [
+        "gymyobgscf"
+      ],
+      "packages": {
+        "yjibkdxrjm": {
+          "1.4.1": [
+            "jwofhdjaap"
+          ]
+        },
+        "uhkknokpwi": {
+          "2021.10.8": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2023.5.7": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2022.12.7": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2022.5.18.1": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2024.6.2": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ]
+        },
+        "jwofhdjaap": {
+          "1.3.1": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ]
+        },
+        "fywdyqpenm": {
+          "3.0.5": [
+            "ibgesjugxt"
+          ]
+        },
+        "ibgesjugxt": {
+          "1.16.0": [
+            "khaejsorof-2.4.2+",
+            "ibgesjugxt"
+          ],
+          "1.11.0": [
+            "khaejsorof-2.4.2+",
+            "ibgesjugxt"
+          ]
+        },
+        "rmlxjsjhwz": {
+          "1.0.1": [
+            "fywdyqpenm2-2.0.0+"
+          ],
+          "1.1.0": [
+            "fywdyqpenm2-2.0.0+"
+          ]
+        },
+        "vapnnqxdoj": {
+          "2.0.7": [],
+          "1.26.12": [
+            "rwbwpddcdacparser"
+          ],
+          "1.26.15": [],
+          "2.2.2": [],
+          "1.26.9": [
+            "rwbwpddcdacparser"
+          ]
+        },
+        "gymyobgscf": {
+          "5.4.0": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "5.9.4": []
+        },
+        "fywdyqpenm2": {
+          "3.0.1": [
+            "fywdyqpenm-3.0.1+"
+          ]
+        },
+        "khaejsorof": {
+          "2.31.0": [],
+          "2.32.3": [],
+          "2.30.0": [],
+          "2.27.1": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2.13.0": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2.28.2": []
+        },
+        "rwbwpddcdacparser": {
+          "2.21": [
+            "yjibkdxrjm",
+            "rmlxjsjhwz"
+          ]
+        }
+      },
+      "expected_status": "solved",
+      "expected_resolved": null,
+      "notes": "Baseline locked from initial solver run.",
+      "category": "real_deps"
+    },
+    {
+      "id": "real_phnetklwiis",
+      "description": "Real package phnetklwiis with deps from rez_lib_caviar",
+      "requests": [
+        "phnetklwiis"
+      ],
+      "packages": {
+        "yjibkdxrjm": {
+          "1.4.1": [
+            "jwofhdjaap"
+          ]
+        },
+        "uhkknokpwi": {
+          "2021.10.8": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2023.5.7": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2022.12.7": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2022.5.18.1": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2024.6.2": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ]
+        },
+        "jwofhdjaap": {
+          "1.3.1": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ]
+        },
+        "ibgesjugxt": {
+          "1.16.0": [
+            "khaejsorof-2.4.2+",
+            "ibgesjugxt"
+          ],
+          "1.11.0": [
+            "khaejsorof-2.4.2+",
+            "ibgesjugxt"
+          ]
+        },
+        "fywdyqpenm": {
+          "3.0.5": [
+            "ibgesjugxt"
+          ]
+        },
+        "rmlxjsjhwz": {
+          "1.0.1": [
+            "fywdyqpenm2-2.0.0+"
+          ],
+          "1.1.0": [
+            "fywdyqpenm2-2.0.0+"
+          ]
+        },
+        "vapnnqxdoj": {
+          "2.0.7": [],
+          "1.26.12": [
+            "rwbwpddcdacparser"
+          ],
+          "1.26.15": [],
+          "2.2.2": [],
+          "1.26.9": [
+            "rwbwpddcdacparser"
+          ]
+        },
+        "phnetklwiis": {
+          "3.3.0": [
+            "khaejsorof-2.4.2+",
+            "ibgesjugxt"
+          ]
+        },
+        "fywdyqpenm2": {
+          "3.0.1": [
+            "fywdyqpenm-3.0.1+"
+          ]
+        },
+        "khaejsorof": {
+          "2.31.0": [],
+          "2.32.3": [],
+          "2.30.0": [],
+          "2.27.1": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2.13.0": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2.28.2": []
+        },
+        "rwbwpddcdacparser": {
+          "2.21": [
+            "yjibkdxrjm",
+            "rmlxjsjhwz"
+          ]
+        }
+      },
+      "expected_status": "failed",
+      "expected_resolved": null,
+      "notes": "Known divergence: solver fails on this case. May succeed in rez due to different resolution strategy. Baseline locked from initial solver run.",
+      "category": "real_deps"
+    },
+    {
+      "id": "real_ccxwvcntwh",
+      "description": "Real package ccxwvcntwh with deps from rez_lib_caviar",
+      "requests": [
+        "ccxwvcntwh"
+      ],
+      "packages": {
+        "naxmpufkaz": {
+          "2.6.2": []
+        },
+        "yjibkdxrjm": {
+          "1.4.1": [
+            "jwofhdjaap"
+          ]
+        },
+        "jwofhdjaap": {
+          "1.3.1": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ]
+        },
+        "fywdyqpenm": {
+          "3.0.5": [
+            "ibgesjugxt"
+          ]
+        },
+        "hwbislecpw": {
+          "3.0.1": [
+            "jwofhdjaap"
+          ]
+        },
+        "agdbymsbbz": {
+          "1.17.112": [
+            "zrrtuctsvt-0.7.1+<1.0.0",
+            "elovudkied-0.4.0+<0.5.0",
+            "qmvpaleczn-1.20.112+<1.21.0"
+          ],
+          "1.26.130": []
+        },
+        "qmvpaleczn": {
+          "1.29.130": [],
+          "1.20.112": [
+            "vapnnqxdoj-1.25.4+<1.27",
+            "giklodhirl_dateutil-2.1+<3.0.0",
+            "zrrtuctsvt-0.7.1+<1.0.0"
+          ]
+        },
+        "khaejsorof": {
+          "2.31.0": [],
+          "2.32.3": [],
+          "2.30.0": [],
+          "2.27.1": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2.13.0": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2.28.2": []
+        },
+        "kncmeshzly": {
+          "0.20.4": [
+            "giklodhirl_dateutil-2.4+",
+            "ibgesjugxt-1.10+",
+            "ugwkkporua-1.2+<1.2.1"
+          ],
+          "0.11.3": [
+            "giklodhirl_dateutil-2.4+",
+            "ibgesjugxt-1.10+",
+            "ugwkkporua-1.2+<1.2.1"
+          ]
+        },
+        "ibgesjugxt": {
+          "1.16.0": [
+            "khaejsorof-2.4.2+",
+            "ibgesjugxt"
+          ],
+          "1.11.0": [
+            "khaejsorof-2.4.2+",
+            "ibgesjugxt"
+          ]
+        },
+        "giklodhirl_dateutil": {
+          "2.8.2": [
+            "ibgesjugxt-1.5+"
+          ]
+        },
+        "fywdyqpenm2": {
+          "3.0.1": [
+            "fywdyqpenm-3.0.1+"
+          ]
+        },
+        "uhkknokpwi": {
+          "2021.10.8": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2023.5.7": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2022.12.7": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2022.5.18.1": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2024.6.2": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ]
+        },
+        "rmlxjsjhwz": {
+          "1.0.1": [
+            "fywdyqpenm2-2.0.0+"
+          ],
+          "1.1.0": [
+            "fywdyqpenm2-2.0.0+"
+          ]
+        },
+        "elovudkied": {
+          "0.6.1": [],
+          "0.4.2": [
+            "qmvpaleczn-1.12.36+<2.0.a0"
+          ]
+        },
+        "vapnnqxdoj": {
+          "2.0.7": [],
+          "1.26.12": [
+            "rwbwpddcdacparser"
+          ],
+          "1.26.15": [],
+          "2.2.2": [],
+          "1.26.9": [
+            "rwbwpddcdacparser"
+          ]
+        },
+        "zrrtuctsvt": {
+          "0.10.0": [
+            "naxmpufkaz",
+            "kncmeshzly-0.15.0+",
+            "ibgesjugxt"
+          ],
+          "1.0.1": [
+            "naxmpufkaz",
+            "kncmeshzly-0.15.0+",
+            "ibgesjugxt"
+          ]
+        },
+        "naxmpufkaz_kncmeshzly": {
+          "0.1.0": [
+            "naxmpufkaz",
+            "kncmeshzly-0.15.0+",
+            "ibgesjugxt"
+          ]
+        },
+        "ugwkkporua": {
+          "1.2": [
+            "kncmeshzly-0.9.2+<1.dev0",
+            "naxmpufkaz-1.4.1+",
+            "naxmpufkaz_kncmeshzly-0.0.3+",
+            "ibgesjugxt-1.6.1+<2.dev0",
+            "hwbislecpw-3.0.0+<4.dev0"
+          ]
+        },
+        "ccxwvcntwh": {
+          "0.4.0": [
+            "khaejsorof",
+            "agdbymsbbz"
+          ],
+          "0.3.4": [
+            "khaejsorof",
+            "agdbymsbbz"
+          ]
+        },
+        "rwbwpddcdacparser": {
+          "2.21": [
+            "yjibkdxrjm",
+            "rmlxjsjhwz"
+          ]
+        }
+      },
+      "expected_status": "solved",
+      "expected_resolved": null,
+      "notes": "Baseline locked from initial solver run.",
+      "category": "real_deps"
+    },
+    {
+      "id": "real_vkahewtwun",
+      "description": "Real package vkahewtwun with deps from rez_lib_caviar",
+      "requests": [
+        "vkahewtwun"
+      ],
+      "packages": {
+        "vkahewtwun": {
+          "5.1.1": [
+            "rwbwpddcdacparser"
+          ],
+          "4.4.2": [
+            "rwbwpddcdacparser"
+          ]
+        },
+        "yjibkdxrjm": {
+          "1.4.1": [
+            "jwofhdjaap"
+          ]
+        },
+        "uhkknokpwi": {
+          "2021.10.8": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2023.5.7": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2022.12.7": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2022.5.18.1": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2024.6.2": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ]
+        },
+        "jwofhdjaap": {
+          "1.3.1": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ]
+        },
+        "fywdyqpenm": {
+          "3.0.5": [
+            "ibgesjugxt"
+          ]
+        },
+        "ibgesjugxt": {
+          "1.16.0": [
+            "khaejsorof-2.4.2+",
+            "ibgesjugxt"
+          ],
+          "1.11.0": [
+            "khaejsorof-2.4.2+",
+            "ibgesjugxt"
+          ]
+        },
+        "rmlxjsjhwz": {
+          "1.0.1": [
+            "fywdyqpenm2-2.0.0+"
+          ],
+          "1.1.0": [
+            "fywdyqpenm2-2.0.0+"
+          ]
+        },
+        "vapnnqxdoj": {
+          "2.0.7": [],
+          "1.26.12": [
+            "rwbwpddcdacparser"
+          ],
+          "1.26.15": [],
+          "2.2.2": [],
+          "1.26.9": [
+            "rwbwpddcdacparser"
+          ]
+        },
+        "fywdyqpenm2": {
+          "3.0.1": [
+            "fywdyqpenm-3.0.1+"
+          ]
+        },
+        "khaejsorof": {
+          "2.31.0": [],
+          "2.32.3": [],
+          "2.30.0": [],
+          "2.27.1": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2.13.0": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2.28.2": []
+        },
+        "rwbwpddcdacparser": {
+          "2.21": [
+            "yjibkdxrjm",
+            "rmlxjsjhwz"
+          ]
+        }
+      },
+      "expected_status": "failed",
+      "expected_resolved": null,
+      "notes": "Known divergence: solver fails on this case. May succeed in rez due to different resolution strategy. Baseline locked from initial solver run.",
+      "category": "real_deps"
+    },
+    {
+      "id": "real_jsjtzkyvbx2",
+      "description": "Real package jsjtzkyvbx2 with deps from rez_lib_caviar",
+      "requests": [
+        "jsjtzkyvbx2"
+      ],
+      "packages": {
+        "jsjtzkyvbx2": {
+          "5.12.0": [
+            "dmqwhpkmtr-5.12.0+<5.12.0.1"
+          ],
+          "5.12-inside-ibasjdwrbe-5.0-pkg.0": [
+            "dmqwhpkmtr-5.12.0+<5.12.0.1"
+          ],
+          "5.15-inside-eumdghchzx-14.0-pkg.0": [
+            "dmqwhpkmtr-5.12.0+<5.12.0.1"
+          ],
+          "5.15.2-inside-cbwcsybpwr-19.5-pkg.0": [
+            "dmqwhpkmtr-5.12.0+<5.12.0.1"
+          ],
+          "5.12.6-inside-eumdghchzx-13.2-pkg.0": [
+            "dmqwhpkmtr-5.12.0+<5.12.0.1"
+          ],
+          "5.15.2-inside-rknuaqvyfr-2022-pkg.0": [
+            "dmqwhpkmtr-5.12.0+<5.12.0.1"
+          ],
+          "5.15.2.1-pkg.1": [
+            "dmqwhpkmtr-5.15.2.1+<5.15.2.1.1"
+          ],
+          "5.15.2.1": [
+            "dmqwhpkmtr-5.15.2.1+<5.15.2.1.1"
+          ]
+        },
+        "yjibkdxrjm": {
+          "1.4.1": [
+            "jwofhdjaap"
+          ]
+        },
+        "uhkknokpwi": {
+          "2021.10.8": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2023.5.7": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2022.12.7": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2022.5.18.1": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2024.6.2": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ]
+        },
+        "jwofhdjaap": {
+          "1.3.1": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ]
+        },
+        "fywdyqpenm": {
+          "3.0.5": [
+            "ibgesjugxt"
+          ]
+        },
+        "ibgesjugxt": {
+          "1.16.0": [
+            "khaejsorof-2.4.2+",
+            "ibgesjugxt"
+          ],
+          "1.11.0": [
+            "khaejsorof-2.4.2+",
+            "ibgesjugxt"
+          ]
+        },
+        "rmlxjsjhwz": {
+          "1.0.1": [
+            "fywdyqpenm2-2.0.0+"
+          ],
+          "1.1.0": [
+            "fywdyqpenm2-2.0.0+"
+          ]
+        },
+        "dmqwhpkmtr": {
+          "5.12.0": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "5.15.2.1": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ]
+        },
+        "vapnnqxdoj": {
+          "2.0.7": [],
+          "1.26.12": [
+            "rwbwpddcdacparser"
+          ],
+          "1.26.15": [],
+          "2.2.2": [],
+          "1.26.9": [
+            "rwbwpddcdacparser"
+          ]
+        },
+        "fywdyqpenm2": {
+          "3.0.1": [
+            "fywdyqpenm-3.0.1+"
+          ]
+        },
+        "khaejsorof": {
+          "2.31.0": [],
+          "2.32.3": [],
+          "2.30.0": [],
+          "2.27.1": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2.13.0": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2.28.2": []
+        },
+        "rwbwpddcdacparser": {
+          "2.21": [
+            "yjibkdxrjm",
+            "rmlxjsjhwz"
+          ]
+        }
+      },
+      "expected_status": "solved",
+      "expected_resolved": null,
+      "notes": "Baseline locked from initial solver run.",
+      "category": "real_deps"
+    },
+    {
+      "id": "real_rknuaqvyfr_bh_ghlivhjrstpzt",
+      "description": "Real package rknuaqvyfr_bh_ghlivhjrstpzt with deps from rez_lib_caviar",
+      "requests": [
+        "rknuaqvyfr_bh_ghlivhjrstpzt"
+      ],
+      "packages": {
+        "naxmpufkaz": {
+          "2.6.2": []
+        },
+        "yjibkdxrjm": {
+          "1.4.1": [
+            "jwofhdjaap"
+          ]
+        },
+        "rknuaqvyfr_bh_ghlivhjrstpzt": {
+          "1.55-pkg.0": [
+            "giklodhirl_dateutil-2.4+",
+            "ibgesjugxt-1.10+",
+            "ugwkkporua-1.2+<1.2.1"
+          ]
+        },
+        "uhkknokpwi": {
+          "2021.10.8": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2023.5.7": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2022.12.7": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2022.5.18.1": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2024.6.2": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ]
+        },
+        "naxmpufkaz_kncmeshzly": {
+          "0.1.0": [
+            "naxmpufkaz",
+            "kncmeshzly-0.15.0+",
+            "ibgesjugxt"
+          ]
+        },
+        "jwofhdjaap": {
+          "1.3.1": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ]
+        },
+        "kncmeshzly": {
+          "0.20.4": [
+            "giklodhirl_dateutil-2.4+",
+            "ibgesjugxt-1.10+",
+            "ugwkkporua-1.2+<1.2.1"
+          ],
+          "0.11.3": [
+            "giklodhirl_dateutil-2.4+",
+            "ibgesjugxt-1.10+",
+            "ugwkkporua-1.2+<1.2.1"
+          ]
+        },
+        "ibgesjugxt": {
+          "1.16.0": [
+            "khaejsorof-2.4.2+",
+            "ibgesjugxt"
+          ],
+          "1.11.0": [
+            "khaejsorof-2.4.2+",
+            "ibgesjugxt"
+          ]
+        },
+        "ugwkkporua": {
+          "1.2": [
+            "kncmeshzly-0.9.2+<1.dev0",
+            "naxmpufkaz-1.4.1+",
+            "naxmpufkaz_kncmeshzly-0.0.3+",
+            "ibgesjugxt-1.6.1+<2.dev0",
+            "hwbislecpw-3.0.0+<4.dev0"
+          ]
+        },
+        "fywdyqpenm": {
+          "3.0.5": [
+            "ibgesjugxt"
+          ]
+        },
+        "hwbislecpw": {
+          "3.0.1": [
+            "jwofhdjaap"
+          ]
+        },
+        "rmlxjsjhwz": {
+          "1.0.1": [
+            "fywdyqpenm2-2.0.0+"
+          ],
+          "1.1.0": [
+            "fywdyqpenm2-2.0.0+"
+          ]
+        },
+        "vapnnqxdoj": {
+          "2.0.7": [],
+          "1.26.12": [
+            "rwbwpddcdacparser"
+          ],
+          "1.26.15": [],
+          "2.2.2": [],
+          "1.26.9": [
+            "rwbwpddcdacparser"
+          ]
+        },
+        "giklodhirl_dateutil": {
+          "2.8.2": [
+            "ibgesjugxt-1.5+"
+          ]
+        },
+        "fywdyqpenm2": {
+          "3.0.1": [
+            "fywdyqpenm-3.0.1+"
+          ]
+        },
+        "khaejsorof": {
+          "2.31.0": [],
+          "2.32.3": [],
+          "2.30.0": [],
+          "2.27.1": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2.13.0": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2.28.2": []
+        },
+        "rwbwpddcdacparser": {
+          "2.21": [
+            "yjibkdxrjm",
+            "rmlxjsjhwz"
+          ]
+        }
+      },
+      "expected_status": "failed",
+      "expected_resolved": null,
+      "notes": "Known divergence: solver fails on this case. May succeed in rez due to different resolution strategy. Baseline locked from initial solver run.",
+      "category": "real_deps"
+    },
+    {
+      "id": "real_wftncdvhbq",
+      "description": "Real package wftncdvhbq with deps from rez_lib_caviar",
+      "requests": [
+        "wftncdvhbq"
+      ],
+      "packages": {
+        "yjibkdxrjm": {
+          "1.4.1": [
+            "jwofhdjaap"
+          ]
+        },
+        "uhkknokpwi": {
+          "2021.10.8": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2023.5.7": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2022.12.7": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2022.5.18.1": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2024.6.2": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ]
+        },
+        "jwofhdjaap": {
+          "1.3.1": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ]
+        },
+        "fywdyqpenm": {
+          "3.0.5": [
+            "ibgesjugxt"
+          ]
+        },
+        "ibgesjugxt": {
+          "1.16.0": [
+            "khaejsorof-2.4.2+",
+            "ibgesjugxt"
+          ],
+          "1.11.0": [
+            "khaejsorof-2.4.2+",
+            "ibgesjugxt"
+          ]
+        },
+        "rmlxjsjhwz": {
+          "1.0.1": [
+            "fywdyqpenm2-2.0.0+"
+          ],
+          "1.1.0": [
+            "fywdyqpenm2-2.0.0+"
+          ]
+        },
+        "wftncdvhbq": {
+          "1.6.4": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ]
+        },
+        "vapnnqxdoj": {
+          "2.0.7": [],
+          "1.26.12": [
+            "rwbwpddcdacparser"
+          ],
+          "1.26.15": [],
+          "2.2.2": [],
+          "1.26.9": [
+            "rwbwpddcdacparser"
+          ]
+        },
+        "fywdyqpenm2": {
+          "3.0.1": [
+            "fywdyqpenm-3.0.1+"
+          ]
+        },
+        "khaejsorof": {
+          "2.31.0": [],
+          "2.32.3": [],
+          "2.30.0": [],
+          "2.27.1": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2.13.0": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2.28.2": []
+        },
+        "rwbwpddcdacparser": {
+          "2.21": [
+            "yjibkdxrjm",
+            "rmlxjsjhwz"
+          ]
+        }
+      },
+      "expected_status": "solved",
+      "expected_resolved": null,
+      "notes": "Baseline locked from initial solver run.",
+      "category": "real_deps"
+    },
+    {
+      "id": "real_rwbwpddcdaperclip",
+      "description": "Real package rwbwpddcdaperclip with deps from rez_lib_caviar",
+      "requests": [
+        "rwbwpddcdaperclip"
+      ],
+      "packages": {
+        "yjibkdxrjm": {
+          "1.4.1": [
+            "jwofhdjaap"
+          ]
+        },
+        "uhkknokpwi": {
+          "2021.10.8": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2023.5.7": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2022.12.7": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2022.5.18.1": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2024.6.2": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ]
+        },
+        "rwbwpddcdaperclip": {
+          "1.8.0": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "1.8.2": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ]
+        },
+        "jwofhdjaap": {
+          "1.3.1": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ]
+        },
+        "fywdyqpenm": {
+          "3.0.5": [
+            "ibgesjugxt"
+          ]
+        },
+        "ibgesjugxt": {
+          "1.16.0": [
+            "khaejsorof-2.4.2+",
+            "ibgesjugxt"
+          ],
+          "1.11.0": [
+            "khaejsorof-2.4.2+",
+            "ibgesjugxt"
+          ]
+        },
+        "rmlxjsjhwz": {
+          "1.0.1": [
+            "fywdyqpenm2-2.0.0+"
+          ],
+          "1.1.0": [
+            "fywdyqpenm2-2.0.0+"
+          ]
+        },
+        "vapnnqxdoj": {
+          "2.0.7": [],
+          "1.26.12": [
+            "rwbwpddcdacparser"
+          ],
+          "1.26.15": [],
+          "2.2.2": [],
+          "1.26.9": [
+            "rwbwpddcdacparser"
+          ]
+        },
+        "fywdyqpenm2": {
+          "3.0.1": [
+            "fywdyqpenm-3.0.1+"
+          ]
+        },
+        "khaejsorof": {
+          "2.31.0": [],
+          "2.32.3": [],
+          "2.30.0": [],
+          "2.27.1": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2.13.0": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2.28.2": []
+        },
+        "rwbwpddcdacparser": {
+          "2.21": [
+            "yjibkdxrjm",
+            "rmlxjsjhwz"
+          ]
+        }
+      },
+      "expected_status": "solved",
+      "expected_resolved": null,
+      "notes": "Baseline locked from initial solver run.",
+      "category": "real_deps"
+    },
+    {
+      "id": "real_giklodhirl_dateutil",
+      "description": "Real package giklodhirl_dateutil with deps from rez_lib_caviar",
+      "requests": [
+        "giklodhirl_dateutil"
+      ],
+      "packages": {
+        "yjibkdxrjm": {
+          "1.4.1": [
+            "jwofhdjaap"
+          ]
+        },
+        "uhkknokpwi": {
+          "2021.10.8": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2023.5.7": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2022.12.7": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2022.5.18.1": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2024.6.2": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ]
+        },
+        "jwofhdjaap": {
+          "1.3.1": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ]
+        },
+        "ibgesjugxt": {
+          "1.16.0": [
+            "khaejsorof-2.4.2+",
+            "ibgesjugxt"
+          ],
+          "1.11.0": [
+            "khaejsorof-2.4.2+",
+            "ibgesjugxt"
+          ]
+        },
+        "fywdyqpenm": {
+          "3.0.5": [
+            "ibgesjugxt"
+          ]
+        },
+        "rmlxjsjhwz": {
+          "1.0.1": [
+            "fywdyqpenm2-2.0.0+"
+          ],
+          "1.1.0": [
+            "fywdyqpenm2-2.0.0+"
+          ]
+        },
+        "vapnnqxdoj": {
+          "2.0.7": [],
+          "1.26.12": [
+            "rwbwpddcdacparser"
+          ],
+          "1.26.15": [],
+          "2.2.2": [],
+          "1.26.9": [
+            "rwbwpddcdacparser"
+          ]
+        },
+        "giklodhirl_dateutil": {
+          "2.8.2": [
+            "ibgesjugxt-1.5+"
+          ]
+        },
+        "fywdyqpenm2": {
+          "3.0.1": [
+            "fywdyqpenm-3.0.1+"
+          ]
+        },
+        "khaejsorof": {
+          "2.31.0": [],
+          "2.32.3": [],
+          "2.30.0": [],
+          "2.27.1": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2.13.0": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2.28.2": []
+        },
+        "rwbwpddcdacparser": {
+          "2.21": [
+            "yjibkdxrjm",
+            "rmlxjsjhwz"
+          ]
+        }
+      },
+      "expected_status": "failed",
+      "expected_resolved": null,
+      "notes": "Known divergence: solver fails on this case. May succeed in rez due to different resolution strategy. Baseline locked from initial solver run.",
+      "category": "real_deps"
+    },
+    {
+      "id": "real_hwbislecpw",
+      "description": "Real package hwbislecpw with deps from rez_lib_caviar",
+      "requests": [
+        "hwbislecpw"
+      ],
+      "packages": {
+        "yjibkdxrjm": {
+          "1.4.1": [
+            "jwofhdjaap"
+          ]
+        },
+        "uhkknokpwi": {
+          "2021.10.8": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2023.5.7": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2022.12.7": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2022.5.18.1": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2024.6.2": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ]
+        },
+        "jwofhdjaap": {
+          "1.3.1": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ]
+        },
+        "fywdyqpenm": {
+          "3.0.5": [
+            "ibgesjugxt"
+          ]
+        },
+        "ibgesjugxt": {
+          "1.16.0": [
+            "khaejsorof-2.4.2+",
+            "ibgesjugxt"
+          ],
+          "1.11.0": [
+            "khaejsorof-2.4.2+",
+            "ibgesjugxt"
+          ]
+        },
+        "hwbislecpw": {
+          "3.0.1": [
+            "jwofhdjaap"
+          ]
+        },
+        "rmlxjsjhwz": {
+          "1.0.1": [
+            "fywdyqpenm2-2.0.0+"
+          ],
+          "1.1.0": [
+            "fywdyqpenm2-2.0.0+"
+          ]
+        },
+        "vapnnqxdoj": {
+          "2.0.7": [],
+          "1.26.12": [
+            "rwbwpddcdacparser"
+          ],
+          "1.26.15": [],
+          "2.2.2": [],
+          "1.26.9": [
+            "rwbwpddcdacparser"
+          ]
+        },
+        "fywdyqpenm2": {
+          "3.0.1": [
+            "fywdyqpenm-3.0.1+"
+          ]
+        },
+        "khaejsorof": {
+          "2.31.0": [],
+          "2.32.3": [],
+          "2.30.0": [],
+          "2.27.1": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2.13.0": [
+            "uhkknokpwi-2017.4.17+",
+            "vapnnqxdoj-1.21.1+<1.27"
+          ],
+          "2.28.2": []
+        },
+        "rwbwpddcdacparser": {
+          "2.21": [
+            "yjibkdxrjm",
+            "rmlxjsjhwz"
+          ]
+        }
+      },
+      "expected_status": "solved",
+      "expected_resolved": null,
+      "notes": "Baseline locked from initial solver run.",
+      "category": "real_deps"
+    }
+  ]
+}
