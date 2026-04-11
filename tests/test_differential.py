@@ -102,6 +102,16 @@ def _parse_resolved(result) -> set[tuple[str, str]]:
 # filesystem solver (which lacks dependency data) can still validate results.
 _NO_DEPS_CATEGORIES = frozenset({"leaf", "multi_leaf", "exact_version", "missing", "conflict"})
 
+# Explicit allowlist of case IDs whose rer/rez divergence is a *known*
+# acceptable difference.  Only these are marked xfail in test_rer_vs_rez;
+# any other divergence will hard-fail so regressions are caught immediately.
+# All entries belong to the ``real_deps`` category — the pubgrub solver
+# currently cannot read transitive dependency metadata from the filesystem,
+# so its resolved set legitimately differs from rez's backtracking solver.
+_KNOWN_DIVERGENT_IDS: frozenset[str] = frozenset(
+    case["id"] for case in ALL_CASES if case["category"] == "real_deps"
+)
+
 
 def _case_id(case: dict) -> str:
     return case["id"]
@@ -218,31 +228,32 @@ def test_rer_vs_rez(case: dict, tmp_path: pathlib.Path):
         rez_status = "failed"
 
     # Compare statuses
+    is_known_divergence = case["id"] in _KNOWN_DIVERGENT_IDS
+
     if rust_result.status == "solved" and rez_status == "solved":
         rust_set = _parse_resolved(rust_result)
-        rez_set = set()
-        for pkg in context.resolved_packages:
-            rez_set.add((pkg.name, str(pkg.version)))
+        rez_set = {(pkg.name, str(pkg.version)) for pkg in context.resolved_packages}
 
         if rust_set != rez_set:
-            # Log divergence for analysis rather than hard-failing.
-            # Both solutions may be valid — pubgrub can pick different
-            # versions than rez's backtracking solver.
             extra = rust_set - rez_set
             missing = rez_set - rust_set
-            pytest.xfail(
-                reason=(
-                    f"[{case['id']}] Acceptable divergence: "
-                    f"rer_extra={extra}, rez_extra={missing}"
-                ),
+            msg = (
+                f"[{case['id']}] Resolved-set divergence: "
+                f"rer_extra={extra}, rez_extra={missing}"
             )
+            if is_known_divergence:
+                pytest.xfail(reason=msg)
+            else:
+                pytest.fail(msg)
     elif rust_result.status != rez_status:
-        pytest.xfail(
-            reason=(
-                f"[{case['id']}] Status divergence: "
-                f"rer={rust_result.status}, rez={rez_status}"
-            ),
+        msg = (
+            f"[{case['id']}] Status divergence: "
+            f"rer={rust_result.status}, rez={rez_status}"
         )
+        if is_known_divergence:
+            pytest.xfail(reason=msg)
+        else:
+            pytest.fail(msg)
 
 
 # ---------------------------------------------------------------------------
