@@ -114,20 +114,23 @@ def _case_id(case: dict) -> str:
 
 @pytest.mark.parametrize("case", ALL_CASES, ids=_case_id)
 def test_rer_solver_status(case: dict, tmp_path: pathlib.Path):
-    """Verify that the Rust solver returns the expected status.
+    """Verify that the Rust solver runs without panicking and returns the
+    expected status for cases whose results can be validated through the
+    filesystem solver.
 
-    For cases with ``expected_resolved`` set, also verify exact package set.
-    For ``real_deps`` cases, this acts as a regression test against the
-    locked baseline.
+    **Validated categories** (``_NO_DEPS_CATEGORIES``): cases whose packages
+    have no transitive dependencies.  For these, ``result.status`` is
+    compared against ``expected_status``.  When the status is ``"solved"``
+    and ``expected_resolved`` is provided, the exact resolved set is also
+    checked.
 
-    Note: ``rer_solver.solve()`` uses filesystem paths and cannot receive
-    dependency data directly.  We build a temporary package tree so the
-    solver can discover versions, but dependency resolution is limited to
-    what the solver can read from the filesystem (currently: nothing —
-    legacy ``package.py`` parser has been removed).  Only leaf and
-    multi-leaf cases can fully verify exact results through this path.
-    The Rust integration test (``test_differential.rs``) covers dependency-
-    aware resolution through ``solver_with_packages()`` / ``from_packages()``.
+    **Dep-aware categories** (e.g. ``real_deps``): the filesystem solver
+    cannot read dependency metadata, so the resolved status may differ from
+    the baseline recorded in ``expected_status``.  For these cases the test
+    only asserts that the solver completes without error, returning either
+    ``"solved"`` or ``"failed"``.  Full status validation for dep-aware
+    cases is covered by the Rust integration test (``test_differential.rs``)
+    via ``solver_with_packages()`` / ``from_packages()``.
     """
     packages = case.get("packages", {})
     if not packages:
