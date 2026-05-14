@@ -19,7 +19,7 @@ use version_ranges::Ranges;
 /// Construct from a rez range string with [`VersionRange::parse`], from a
 /// single version with [`VersionRange::from_version`], or from an existing
 /// [`Ranges`] with [`VersionRange::from_ranges`].
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct VersionRange(Ranges<RerVersion>);
 
 impl VersionRange {

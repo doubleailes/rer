@@ -604,21 +604,33 @@ impl PackageVariantSlice {
 
         let mut new_entries: Vec<PackageEntry> = Vec::new();
         let mut reductions: Vec<Reduction> = Vec::new();
+        // Per-call cache: many variants share the same requirement for this
+        // family, and `conflicts_with` is a comparatively expensive range op.
+        // Keyed by `&Requirement` — the map hashes/compares by value, so
+        // equal-but-distinct requirements share a cache entry without cloning.
+        let mut conflict_tests: FxHashMap<&Requirement, bool> = FxHashMap::default();
 
         for entry in &self.entries {
             let mut kept: Vec<Rc<PackageVariant>> = Vec::new();
             for variant in &entry.variants {
                 match variant.get(package_request.name()) {
-                    Some(req) if req.conflicts_with(package_request) => {
-                        reductions.push(Reduction {
-                            name: variant.name().to_string(),
-                            version: variant.version().clone(),
-                            variant_index: variant.index(),
-                            dependency: req.clone(),
-                            conflicting_request: package_request.clone(),
-                        });
+                    Some(req) => {
+                        let conflicts = *conflict_tests
+                            .entry(req)
+                            .or_insert_with(|| req.conflicts_with(package_request));
+                        if conflicts {
+                            reductions.push(Reduction {
+                                name: variant.name().to_string(),
+                                version: variant.version().clone(),
+                                variant_index: variant.index(),
+                                dependency: req.clone(),
+                                conflicting_request: package_request.clone(),
+                            });
+                        } else {
+                            kept.push(Rc::clone(variant));
+                        }
                     }
-                    _ => kept.push(Rc::clone(variant)),
+                    None => kept.push(Rc::clone(variant)),
                 }
             }
             if kept.is_empty() {

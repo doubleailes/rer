@@ -5,7 +5,6 @@ use rer_version::VersionRange;
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::cell::RefCell;
 use std::fmt;
-use std::hash::{Hash, Hasher};
 
 thread_local! {
     /// Memoises [`Requirement::parse`]. The benchmark dataset repeats the same
@@ -25,7 +24,7 @@ thread_local! {
 ///   A weak requirement is stored internally as a conflict over the *inverse*
 ///   of the given range, so the solver only ever distinguishes "conflict" from
 ///   "normal" — `negate` is purely for faithful display.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Requirement {
     name: String,
     /// `None` only for the no-effect weak requirement `~foo`. For every other
@@ -240,22 +239,9 @@ impl fmt::Display for Requirement {
     }
 }
 
-// `Eq` and `Hash` are both defined via the string representation so they stay
-// consistent (rez hashes on `str` but compares structurally — fine in Python,
-// but Rust's hash maps require the two to agree).
-impl PartialEq for Requirement {
-    fn eq(&self, other: &Self) -> bool {
-        self.to_string() == other.to_string()
-    }
-}
-
-impl Eq for Requirement {}
-
-impl Hash for Requirement {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.to_string().hash(state);
-    }
-}
+// `PartialEq`/`Eq`/`Hash` are derived (field-based) — now that `VersionRange`
+// derives `Hash`, this is both cheap and consistent. The solver uses it as a
+// hot-path cache key, so the previous `to_string()`-based impls were too slow.
 
 /// A list of requirements reduced to optimal form: requirements for the same
 /// object are merged, and original order is preserved. Mirrors rez's
