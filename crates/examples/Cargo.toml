@@ -1,4 +1,3 @@
-
 [package]
 name = "examples"
 version = "0.0.0"
@@ -6,24 +5,10 @@ publish = false
 edition = "2021"
 
 [[example]]
-name = "with_candidate_selector_rayon"
-path = "with_candidate_selector_rayon.rs"
-
-[[example]]
-name = "rez_benchmark"
-path = "rez_benchmark.rs"
-
-[[example]]
-name = "new_solver"
-path = "new_solver.rs"
-
-[[example]]
 name = "rez_benchmark_dataset"
 path = "rez_benchmark_dataset.rs"
 
 [dependencies]
-pubgrub = { workspace = true }
-rer-version = { workspace = true }
 rer-resolver = { workspace = true }
-serde_json = { workspace = true }
 serde = { workspace = true }
+serde_json = { workspace = true }

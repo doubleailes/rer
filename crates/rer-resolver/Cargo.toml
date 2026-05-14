@@ -10,15 +10,13 @@ license-file = { workspace = true }
 name = "rer_resolver"
 
 [dependencies]
-pubgrub = { workspace = true }
-version-ranges = { workspace = true }
 rer-version = { workspace = true }
-rayon = { workspace = true }
+# `serde` derive for `PackageData` (the repository is handed in as data).
 serde = { workspace = true }
-serde_json = { workspace = true }
-itertools = { workspace = true }
-regex = { workspace = true }
-log = { workspace = true }
 # Fast non-cryptographic hasher for the solver's hot-path maps/sets (package
-# family names, requirement lookups). Already in the tree via pubgrub.
+# family names, requirement lookups).
 rustc-hash = "2"
+
+[dev-dependencies]
+# Only the benchmark integration test deserialises fixtures.
+serde_json = { workspace = true }

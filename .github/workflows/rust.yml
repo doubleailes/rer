@@ -44,8 +44,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: 🧪 Rust differential tests
-        run: cargo test -p rer-resolver --test test_differential
+      - name: 🧪 Rust solver tests
+        run: cargo test -p rer-resolver
       - name: 📦 Build rer_solver Python module
         run: |
           python -m venv .venv

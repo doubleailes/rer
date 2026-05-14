@@ -1,16 +1,11 @@
-mod candidate_selector;
-pub use candidate_selector::{
-    find_best_candidate, CandidateList, PackageOrderConfig, ResolutionMode,
-};
-mod local_package;
-pub use local_package::{LocalPackages, PackageData};
-pub mod package_filter;
-pub use package_filter::{FilterList, GlobFilter, PackageFilter, RegexFilter, TimestampFilter};
-mod package_id;
-pub use package_id::PackageId;
-mod solver;
-pub use solver::{
-    solver, solver_with_packages, solver_with_packages_filtered, solver_with_packages_ordered,
-};
-pub mod resolver;
+//! `rer-resolver` — rer's package solver.
+//!
+//! [`rez_solver`] is a faithful Rust port of rez's own phase-based backtracking
+//! solver; resolves match rez 1:1, including weak (`~`) / conflict (`!`)
+//! requirement semantics and variant selection order. [`PackageData`] is the
+//! in-memory unit of the package repository it works on.
+
+mod package_data;
+pub use package_data::PackageData;
+
 pub mod rez_solver;
