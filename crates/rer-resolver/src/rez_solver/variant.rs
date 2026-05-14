@@ -7,10 +7,10 @@
 //! requirements (`reduce_by`), and by peeling off the search space (`split`).
 //! `extract` pulls out a dependency common to every remaining variant.
 
-use super::context::SolverContext;
+use super::context::{PackageRepo, SolverContext};
 use super::requirement::{Requirement, RequirementList};
 use rer_version::{RerVersion, VersionRange};
-use std::cell::OnceCell;
+use std::cell::{OnceCell, RefCell};
 use std::collections::HashSet;
 use std::ops::Bound;
 use std::rc::Rc;
@@ -314,53 +314,85 @@ fn variant_sort_key(variant: &PackageVariant, ctx: &SolverContext) -> VariantKey
 // PackageVariantList — every variant of a family (cached per family)
 // ---------------------------------------------------------------------------
 
-/// Every variant of one package family, built once and cached. Mirrors rez's
-/// `_PackageVariantList` (minus the lazy-load / package-filter machinery, which
-/// the in-memory repo makes unnecessary).
+/// One version of a family, whose variants (parsed requirements) are
+/// materialised lazily on first access.
+#[derive(Debug)]
+struct LazyEntry {
+    version: RerVersion,
+    /// The repository key for this version, used to look its data back up.
+    version_str: String,
+    /// `None` until the version is first touched by a range intersection.
+    variants: RefCell<Option<Vec<Rc<PackageVariant>>>>,
+}
+
+/// Every version of one package family, built once and cached.
+///
+/// Mirrors rez's `_PackageVariantList`: a version's variants — which means
+/// *parsing all its requirement strings* — are materialised lazily, only when
+/// some range actually intersects that version. This avoids parsing the
+/// requirements of versions no resolve ever looks at (the dominant cost before
+/// this was added).
 #[derive(Debug)]
 pub struct PackageVariantList {
-    /// `(version, variants)` for every version of the family, version-sorted
-    /// ascending for deterministic iteration.
-    entries: Vec<(RerVersion, Vec<Rc<PackageVariant>>)>,
+    package_name: String,
+    repo: Rc<PackageRepo>,
+    /// One entry per version, version-sorted ascending for deterministic
+    /// iteration; `_PackageVariantSlice::sort_versions` re-sorts when ordering
+    /// actually matters.
+    entries: Vec<LazyEntry>,
 }
 
 impl PackageVariantList {
-    /// Build the variant list for a family, or `None` if the family is absent
-    /// from the repository.
+    /// Build the (lazy) variant list for a family, or `None` if the family is
+    /// absent from the repository. Only version strings are parsed here — the
+    /// requirement strings are parsed on demand by [`Self::get_intersection`].
     pub fn new(ctx: &SolverContext, package_name: &str) -> Option<Self> {
         let versions = ctx.repo.get(package_name)?;
-        let mut entries: Vec<(RerVersion, Vec<Rc<PackageVariant>>)> = Vec::new();
-
-        for (version_str, data) in versions {
-            let version = RerVersion::try_from(version_str.as_str())
-                .unwrap_or_else(|e| panic!("invalid version '{version_str}': {e:?}"));
-            let variants = build_variants(package_name, &version, data);
-            entries.push((version, variants));
-        }
-        // Deterministic base order; `_PackageVariantSlice::sort_versions`
-        // re-sorts (descending) when ordering actually matters.
-        entries.sort_by(|a, b| a.0.cmp(&b.0));
-
-        Some(PackageVariantList { entries })
-    }
-
-    /// The `_PackageEntry` list for every version that falls within `range`,
-    /// or `None` if none do. Mirrors `_PackageVariantList.get_intersection`.
-    pub fn get_intersection(&self, range: &VersionRange) -> Option<Vec<PackageEntry>> {
-        let entries: Vec<PackageEntry> = self
-            .entries
-            .iter()
-            .filter(|(version, _)| range.contains(version))
-            .map(|(version, variants)| PackageEntry {
-                version: version.clone(),
-                variants: variants.clone(),
-                sorted: false,
+        let mut entries: Vec<LazyEntry> = versions
+            .keys()
+            .map(|version_str| {
+                let version = RerVersion::try_from(version_str.as_str())
+                    .unwrap_or_else(|e| panic!("invalid version '{version_str}': {e:?}"));
+                LazyEntry {
+                    version,
+                    version_str: version_str.clone(),
+                    variants: RefCell::new(None),
+                }
             })
             .collect();
-        if entries.is_empty() {
+        entries.sort_by(|a, b| a.version.cmp(&b.version));
+
+        Some(PackageVariantList {
+            package_name: package_name.to_string(),
+            repo: Rc::clone(&ctx.repo),
+            entries,
+        })
+    }
+
+    /// The `_PackageEntry` list for every version within `range`, or `None` if
+    /// none qualify. Each qualifying version's variants are built on first use
+    /// and memoised, so a version is parsed at most once per solve.
+    pub fn get_intersection(&self, range: &VersionRange) -> Option<Vec<PackageEntry>> {
+        let mut out: Vec<PackageEntry> = Vec::new();
+        for entry in &self.entries {
+            if !range.contains(&entry.version) {
+                continue;
+            }
+            let mut slot = entry.variants.borrow_mut();
+            if slot.is_none() {
+                let data = &self.repo[&self.package_name][&entry.version_str];
+                *slot = Some(build_variants(&self.package_name, &entry.version, data));
+            }
+            out.push(PackageEntry {
+                version: entry.version.clone(),
+                variants: slot.as_ref().unwrap().clone(),
+                sorted: false,
+            });
+        }
+        if out.is_empty() {
             None
         } else {
-            Some(entries)
+            Some(out)
         }
     }
 }
