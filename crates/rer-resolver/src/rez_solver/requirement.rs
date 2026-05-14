@@ -3,8 +3,19 @@
 
 use rer_version::VersionRange;
 use rustc_hash::{FxHashMap, FxHashSet};
+use std::cell::RefCell;
 use std::fmt;
 use std::hash::{Hash, Hasher};
+
+thread_local! {
+    /// Memoises [`Requirement::parse`]. The benchmark dataset repeats the same
+    /// requirement strings — platform deps, common deps — thousands of times,
+    /// and parsing runs a heavy version-range regex. `parse` is a pure function
+    /// of its input, so caching is always sound; the cache simply persists for
+    /// the lifetime of the thread.
+    static PARSE_CACHE: RefCell<FxHashMap<String, Requirement>> =
+        RefCell::new(FxHashMap::default());
+}
 
 /// A requirement for an object, e.g. `foo-5+`, `!foo`, `~foo-1`.
 ///
@@ -31,11 +42,23 @@ pub struct Requirement {
 impl Requirement {
     /// Parse a requirement string such as `foo-1.0`, `foo<3`, `!foo`, `~foo-1`.
     ///
+    /// Memoised per thread — see [`PARSE_CACHE`].
+    ///
     /// # Panics
     ///
     /// Panics on a syntactically invalid version range, matching
     /// [`VersionRange::parse`].
     pub fn parse(s: &str) -> Self {
+        if let Some(cached) = PARSE_CACHE.with(|c| c.borrow().get(s).cloned()) {
+            return cached;
+        }
+        let parsed = Self::parse_uncached(s);
+        PARSE_CACHE.with(|c| c.borrow_mut().insert(s.to_string(), parsed.clone()));
+        parsed
+    }
+
+    /// The actual parse, run once per unique string (see [`Self::parse`]).
+    fn parse_uncached(s: &str) -> Self {
         let mut conflict = s.starts_with('!');
         let mut negate = false;
         let body: &str = if conflict {
