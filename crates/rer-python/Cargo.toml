@@ -11,6 +11,9 @@ publish = false
 name = "rer_solver"
 crate-type = ["cdylib", "lib"]
 
+# abi3-py39 builds a single stable-ABI wheel that works on Python 3.9+,
+# so the CI does not need to iterate (or accidentally pick up) interpreters
+# newer than what this pyo3 version supports.
 [dependencies]
-pyo3 = { workspace = true }
+pyo3 = { workspace = true, features = ["abi3-py39"] }
 rer-resolver = { workspace = true }
