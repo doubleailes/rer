@@ -14,12 +14,14 @@ use std::path::PathBuf;
 /// ```
 ///
 /// `requires` would be `["python-3"]` and `variants` would be `[["maya-2024"], ["maya-2025"]]`.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct PackageData {
     /// Base requirements that apply to all variants.
+    #[serde(default)]
     pub requires: Vec<String>,
     /// Each inner Vec is a list of dependency strings for one variant.
     /// Empty if the package has no variants.
+    #[serde(default)]
     pub variants: Vec<Vec<String>>,
 }
 

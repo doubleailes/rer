@@ -1,0 +1,38 @@
+name: benchmark integration
+
+# Runs the rez benchmark-dataset integration suite on PRs that touch the
+# resolver (or its inputs). Fixtures are generated on the fly from the `rez`
+# git submodule by scripts/prepare_benchmark_data.py — they are not committed.
+on:
+  pull_request:
+    paths:
+      - 'crates/rer-resolver/**'
+      - 'crates/rer-version/**'
+      - 'crates/examples/**'
+      - 'scripts/prepare_benchmark_data.py'
+      - '.github/workflows/benchmark.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Generate benchmark fixtures
+        run: python scripts/prepare_benchmark_data.py
+      - name: Correctness — rer vs rez recorded resolves
+        run: cargo test -p rer-resolver --test test_rez_benchmark -- --nocapture
+      - name: Timing report
+        run: cargo run --release -p examples --example rez_benchmark_dataset
