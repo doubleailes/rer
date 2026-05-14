@@ -2,44 +2,124 @@
 
 ![rer.logo](https://github.com/doubleailes/rer/blob/main/docs/content/images/res_v01.png)
 
-**r.e.r** stand for the french sentence: "Rez En Rust"
+**r.e.r** stands for the French phrase *"Rez En Rust"* — a pun on the Parisian
+suburban train, the [réseau express régional d'Île-de-France](https://en.wikipedia.org/wiki/R%C3%A9seau_Express_R%C3%A9gional).
 
-It's a joke with the parisian sub-urban train, [réseau express régional d'Île-de-France](https://en.wikipedia.org/wiki/R%C3%A9seau_Express_R%C3%A9gional)
+## What it is
 
+`rer` is a Rust reimplementation of the solver hotpath of
+[rez](https://github.com/AcademySoftwareFoundation/rez), the VFX/animation
+package manager.
 
-## Description
+The solver is a **faithful port of rez's own phase-based backtracking solver**
+(`rez/src/rez/solver.py`) — not a different algorithm dressed up to look
+similar. It reproduces rez's mechanics exactly: weak (`~`) and conflict (`!`)
+requirement semantics, variant selection order, the extract / intersect /
+reduce / split cycle, and implicit backtracking. The goal is output that
+matches rez **1:1**, not merely "a valid resolve".
 
-A rez implementation in rust
+The end goal is a **hybrid integration**: a Rust library callable from Python
+via PyO3 that accelerates rez resolves while leaving the rest of rez untouched.
 
-### Library
+### Status
 
-- [clap](https://github.com/clap-rs/clap) as the command line tool.
-- [resolvo](https://github.com/mamba-org/resolvo) as the resolution algorithm based on CDCL SAT solving or [pubgrub](https://github.com/pubgrub-rs/pubgrub)
+- ✅ **Solver** — complete and rez-faithful.
+- ✅ **Validated 1:1** — against rez's bundled 188-case benchmark dataset, every
+  resolve matches rez's own recorded result exactly (same status, same package
+  set).
+- ✅ **Fast** — on that benchmark, on one machine, `rer` resolves all 188
+  requests in ~44 s versus ~206 s for rez 3.3.0 (`rez benchmark`). Correctness
+  is version-independent; the timing is same-machine context, not a lab claim.
+- ✅ **Python bridge** — `rer_solver.solve(...)` runs the ported solver.
+- 🚧 **CLI** (`rer`) — a placeholder; the build/bind/env subcommands are future
+  work.
 
+## Workspace
 
-## Roadmap
+A virtual Cargo workspace — use `-p <crate>` for crate-specific commands.
 
-1. Understanding the Current Codebase: We will begin by thoroughly understanding the existing "rez" codebase, including its architecture, dependencies, and overall design. This initial analysis is essential to identify potential challenges and opportunities for improvement.
-2. Defining Our Goals: We need to define clear objectives for the rewrite. Is our goal to enhance performance, maintainability, or address specific issues in the original code? We will establish these objectives to guide our efforts.
-3. Learning Rust: Before we begin rewriting, we will ensure that our team is well-versed in the Rust programming language. Rust has a learning curve, but it offers robust performance and safety features. We'll invest time in understanding Rust through resources like the official Rust book and practical projects.
-4. Creating a Project Plan: A comprehensive project plan is crucial. We will outline the scope of the rewrite, set milestones, and establish realistic deadlines. This plan will also address how we transition from the old code to the new Rust version.
-5. Start with a Prototype: To gain confidence in our Rust skills and test key concepts, we will begin with a small Rust prototype of the "rez" application. This will help us validate our approach and tooling.
-6. Identify Dependencies: We will identify external dependencies used by the "rez" application and evaluate if equivalent libraries are available in Rust. If not, we may need to create Rust bindings for these dependencies.
-7. Decide on the Architecture: We will make architectural decisions, considering whether we want to replicate the existing architecture or take the opportunity to improve it. Rust's ownership system may influence our design choices.
-8. Migrate Incrementally: Instead of rewriting the entire codebase at once, we will opt for a gradual migration. Starting with specific modules or components, we will ensure they work seamlessly with the existing code.
-9. Write Tests: Quality assurance is paramount. We will write extensive unit tests, integration tests, and potentially property-based tests. Rust has a strong testing ecosystem, and we will leverage it to maintain code quality.
-10. Documenting as We Go: We'll document the code as we rewrite it. Proper documentation will enhance the understandability and maintainability of the Rust codebase.
-11. Performance Profiling: We will regularly profile the application to identify bottlenecks and areas where Rust can make a difference.
-12. Code Review and Collaboration: Collaboration is key. We will engage in code reviews to ensure that the code aligns with Rust best practices, is maintainable, and adheres to security standards.
-13. Stay Informed About Rust Updates: Rust is an evolving language. We'll keep ourselves updated with the latest Rust releases and best practices to benefit from the latest improvements.
-14. Migration Plan: As we near the completion of the Rust version, we'll formulate a migration plan. This plan will cover data migration, user transition, and other logistical aspects.
-15. Testing and Validation: Thorough testing is non-negotiable. We'll ensure that the Rust version matches the functionality and quality standards of the original "rez" application.
-16. Deployment: Once testing is successful, we'll deploy the Rust version to production. Rigorous monitoring will be essential to ensure performance and stability.
-17. Feedback and Maintenance: We value user feedback. After deployment, we'll collect feedback and be ready to address any issues or implement improvements that may arise.
-18. Retire the Old Code: When we're confident in the Rust version's stability and performance, we'll consider retiring the old "rez" codebase.
+| Crate | Role |
+|---|---|
+| **`rer-version`** | `RerVersion` (rez token ordering) and `VersionRange` (rez range semantics over [`version-ranges`](https://crates.io/crates/version-ranges)). |
+| **`rer-resolver`** | The solver. `rez_solver` is the rez port — `Solver`, `ResolvePhase`, `PackageScope`, the variant structures, `Requirement`/`RequirementList`. `PackageData` is the in-memory unit of the package repository. |
+| **`rer-python`** | PyO3 bridge (module name `rer_solver`), built into wheels by maturin. |
+| **`rer`** | `clap` CLI binary (placeholder). |
+| **`examples`** | `rez_benchmark_dataset` — a timing report. |
 
-## TODO
+`rer` works on an **in-memory package repository** (`family → version →
+{requires, variants}`); it does not read the filesystem itself — the host
+(rez) hands the loaded data in.
 
-- [ ] `rer-build`
-- [ ] `rer-bind`
-- [ ] `rer-env`
+## Using it from Rust
+
+```rust
+use std::rc::Rc;
+use rer_resolver::rez_solver::{Requirement, Solver, SolverStatus};
+use rer_resolver::PackageData;
+
+let mut repo = std::collections::HashMap::new();
+// app-1.0.0 requires lib-2; lib has 1.0.0 and 2.0.0
+repo.insert("app".into(), [("1.0.0".to_string(), PackageData {
+    requires: vec!["lib-2".into()], variants: vec![],
+})].into_iter().collect());
+repo.insert("lib".into(), [
+    ("1.0.0".to_string(), PackageData::default()),
+    ("2.0.0".to_string(), PackageData::default()),
+].into_iter().collect());
+
+let reqs = vec![Requirement::parse("app")];
+let mut solver = Solver::new(reqs, Rc::new(repo)).unwrap();
+solver.solve();
+assert_eq!(solver.status(), SolverStatus::Solved);
+// resolves to app-1.0.0 + lib-2.0.0
+```
+
+## Using it from Python
+
+```bash
+python -m venv .venv && . .venv/bin/activate
+pip install maturin
+cd crates/rer-python && maturin develop
+```
+
+```python
+import json, rer_solver
+
+repo = {
+    "app": {"1.0.0": {"requires": ["lib-2"], "variants": []}},
+    "lib": {"1.0.0": {"requires": [], "variants": []},
+            "2.0.0": {"requires": [], "variants": []}},
+}
+result = rer_solver.solve(["app"], json.dumps(repo))
+print(result.status)    # "solved"
+print(result.resolved)  # [("app", "1.0.0", None), ("lib", "2.0.0", None)]
+```
+
+`solve()` reports failures and bad input via `result.status`
+(`"solved"` / `"failed"` / `"error"`), never as a Python exception.
+
+## Building & testing
+
+```bash
+cargo build                          # build all crates
+cargo test                           # unit + integration tests
+cargo bench                          # benchmarks (rer-version)
+```
+
+### The rez benchmark
+
+The 1:1 differential test against rez's bundled benchmark is `#[ignore]`d (the
+full release run takes several minutes). It needs the `rez` git submodule:
+
+```bash
+git submodule update --init
+python scripts/prepare_benchmark_data.py     # -> data_set/benchmark_*.json
+cargo test --release -p rer-resolver --test test_rez_benchmark -- --ignored
+cargo run  --release -p examples --example rez_benchmark_dataset   # timing report
+```
+
+The `benchmark` CI workflow runs this on every PR touching the resolver.
+
+## License
+
+See [LICENSE](LICENSE).
