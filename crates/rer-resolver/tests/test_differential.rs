@@ -48,9 +48,7 @@ struct TestCase {
 }
 
 /// Convert the JSON package map to `LocalPackages` using `from_packages()`.
-fn build_local_packages(
-    packages: &HashMap<String, HashMap<String, Vec<String>>>,
-) -> LocalPackages {
+fn build_local_packages(packages: &HashMap<String, HashMap<String, Vec<String>>>) -> LocalPackages {
     let mut pkg_data: HashMap<String, HashMap<String, PackageData>> = HashMap::new();
     for (pkg_name, versions) in packages {
         let mut version_map: HashMap<String, PackageData> = HashMap::new();
@@ -222,14 +220,8 @@ fn test_differential_case_coverage() {
         multi_count >= 5,
         "Need at least 5 multi-package request cases"
     );
-    assert!(
-        exact_count >= 3,
-        "Need at least 3 exact-version cases"
-    );
-    assert!(
-        conflict_count >= 1,
-        "Need at least 1 conflict case"
-    );
+    assert!(exact_count >= 3, "Need at least 3 exact-version cases");
+    assert!(conflict_count >= 1, "Need at least 1 conflict case");
     assert!(
         real_count >= 10,
         "Need at least 10 real-world dependency cases"

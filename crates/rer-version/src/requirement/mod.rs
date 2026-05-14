@@ -1,2 +1,2 @@
-mod parser;
+pub(crate) mod parser;
 pub mod requirement;
