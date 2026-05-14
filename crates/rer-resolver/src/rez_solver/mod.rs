@@ -10,14 +10,17 @@
 //! - [`requirement`] — `Requirement` / `RequirementList`
 //! - [`context`] — the shared, read-only solve context
 //! - [`variant`] — variant data structures (`PackageVariant`, slices, cache)
-//! - (further phases: scopes, resolve phases, solver)
+//! - [`scope`] — `_PackageScope`, one family's evolving state
+//! - (further phases: resolve phases, solver)
 
 pub mod context;
 pub mod requirement;
+pub mod scope;
 pub mod variant;
 
 pub use context::{PackageRepo, SolverContext};
 pub use requirement::{Requirement, RequirementList};
+pub use scope::{PackageScope, ScopeError, ScopeIntersect, ScopeReduce};
 pub use variant::{
     PackageEntry, PackageVariant, PackageVariantCache, PackageVariantList, PackageVariantSlice,
     Reduction,
