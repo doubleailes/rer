@@ -2,7 +2,7 @@
 //! (`rez/src/rez/version/_requirement.py`).
 
 use rer_version::VersionRange;
-use std::collections::HashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::fmt;
 use std::hash::{Hash, Hasher};
 
@@ -240,7 +240,7 @@ impl Hash for Requirement {
 #[derive(Debug, Clone, Default)]
 pub struct RequirementList {
     requirements: Vec<Requirement>,
-    by_name: HashMap<String, Requirement>,
+    by_name: FxHashMap<String, Requirement>,
     /// `Some((existing, incoming))` if two requirements could not be merged.
     conflict: Option<(Requirement, Requirement)>,
     names: Vec<String>,
@@ -271,7 +271,7 @@ impl RequirementList {
         }
 
         // Build the optimised list in original request order.
-        let mut seen = std::collections::HashSet::new();
+        let mut seen = FxHashSet::default();
         for req in &requirements {
             if seen.insert(req.name.clone()) {
                 let merged = list.by_name[&req.name].clone();

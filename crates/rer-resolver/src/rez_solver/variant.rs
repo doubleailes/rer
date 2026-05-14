@@ -10,8 +10,8 @@
 use super::context::{PackageRepo, SolverContext};
 use super::requirement::{Requirement, RequirementList};
 use rer_version::{RerVersion, VersionRange};
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::cell::{OnceCell, RefCell};
-use std::collections::HashSet;
 use std::ops::Bound;
 use std::rc::Rc;
 
@@ -102,9 +102,9 @@ pub struct PackageVariant {
     /// Base `requires` plus this variant's own requires, merged.
     requires: RequirementList,
     /// Non-conflict dependency family names (`requires_list.names`).
-    request_fams: HashSet<String>,
+    request_fams: FxHashSet<String>,
     /// Conflict dependency family names (`requires_list.conflict_names`).
-    conflict_request_fams: HashSet<String>,
+    conflict_request_fams: FxHashSet<String>,
 }
 
 impl PackageVariant {
@@ -152,12 +152,12 @@ impl PackageVariant {
     }
 
     /// Non-conflict dependency family names.
-    pub fn request_fams(&self) -> &HashSet<String> {
+    pub fn request_fams(&self) -> &FxHashSet<String> {
         &self.request_fams
     }
 
     /// Conflict dependency family names.
-    pub fn conflict_request_fams(&self) -> &HashSet<String> {
+    pub fn conflict_request_fams(&self) -> &FxHashSet<String> {
         &self.conflict_request_fams
     }
 
@@ -283,7 +283,7 @@ impl PackageEntry {
 /// `_PackageEntry.sort` (`solver.py:423`).
 fn variant_sort_key(variant: &PackageVariant, ctx: &SolverContext) -> VariantKey {
     let mut requested_key: Vec<(i32, RangeKey)> = Vec::new();
-    let mut names: HashSet<&str> = HashSet::new();
+    let mut names: FxHashSet<&str> = FxHashSet::default();
 
     for (i, request) in ctx.request_list.iter().enumerate() {
         if request.is_conflict() {
@@ -475,14 +475,14 @@ pub struct PackageVariantSlice {
     package_name: String,
     entries: Vec<PackageEntry>,
     /// Families already extracted from this slice as common requirements.
-    extracted_fams: HashSet<String>,
+    extracted_fams: FxHashSet<String>,
     /// Whether `entries` is version-sorted (descending).
     sorted: bool,
     // Lazily-computed, entries-derived caches.
     len_cache: OnceCell<usize>,
     range_cache: OnceCell<VersionRange>,
-    common_fams_cache: OnceCell<HashSet<String>>,
-    fam_requires_cache: OnceCell<HashSet<String>>,
+    common_fams_cache: OnceCell<FxHashSet<String>>,
+    fam_requires_cache: OnceCell<FxHashSet<String>>,
 }
 
 impl PackageVariantSlice {
@@ -492,7 +492,7 @@ impl PackageVariantSlice {
             ctx,
             package_name,
             entries,
-            extracted_fams: HashSet::new(),
+            extracted_fams: FxHashSet::default(),
             sorted: false,
             len_cache: OnceCell::new(),
             range_cache: OnceCell::new(),
@@ -541,11 +541,11 @@ impl PackageVariantSlice {
     }
 
     /// Families every variant depends on (non-conflict). Mirrors `common_fams`.
-    pub fn common_fams(&self) -> &HashSet<String> {
+    pub fn common_fams(&self) -> &FxHashSet<String> {
         self.common_fams_cache.get_or_init(|| {
             let mut iter = self.iter_variants();
             let Some(first) = iter.next() else {
-                return HashSet::new();
+                return FxHashSet::default();
             };
             let mut common = first.request_fams().clone();
             for variant in iter {
@@ -556,9 +556,9 @@ impl PackageVariantSlice {
     }
 
     /// Every family any variant mentions, conflict or not. Mirrors `fam_requires`.
-    pub fn fam_requires(&self) -> &HashSet<String> {
+    pub fn fam_requires(&self) -> &FxHashSet<String> {
         self.fam_requires_cache.get_or_init(|| {
-            let mut all = HashSet::new();
+            let mut all = FxHashSet::default();
             for variant in self.iter_variants() {
                 all.extend(variant.request_fams().iter().cloned());
                 all.extend(variant.conflict_request_fams().iter().cloned());
@@ -656,7 +656,7 @@ impl PackageVariantSlice {
         if !self.extractable() {
             return None;
         }
-        let extractable: HashSet<String> = self
+        let extractable: FxHashSet<String> = self
             .common_fams()
             .difference(&self.extracted_fams)
             .cloned()
@@ -697,7 +697,7 @@ impl PackageVariantSlice {
 
         // Decide whether to look for the first variant without a common
         // dependency, or just peel off the single best variant.
-        let mut fams: HashSet<String> = if self.len() > 2 {
+        let mut fams: FxHashSet<String> = if self.len() > 2 {
             let first = self.first_variant();
             first
                 .request_fams()
@@ -705,7 +705,7 @@ impl PackageVariantSlice {
                 .cloned()
                 .collect()
         } else {
-            HashSet::new()
+            FxHashSet::default()
         };
 
         if fams.is_empty() {
@@ -782,7 +782,7 @@ impl PackageVariantSlice {
             ctx: Rc::clone(&self.ctx),
             package_name: self.package_name.clone(),
             entries: new_entries,
-            extracted_fams: HashSet::new(),
+            extracted_fams: FxHashSet::default(),
             sorted: self.sorted,
             len_cache: OnceCell::new(),
             range_cache: OnceCell::new(),
@@ -807,7 +807,7 @@ impl std::fmt::Display for PackageVariantSlice {
 #[derive(Debug, Default)]
 pub struct PackageVariantCache {
     /// `family -> Some(list)` if found, `family -> None` if absent.
-    variant_lists: std::collections::HashMap<String, Option<Rc<PackageVariantList>>>,
+    variant_lists: FxHashMap<String, Option<Rc<PackageVariantList>>>,
 }
 
 impl PackageVariantCache {
