@@ -8,8 +8,17 @@
 //!
 //! The port is built bottom-up:
 //! - [`requirement`] — `Requirement` / `RequirementList`
-//! - (further phases: variant structures, scopes, resolve phases, solver)
+//! - [`context`] — the shared, read-only solve context
+//! - [`variant`] — variant data structures (`PackageVariant`, slices, cache)
+//! - (further phases: scopes, resolve phases, solver)
 
+pub mod context;
 pub mod requirement;
+pub mod variant;
 
+pub use context::{PackageRepo, SolverContext};
 pub use requirement::{Requirement, RequirementList};
+pub use variant::{
+    PackageEntry, PackageVariant, PackageVariantCache, PackageVariantList, PackageVariantSlice,
+    Reduction,
+};
