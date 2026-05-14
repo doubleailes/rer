@@ -314,15 +314,17 @@ fn variant_sort_key(variant: &PackageVariant, ctx: &SolverContext) -> VariantKey
 // PackageVariantList — every variant of a family (cached per family)
 // ---------------------------------------------------------------------------
 
-/// One version of a family, whose variants (parsed requirements) are
+/// One version of a family, whose `PackageEntry` (parsed requirements) is
 /// materialised lazily on first access.
 #[derive(Debug)]
 struct LazyEntry {
     version: RerVersion,
     /// The repository key for this version, used to look its data back up.
     version_str: String,
-    /// `None` until the version is first touched by a range intersection.
-    variants: RefCell<Option<Vec<Rc<PackageVariant>>>>,
+    /// `None` until the version is first touched by a range intersection;
+    /// thereafter the built `Rc<PackageEntry>` — unsorted, and shared (by
+    /// `Rc`) with every slice that intersects this version.
+    entry: RefCell<Option<Rc<PackageEntry>>>,
 }
 
 /// Every version of one package family, built once and cached.
@@ -356,7 +358,7 @@ impl PackageVariantList {
                 LazyEntry {
                     version,
                     version_str: version_str.clone(),
-                    variants: RefCell::new(None),
+                    entry: RefCell::new(None),
                 }
             })
             .collect();
@@ -370,24 +372,25 @@ impl PackageVariantList {
     }
 
     /// The `_PackageEntry` list for every version within `range`, or `None` if
-    /// none qualify. Each qualifying version's variants are built on first use
-    /// and memoised, so a version is parsed at most once per solve.
-    pub fn get_intersection(&self, range: &VersionRange) -> Option<Vec<PackageEntry>> {
-        let mut out: Vec<PackageEntry> = Vec::new();
-        for entry in &self.entries {
-            if !range.contains(&entry.version) {
+    /// none qualify. Each qualifying version's `PackageEntry` is built on first
+    /// use and memoised as a shared `Rc`, so a version is parsed at most once
+    /// per solve and unchanged entries are shared across slices.
+    pub fn get_intersection(&self, range: &VersionRange) -> Option<Vec<Rc<PackageEntry>>> {
+        let mut out: Vec<Rc<PackageEntry>> = Vec::new();
+        for lazy in &self.entries {
+            if !range.contains(&lazy.version) {
                 continue;
             }
-            let mut slot = entry.variants.borrow_mut();
-            if slot.is_none() {
-                let data = &self.repo[&self.package_name][&entry.version_str];
-                *slot = Some(build_variants(&self.package_name, &entry.version, data));
-            }
-            out.push(PackageEntry {
-                version: entry.version.clone(),
-                variants: slot.as_ref().unwrap().clone(),
-                sorted: false,
+            let mut slot = lazy.entry.borrow_mut();
+            let built = slot.get_or_insert_with(|| {
+                let data = &self.repo[&self.package_name][&lazy.version_str];
+                Rc::new(PackageEntry {
+                    version: lazy.version.clone(),
+                    variants: build_variants(&self.package_name, &lazy.version, data),
+                    sorted: false,
+                })
             });
+            out.push(Rc::clone(built));
         }
         if out.is_empty() {
             None
@@ -473,7 +476,11 @@ pub enum SliceReduce {
 pub struct PackageVariantSlice {
     ctx: Rc<SolverContext>,
     package_name: String,
-    entries: Vec<PackageEntry>,
+    /// Entries are `Rc`-shared: `intersect`/`reduce_by`/`split` keep most
+    /// entries unchanged, so passing them through is a refcount bump rather
+    /// than a deep `Vec<Rc<PackageVariant>>` clone. `sort`/`split` of an entry
+    /// go through `Rc::make_mut` (copy-on-write).
+    entries: Vec<Rc<PackageEntry>>,
     /// Families already extracted from this slice as common requirements.
     extracted_fams: FxHashSet<String>,
     /// Whether `entries` is version-sorted (descending).
@@ -487,7 +494,11 @@ pub struct PackageVariantSlice {
 
 impl PackageVariantSlice {
     /// Build a slice over the given entries.
-    pub fn new(ctx: Rc<SolverContext>, package_name: String, entries: Vec<PackageEntry>) -> Self {
+    pub fn new(
+        ctx: Rc<SolverContext>,
+        package_name: String,
+        entries: Vec<Rc<PackageEntry>>,
+    ) -> Self {
         PackageVariantSlice {
             ctx,
             package_name,
@@ -510,7 +521,7 @@ impl PackageVariantSlice {
     pub fn len(&self) -> usize {
         *self
             .len_cache
-            .get_or_init(|| self.entries.iter().map(PackageEntry::len).sum())
+            .get_or_init(|| self.entries.iter().map(|e| e.len()).sum())
     }
 
     /// True if the slice has no variants (should not normally occur).
@@ -532,10 +543,11 @@ impl PackageVariantSlice {
         self.entries.iter().flat_map(|e| e.variants.iter())
     }
 
-    /// The first variant of the first (sorted) entry. Sorts that entry.
+    /// The first variant of the first (sorted) entry. Sorts that entry
+    /// (copy-on-write if it is shared with another slice).
     pub fn first_variant(&mut self) -> Rc<PackageVariant> {
         let ctx = Rc::clone(&self.ctx);
-        let entry = &mut self.entries[0];
+        let entry = Rc::make_mut(&mut self.entries[0]);
         entry.sort(&ctx);
         Rc::clone(&entry.variants[0])
     }
@@ -577,7 +589,8 @@ impl PackageVariantSlice {
         if range.is_any() {
             return SliceIntersect::Unchanged;
         }
-        let entries: Vec<PackageEntry> = self
+        // `.cloned()` on `&Rc<PackageEntry>` is a refcount bump.
+        let entries: Vec<Rc<PackageEntry>> = self
             .entries
             .iter()
             .filter(|e| range.contains(&e.version))
@@ -602,7 +615,7 @@ impl PackageVariantSlice {
             return (SliceReduce::Unchanged, Vec::new());
         }
 
-        let mut new_entries: Vec<PackageEntry> = Vec::new();
+        let mut new_entries: Vec<Rc<PackageEntry>> = Vec::new();
         let mut reductions: Vec<Reduction> = Vec::new();
         // Per-call cache: many variants share the same requirement for this
         // family, and `conflicts_with` is a comparatively expensive range op.
@@ -637,13 +650,14 @@ impl PackageVariantSlice {
                 continue; // whole version dropped
             }
             if kept.len() < entry.variants.len() {
-                new_entries.push(PackageEntry {
+                new_entries.push(Rc::new(PackageEntry {
                     version: entry.version.clone(),
                     variants: kept,
                     sorted: entry.sorted,
-                });
+                }));
             } else {
-                new_entries.push(entry.clone());
+                // Unchanged — share the entry rather than deep-cloning it.
+                new_entries.push(Rc::clone(entry));
             }
         }
 
@@ -722,7 +736,7 @@ impl PackageVariantSlice {
 
         if fams.is_empty() {
             let ctx = Rc::clone(&self.ctx);
-            self.entries[0].sort(&ctx);
+            Rc::make_mut(&mut self.entries[0]).sort(&ctx);
             return self.split_at(0, 1);
         }
 
@@ -731,7 +745,7 @@ impl PackageVariantSlice {
         let ctx = Rc::clone(&self.ctx);
         let mut prev: Option<(usize, usize)> = None;
         for i in 0..self.entries.len() {
-            self.entries[i].sort(&ctx);
+            Rc::make_mut(&mut self.entries[i]).sort(&ctx);
             for j in 0..self.entries[i].variants.len() {
                 let variant_fams = self.entries[i].variants[j].request_fams();
                 fams.retain(|f| variant_fams.contains(f));
@@ -755,13 +769,13 @@ impl PackageVariantSlice {
         n_variants: usize,
     ) -> (PackageVariantSlice, PackageVariantSlice) {
         let ctx = Rc::clone(&self.ctx);
-        let split = self.entries[i_entry].split(&ctx, n_variants);
+        let split = Rc::make_mut(&mut self.entries[i_entry]).split(&ctx, n_variants);
 
         let (entries, next_entries) = match split {
             Some((entry, next_entry)) => {
                 let mut entries = self.entries[..i_entry].to_vec();
-                entries.push(entry);
-                let mut next_entries = vec![next_entry];
+                entries.push(Rc::new(entry));
+                let mut next_entries = vec![Rc::new(next_entry)];
                 next_entries.extend_from_slice(&self.entries[i_entry + 1..]);
                 (entries, next_entries)
             }
@@ -789,7 +803,7 @@ impl PackageVariantSlice {
     /// rez's `_copy`: a new slice over `new_entries` carrying the `sorted`
     /// flag but with a *fresh* (empty) `extracted_fams` and fresh caches (the
     /// entries differ, so the derived caches must be recomputed).
-    fn copy_with_entries(&self, new_entries: Vec<PackageEntry>) -> PackageVariantSlice {
+    fn copy_with_entries(&self, new_entries: Vec<Rc<PackageEntry>>) -> PackageVariantSlice {
         PackageVariantSlice {
             ctx: Rc::clone(&self.ctx),
             package_name: self.package_name.clone(),
