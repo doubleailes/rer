@@ -6,7 +6,6 @@
     "Cases with expected_resolved set verify exact package selection",
     "Cases with expected_status='solved_or_failed' accept either (baseline TBD)",
     "Known divergence 1: pubgrub may select different but equally valid solutions vs rez",
-    "Known divergence 2: Version ordering (char-by-char) may affect range matching",
     "Known divergence 3: Self-dependencies handled differently"
   ],
   "cases": [
@@ -1268,9 +1267,9 @@
           ]
         }
       },
-      "expected_status": "failed",
+      "expected_status": "solved",
       "expected_resolved": null,
-      "notes": "Known divergence: solver fails on this case. May succeed in rez due to different resolution strategy. Baseline locked from initial solver run.",
+      "notes": "Now solves: the char-by-char version ordering bug was fixed (numeric subtokens compare numerically).",
       "category": "real_deps"
     },
     {
@@ -1709,9 +1708,9 @@
           ]
         }
       },
-      "expected_status": "failed",
+      "expected_status": "solved",
       "expected_resolved": null,
-      "notes": "Known divergence: solver fails on this case. May succeed in rez due to different resolution strategy. Baseline locked from initial solver run.",
+      "notes": "Now solves: the char-by-char version ordering bug was fixed (numeric subtokens compare numerically).",
       "category": "real_deps"
     },
     {
@@ -1820,9 +1819,9 @@
           ]
         }
       },
-      "expected_status": "failed",
+      "expected_status": "solved",
       "expected_resolved": null,
-      "notes": "Known divergence: solver fails on this case. May succeed in rez due to different resolution strategy. Baseline locked from initial solver run.",
+      "notes": "Now solves: the char-by-char version ordering bug was fixed (numeric subtokens compare numerically).",
       "category": "real_deps"
     },
     {
@@ -2241,9 +2240,9 @@
           ]
         }
       },
-      "expected_status": "failed",
+      "expected_status": "solved",
       "expected_resolved": null,
-      "notes": "Known divergence: solver fails on this case. May succeed in rez due to different resolution strategy. Baseline locked from initial solver run.",
+      "notes": "Now solves: the char-by-char version ordering bug was fixed (numeric subtokens compare numerically).",
       "category": "real_deps"
     },
     {
@@ -2579,9 +2578,9 @@
           ]
         }
       },
-      "expected_status": "failed",
+      "expected_status": "solved",
       "expected_resolved": null,
-      "notes": "Known divergence: solver fails on this case. May succeed in rez due to different resolution strategy. Baseline locked from initial solver run.",
+      "notes": "Now solves: the char-by-char version ordering bug was fixed (numeric subtokens compare numerically).",
       "category": "real_deps"
     },
     {
@@ -2882,9 +2881,9 @@
           ]
         }
       },
-      "expected_status": "failed",
+      "expected_status": "solved",
       "expected_resolved": null,
-      "notes": "Known divergence: solver fails on this case. May succeed in rez due to different resolution strategy. Baseline locked from initial solver run.",
+      "notes": "Now solves: the char-by-char version ordering bug was fixed (numeric subtokens compare numerically).",
       "category": "real_deps"
     },
     {
@@ -3176,9 +3175,9 @@
           ]
         }
       },
-      "expected_status": "failed",
+      "expected_status": "solved",
       "expected_resolved": null,
-      "notes": "Known divergence: solver fails on this case. May succeed in rez due to different resolution strategy. Baseline locked from initial solver run.",
+      "notes": "Now solves: the char-by-char version ordering bug was fixed (numeric subtokens compare numerically).",
       "category": "real_deps"
     },
     {
@@ -3512,9 +3511,9 @@
           ]
         }
       },
-      "expected_status": "failed",
+      "expected_status": "solved",
       "expected_resolved": null,
-      "notes": "Known divergence: solver fails on this case. May succeed in rez due to different resolution strategy. Baseline locked from initial solver run.",
+      "notes": "Now solves: the char-by-char version ordering bug was fixed (numeric subtokens compare numerically).",
       "category": "real_deps"
     },
     {

@@ -13,8 +13,7 @@ lazy_static! {
     static ref NUMERIC_REGEX: Regex = Regex::new(r"[0-9]+").expect("Can't compile NUMERIC_REGEX regex");
 }
 
-#[allow(clippy::derive_ord_xor_partial_ord)]
-#[derive(Debug, PartialEq, Eq, Clone, Ord)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 struct SubToken {
     s: String,
     n: Option<i64>,
@@ -59,23 +58,54 @@ fn test_subtoken_new() {
     assert_eq!(a.s, "a1");
 }
 
-#[allow(clippy::non_canonical_partial_ord_impl)]
-impl PartialOrd for SubToken {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+#[test]
+fn test_subtoken_numeric_ordering() {
+    // Numeric subtokens compare numerically, not lexically.
+    assert!(SubToken::new("2") < SubToken::new("10"));
+    assert!(SubToken::new("9") < SubToken::new("100"));
+    assert!(SubToken::new("122") > SubToken::new("34"));
+    // Zero-padding tie-break: equal value, shorter/padded string compares lower.
+    assert!(SubToken::new("01") < SubToken::new("1"));
+    // Ord and PartialOrd must agree.
+    assert_eq!(SubToken::new("2").cmp(&SubToken::new("10")), Ordering::Less);
+    assert_eq!(
+        SubToken::new("2").partial_cmp(&SubToken::new("10")),
+        Some(Ordering::Less)
+    );
+}
+
+#[test]
+fn test_version_numeric_ordering() {
+    // Multi-token versions must order numerically token-by-token.
+    let a: RerVersion = "2.34.1".try_into().unwrap();
+    let b: RerVersion = "2.122.2".try_into().unwrap();
+    assert!(a < b, "2.34.1 should sort below 2.122.2");
+    let a: RerVersion = "1.9.0".try_into().unwrap();
+    let b: RerVersion = "1.10.0".try_into().unwrap();
+    assert!(a < b, "1.9.0 should sort below 1.10.0");
+}
+
+impl Ord for SubToken {
+    fn cmp(&self, other: &Self) -> Ordering {
+        // Mirrors rez's `_SubToken.__lt__` (rez/src/rez/version/_version.py:145):
         match (self.n, other.n) {
+            // Two alpha subtokens: custom char ordering ('_' < a-z < A-Z).
             (None, None) => self.compare_subtokens(&self.s, &other.s),
+            // Alphas always sort before numbers.
             (None, Some(_)) => Ordering::Less,
             (Some(_), None) => Ordering::Greater,
-            (Some(a), Some(b)) => {
-                let num_cmp = self.compare_subtokens(&a.to_string(), &b.to_string());
-                if num_cmp == Ordering::Equal {
-                    self.compare_subtokens(&self.s, &other.s)
-                } else {
-                    num_cmp
-                }
-            }
+            // Two numeric subtokens: compare numerically, then break ties on the
+            // raw string so that e.g. "01" < "1" (padding-sensitive, per rez).
+            (Some(a), Some(b)) => a
+                .cmp(&b)
+                .then_with(|| self.compare_subtokens(&self.s, &other.s)),
         }
-        .into()
+    }
+}
+
+impl PartialOrd for SubToken {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
     }
 }
 
