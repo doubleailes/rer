@@ -1,8 +1,8 @@
 //! Integration test: rer vs rez on rez's bundled benchmark dataset.
 //!
 //! Runs all 188 benchmark resolve requests (against ~1.3k package families /
-//! ~18k versions) through `solver_with_packages()` and compares the outcome
-//! against rez's own recorded results.
+//! ~18k versions) through the rez-faithful [`Solver`] and compares the outcome
+//! against rez's own recorded results — the goal is a 1:1 match.
 //!
 //! # Fixtures
 //!
@@ -13,19 +13,18 @@
 //!
 //! # What is checked
 //!
-//! * **Solve status** must match rez (`success` ↔ `Ok`, `failed` ↔ `Err`).
-//!   A mismatch is a hard failure — this is the regression gate.
-//! * For solved cases, rer's resolution must be **internally valid**: every
-//!   resolved package's plain (non-weak, non-conflict) `requires` must be
-//!   satisfied by the resolved set. A violation is a hard failure.
-//! * Resolutions that are valid but differ from the set rez picked are
-//!   reported as **divergences** (warnings, not failures) — pubgrub may find a
-//!   different but equally valid solution.
+//! * **Solve status** must match rez (`success` ↔ solved, `failed` ↔ failed).
+//!   A mismatch is a hard failure.
+//! * For solved cases, rer's resolved package set must match rez's exactly
+//!   (ignoring order and variant index). A divergence is reported; once the
+//!   port is fully faithful, divergences become hard failures too.
+//! * A solver panic is always a hard failure.
 
-use rer_resolver::{solver_with_packages, LocalPackages, PackageData};
-use rer_version::{Requirements, RerVersion};
+use rer_resolver::rez_solver::{Requirement, Solver, SolverStatus};
+use rer_resolver::PackageData;
 use serde::Deserialize;
 use std::collections::HashMap;
+use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::PathBuf;
 
 /// `package name → version → PackageData`, as produced by the prep script.
@@ -56,11 +55,9 @@ fn load_json<T: for<'de> Deserialize<'de>>(name: &str) -> Option<T> {
     )
 }
 
-/// Normalize a resolved-package list to a sorted, deduped `(name, version)` set.
-///
-/// Accepts both rer output (`"name/version/package.py"`) and rez output
-/// (`"name/version/package.py[<variant>]"`); the variant suffix is ignored.
-fn normalize(entries: &[String]) -> Vec<(String, String)> {
+/// Normalize rez's resolved-package list (`"name/version/package.py[idx]"`) to
+/// a sorted, deduped `(name, version)` set.
+fn normalize_rez(entries: &[String]) -> Vec<(String, String)> {
     let mut out: Vec<(String, String)> = entries
         .iter()
         .filter_map(|entry| {
@@ -75,51 +72,30 @@ fn normalize(entries: &[String]) -> Vec<(String, String)> {
     out
 }
 
-/// Best-effort validity check on one of rer's resolutions.
+/// Run one resolve through the rez-faithful solver.
 ///
-/// For every resolved package, its plain `requires` (weak `~` and conflict `!`
-/// requirements are skipped — they are not "must be present" constraints) must
-/// be satisfied by some package in the same resolution. Variant-specific
-/// dependencies are not checked: rer's solver output does not expose which
-/// variant was chosen.
-fn validate(resolved: &[(String, String)], repo: &PackageRepo) -> Result<(), String> {
-    let picked: HashMap<&str, &str> = resolved
-        .iter()
-        .map(|(n, v)| (n.as_str(), v.as_str()))
-        .collect();
-    for (name, version) in resolved {
-        let Some(data) = repo.get(name).and_then(|versions| versions.get(version)) else {
-            // Not in the repo (e.g. an implicit package) — nothing to check.
-            continue;
-        };
-        let plain: Vec<&str> = data
-            .requires
-            .iter()
-            .map(|s| s.as_str())
-            .filter(|s| !s.starts_with('!') && !s.starts_with('~'))
-            .collect();
-        for (dep_name, range) in Requirements::from(plain).to_pubgrub() {
-            match picked.get(dep_name.as_str()) {
-                None => {
-                    return Err(format!(
-                        "{name}/{version} requires `{dep_name}`, absent from the resolution"
-                    ))
-                }
-                Some(resolved_version) => {
-                    let parsed = RerVersion::try_from(*resolved_version).map_err(|e| {
-                        format!("{name}/{version}: unparseable resolved version `{resolved_version}`: {e:?}")
-                    })?;
-                    if !range.contains(&parsed) {
-                        return Err(format!(
-                            "{name}/{version} requires `{dep_name}` in {range:?}, \
-                             but the resolution has {resolved_version}"
-                        ));
-                    }
-                }
-            }
+/// Returns `Some(set)` of `(name, version)` pairs on success, or `None` if the
+/// solve failed (including a construction error — rez would error, but the
+/// benchmark records no error cases, so we treat it as a failed solve).
+fn solve(request: &[String], repo: PackageRepo) -> Option<Vec<(String, String)>> {
+    let reqs: Vec<Requirement> = request.iter().map(|s| Requirement::parse(s)).collect();
+    let mut solver = Solver::new(reqs, repo).ok()?;
+    solver.solve();
+    match solver.status() {
+        SolverStatus::Solved => {
+            let mut set: Vec<(String, String)> = solver
+                .resolved_packages()
+                .unwrap()
+                .iter()
+                .map(|v| (v.name().to_string(), v.version().to_string()))
+                .collect();
+            set.sort();
+            set.dedup();
+            Some(set)
         }
+        SolverStatus::Failed => None,
+        other => panic!("solver finished in unexpected status {other:?}"),
     }
-    Ok(())
 }
 
 #[test]
@@ -145,26 +121,18 @@ fn test_rez_benchmark_correctness() {
     let mut both_failed = 0usize;
     let mut divergent: Vec<usize> = Vec::new();
     let mut status_mismatch: Vec<String> = Vec::new();
-    let mut invalid: Vec<String> = Vec::new();
     let mut panicked: Vec<usize> = Vec::new();
 
-    // The solver can still panic on some inputs (e.g. weak-ref requirements
-    // without a version). Catch those so one bad request does not abort the
-    // whole suite; a panic is recorded as its own outcome. Silence the default
-    // panic hook for the duration so the run is not buried in backtraces.
+    // Catch panics so one bad request does not abort the whole suite. Silence
+    // the default hook so the run is not buried in backtraces.
     let prev_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(|_| {}));
 
     for (i, case) in cases.iter().enumerate() {
-        let request: Vec<&str> = case.request.iter().map(|s| s.as_str()).collect();
         let rez_solved = case.status == "success";
-        // Clone the repo per case so each resolve starts from a clean state.
-        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            let mut packages = LocalPackages::from_packages(repo.clone());
-            solver_with_packages(request, &mut packages)
-        }));
+        let outcome = catch_unwind(AssertUnwindSafe(|| solve(&case.request, repo.clone())));
 
-        let result = match outcome {
+        let rer_result = match outcome {
             Ok(result) => result,
             Err(_) => {
                 panicked.push(i);
@@ -172,8 +140,8 @@ fn test_rez_benchmark_correctness() {
             }
         };
 
-        match result {
-            Ok(solution) => {
+        match rer_result {
+            Some(rer_set) => {
                 if !rez_solved {
                     status_mismatch.push(format!(
                         "case {i}: rez `{}` but rer solved — {:?}",
@@ -181,21 +149,18 @@ fn test_rez_benchmark_correctness() {
                     ));
                     continue;
                 }
-                let rer_set = normalize(&solution);
                 let rez_set = case
                     .resolved_packages
                     .as_deref()
-                    .map(normalize)
+                    .map(normalize_rez)
                     .unwrap_or_default();
                 if rer_set == rez_set {
                     exact += 1;
-                } else if let Err(why) = validate(&rer_set, &repo) {
-                    invalid.push(format!("case {i}: {why}"));
                 } else {
                     divergent.push(i);
                 }
             }
-            Err(_) => {
+            None => {
                 if rez_solved {
                     status_mismatch.push(format!(
                         "case {i}: rez `success` but rer failed — {:?}",
@@ -211,15 +176,14 @@ fn test_rez_benchmark_correctness() {
     std::panic::set_hook(prev_hook);
 
     println!(
-        "exact: {exact}  divergent-but-valid: {}  both-failed: {both_failed}  \
-         status-mismatch: {}  invalid: {}  panicked: {}",
+        "exact: {exact}  divergent: {}  both-failed: {both_failed}  \
+         status-mismatch: {}  panicked: {}",
         divergent.len(),
         status_mismatch.len(),
-        invalid.len(),
         panicked.len(),
     );
     if !divergent.is_empty() {
-        println!("divergent cases (different but valid solution): {divergent:?}");
+        println!("divergent cases (solved, but a different set than rez): {divergent:?}");
     }
     if !panicked.is_empty() {
         println!("cases that panicked the solver: {panicked:?}");
@@ -230,12 +194,6 @@ fn test_rez_benchmark_correctness() {
         "{} resolve(s) diverged from rez in status:\n{}",
         status_mismatch.len(),
         status_mismatch.join("\n"),
-    );
-    assert!(
-        invalid.is_empty(),
-        "{} resolve(s) were internally invalid:\n{}",
-        invalid.len(),
-        invalid.join("\n"),
     );
     assert!(
         panicked.is_empty(),
