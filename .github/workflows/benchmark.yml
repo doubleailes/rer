@@ -32,7 +32,8 @@ jobs:
           python-version: '3.12'
       - name: Generate benchmark fixtures
         run: python scripts/prepare_benchmark_data.py
-      - name: Correctness — rer vs rez recorded resolves
-        run: cargo test -p rer-resolver --test test_rez_benchmark -- --nocapture
-      - name: Timing report
-        run: cargo run --release -p examples --example rez_benchmark_dataset
+      - name: Correctness — rer vs rez recorded resolves (strict 1:1)
+        # Release build + `--ignored`: the rez-faithful solver runs every one
+        # of the 188 benchmark resolves and must match rez exactly. Takes
+        # several minutes, hence release and the explicit opt-in.
+        run: cargo test --release -p rer-resolver --test test_rez_benchmark -- --ignored --nocapture
