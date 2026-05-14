@@ -10,6 +10,7 @@
 use super::context::SolverContext;
 use super::requirement::{Requirement, RequirementList};
 use rer_version::{RerVersion, VersionRange};
+use std::cell::OnceCell;
 use std::collections::HashSet;
 use std::ops::Bound;
 use std::rc::Rc;
@@ -431,6 +432,11 @@ pub enum SliceReduce {
 
 /// A working subset of one family's variants, with dependency-related info.
 /// Mirrors rez's `_PackageVariantSlice`.
+///
+/// `len`, `range`, `common_fams` and `fam_requires` are derived from `entries`
+/// and cached on first use — they are hot paths during a solve, and rez caches
+/// them too. The caches stay valid across a plain `Clone` (the entries are
+/// identical) but `copy_with_entries` starts fresh, since the entries differ.
 #[derive(Debug, Clone)]
 pub struct PackageVariantSlice {
     ctx: Rc<SolverContext>,
@@ -440,6 +446,11 @@ pub struct PackageVariantSlice {
     extracted_fams: HashSet<String>,
     /// Whether `entries` is version-sorted (descending).
     sorted: bool,
+    // Lazily-computed, entries-derived caches.
+    len_cache: OnceCell<usize>,
+    range_cache: OnceCell<VersionRange>,
+    common_fams_cache: OnceCell<HashSet<String>>,
+    fam_requires_cache: OnceCell<HashSet<String>>,
 }
 
 impl PackageVariantSlice {
@@ -451,6 +462,10 @@ impl PackageVariantSlice {
             entries,
             extracted_fams: HashSet::new(),
             sorted: false,
+            len_cache: OnceCell::new(),
+            range_cache: OnceCell::new(),
+            common_fams_cache: OnceCell::new(),
+            fam_requires_cache: OnceCell::new(),
         }
     }
 
@@ -461,7 +476,9 @@ impl PackageVariantSlice {
 
     /// Total number of variants across all versions.
     pub fn len(&self) -> usize {
-        self.entries.iter().map(PackageEntry::len).sum()
+        *self
+            .len_cache
+            .get_or_init(|| self.entries.iter().map(PackageEntry::len).sum())
     }
 
     /// True if the slice has no variants (should not normally occur).
@@ -471,7 +488,11 @@ impl PackageVariantSlice {
 
     /// The version range spanned by the slice's versions.
     pub fn range(&self) -> VersionRange {
-        VersionRange::from_versions(self.entries.iter().map(|e| e.version.clone()))
+        self.range_cache
+            .get_or_init(|| {
+                VersionRange::from_versions(self.entries.iter().map(|e| e.version.clone()))
+            })
+            .clone()
     }
 
     /// Iterate every variant in the slice.
@@ -488,26 +509,30 @@ impl PackageVariantSlice {
     }
 
     /// Families every variant depends on (non-conflict). Mirrors `common_fams`.
-    pub fn common_fams(&self) -> HashSet<String> {
-        let mut iter = self.iter_variants();
-        let Some(first) = iter.next() else {
-            return HashSet::new();
-        };
-        let mut common = first.request_fams().clone();
-        for variant in iter {
-            common.retain(|f| variant.request_fams().contains(f));
-        }
-        common
+    pub fn common_fams(&self) -> &HashSet<String> {
+        self.common_fams_cache.get_or_init(|| {
+            let mut iter = self.iter_variants();
+            let Some(first) = iter.next() else {
+                return HashSet::new();
+            };
+            let mut common = first.request_fams().clone();
+            for variant in iter {
+                common.retain(|f| variant.request_fams().contains(f));
+            }
+            common
+        })
     }
 
     /// Every family any variant mentions, conflict or not. Mirrors `fam_requires`.
-    pub fn fam_requires(&self) -> HashSet<String> {
-        let mut all = HashSet::new();
-        for variant in self.iter_variants() {
-            all.extend(variant.request_fams().iter().cloned());
-            all.extend(variant.conflict_request_fams().iter().cloned());
-        }
-        all
+    pub fn fam_requires(&self) -> &HashSet<String> {
+        self.fam_requires_cache.get_or_init(|| {
+            let mut all = HashSet::new();
+            for variant in self.iter_variants() {
+                all.extend(variant.request_fams().iter().cloned());
+                all.extend(variant.conflict_request_fams().iter().cloned());
+            }
+            all
+        })
     }
 
     /// True if a common dependency family remains to be extracted.
@@ -718,7 +743,8 @@ impl PackageVariantSlice {
     }
 
     /// rez's `_copy`: a new slice over `new_entries` carrying the `sorted`
-    /// flag but with a *fresh* (empty) `extracted_fams`.
+    /// flag but with a *fresh* (empty) `extracted_fams` and fresh caches (the
+    /// entries differ, so the derived caches must be recomputed).
     fn copy_with_entries(&self, new_entries: Vec<PackageEntry>) -> PackageVariantSlice {
         PackageVariantSlice {
             ctx: Rc::clone(&self.ctx),
@@ -726,6 +752,10 @@ impl PackageVariantSlice {
             entries: new_entries,
             extracted_fams: HashSet::new(),
             sorted: self.sorted,
+            len_cache: OnceCell::new(),
+            range_cache: OnceCell::new(),
+            common_fams_cache: OnceCell::new(),
+            fam_requires_cache: OnceCell::new(),
         }
     }
 }

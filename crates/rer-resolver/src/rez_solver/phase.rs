@@ -22,7 +22,11 @@ use std::rc::Rc;
 pub struct ResolvePhase {
     ctx: Rc<SolverContext>,
     /// One scope per package family currently in the resolve.
-    scopes: Vec<PackageScope>,
+    ///
+    /// Scopes are `Rc`-shared: rez treats scopes as immutable (replaced, never
+    /// mutated) and shares the objects across phases by reference, so cloning a
+    /// phase — which happens constantly during backtracking — must be cheap.
+    scopes: Vec<Rc<PackageScope>>,
     /// Why the phase failed, if it did.
     failure_reason: Option<FailureReason>,
     /// `(scope_name, extracted_name) -> requirement` — every extraction so far.
@@ -39,7 +43,7 @@ impl ResolvePhase {
     pub fn new(ctx: &Rc<SolverContext>) -> Result<Self, ScopeError> {
         let mut scopes = Vec::new();
         for req in ctx.request_list.iter() {
-            scopes.push(PackageScope::new(req.clone(), ctx)?);
+            scopes.push(Rc::new(PackageScope::new(req.clone(), ctx)?));
         }
         let n = scopes.len();
         Ok(ResolvePhase {
@@ -71,15 +75,15 @@ impl ResolvePhase {
     }
 
     /// True if every scope is solved.
-    fn is_solved(scopes: &[PackageScope]) -> bool {
-        scopes.iter().all(PackageScope::is_solved)
+    fn is_solved(scopes: &[Rc<PackageScope>]) -> bool {
+        scopes.iter().all(|s| s.is_solved())
     }
 
     /// Assemble a result phase, mirroring rez's `_create_phase`. `status: None`
     /// resolves to `Solved`/`Exhausted` from the scopes.
     fn make_phase(
         &self,
-        scopes: Vec<PackageScope>,
+        scopes: Vec<Rc<PackageScope>>,
         failure_reason: Option<FailureReason>,
         extractions: HashMap<(String, String), Requirement>,
         status: Option<SolverStatus>,
@@ -132,7 +136,7 @@ impl ResolvePhase {
                                 );
                                 extractions.insert(key, extracted_request.clone());
                                 extracted_requests.push(extracted_request);
-                                scopes[i] = scope_;
+                                scopes[i] = Rc::new(scope_);
                             }
                             None => break,
                         }
@@ -191,7 +195,7 @@ impl ResolvePhase {
                         ScopeIntersect::Unchanged => {}
                         ScopeIntersect::Narrowed(scope_) => {
                             let now_conflict = scope_.is_conflict();
-                            scopes[i] = scope_;
+                            scopes[i] = Rc::new(scope_);
                             changed_scopes_i.insert(i);
                             // A conflict scope that became a normal scope has
                             // *widened* — it must reduce against everything.
@@ -211,7 +215,7 @@ impl ResolvePhase {
                     .collect();
                 for req in new_reqs {
                     match PackageScope::new(req, &self.ctx) {
-                        Ok(scope) => scopes.push(scope),
+                        Ok(scope) => scopes.push(Rc::new(scope)),
                         Err(err) => {
                             // rez raises here by default; the benchmark records
                             // no "error" resolves, so treat an unresolvable
@@ -301,7 +305,7 @@ impl ResolvePhase {
                         );
                     }
                     ScopeReduce::Reduced(new_scope) => {
-                        scopes[x] = new_scope;
+                        scopes[x] = Rc::new(new_scope);
                         // Every other scope must reduce against the narrower x.
                         for j in 0..num_scopes {
                             if j != x {
@@ -339,7 +343,7 @@ impl ResolvePhase {
             let name = scopes[i].package_name().to_string();
             graph.add_node(name.clone());
             index_by_name.insert(name.clone(), i);
-            if let Some(variant) = scopes[i].get_solved_variant() {
+            if let Some(variant) = Rc::make_mut(&mut scopes[i]).get_solved_variant() {
                 for req in variant.requires().iter() {
                     if !req.is_conflict() {
                         graph.add_edge(name.clone(), req.name().to_string());
@@ -354,14 +358,14 @@ impl ResolvePhase {
             let mut cycle: Vec<(String, rer_version::RerVersion)> = Vec::new();
             for fam in &cycle_fams {
                 let idx = index_by_name[fam];
-                let version = scopes[idx]
+                let version = Rc::make_mut(&mut scopes[idx])
                     .get_solved_variant()
                     .expect("cycle node is a solved scope")
                     .version()
                     .clone();
                 cycle.push((fam.clone(), version));
             }
-            let final_scopes: Vec<PackageScope> =
+            let final_scopes: Vec<Rc<PackageScope>> =
                 scopes.into_iter().filter(|s| !s.is_conflict()).collect();
             return ResolvePhase {
                 ctx: Rc::clone(&self.ctx),
@@ -383,8 +387,8 @@ impl ResolvePhase {
         let ordered_fams = graph.dependency_order(&request_fams);
 
         // Pull the (non-conflict) scopes out in dependency order.
-        let mut taken: Vec<Option<PackageScope>> = scopes.into_iter().map(Some).collect();
-        let mut final_scopes: Vec<PackageScope> = Vec::new();
+        let mut taken: Vec<Option<Rc<PackageScope>>> = scopes.into_iter().map(Some).collect();
+        let mut final_scopes: Vec<Rc<PackageScope>> = Vec::new();
         for fam in ordered_fams {
             if let Some(&idx) = index_by_name.get(&fam) {
                 if let Some(scope) = taken[idx].take() {
@@ -411,22 +415,23 @@ impl ResolvePhase {
     pub fn split(&self) -> (ResolvePhase, ResolvePhase) {
         debug_assert_eq!(self.status, SolverStatus::Exhausted);
 
-        let mut scopes: Vec<PackageScope> = Vec::with_capacity(self.scopes.len());
-        let mut next_scopes: Vec<PackageScope> = Vec::with_capacity(self.scopes.len());
+        let mut scopes: Vec<Rc<PackageScope>> = Vec::with_capacity(self.scopes.len());
+        let mut next_scopes: Vec<Rc<PackageScope>> = Vec::with_capacity(self.scopes.len());
         let mut split_i: Option<usize> = None;
 
         for (i, scope) in self.scopes.iter().enumerate() {
             if split_i.is_none() {
-                let mut scope = scope.clone();
-                if let Some((scope_, next_scope)) = scope.split() {
-                    scopes.push(scope_);
-                    next_scopes.push(next_scope);
+                let mut candidate = (**scope).clone();
+                if let Some((scope_, next_scope)) = candidate.split() {
+                    scopes.push(Rc::new(scope_));
+                    next_scopes.push(Rc::new(next_scope));
                     split_i = Some(i);
                     continue;
                 }
             }
-            scopes.push(scope.clone());
-            next_scopes.push(scope.clone());
+            // Unchanged scopes are shared by reference between the two phases.
+            scopes.push(Rc::clone(scope));
+            next_scopes.push(Rc::clone(scope));
         }
 
         let split_i = split_i.expect("an exhausted phase always has a splittable scope");
@@ -451,7 +456,7 @@ impl ResolvePhase {
         let mut scopes = self.scopes.clone();
         scopes
             .iter_mut()
-            .filter_map(PackageScope::get_solved_variant)
+            .filter_map(|s| Rc::make_mut(s).get_solved_variant())
             .collect()
     }
 }
