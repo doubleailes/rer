@@ -19,3 +19,6 @@ serde_json = { workspace = true }
 itertools = { workspace = true }
 regex = { workspace = true }
 log = { workspace = true }
+# Fast non-cryptographic hasher for the solver's hot-path maps/sets (package
+# family names, requirement lookups). Already in the tree via pubgrub.
+rustc-hash = "2"

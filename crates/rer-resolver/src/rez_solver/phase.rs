@@ -14,7 +14,7 @@ use super::graph::DepGraph;
 use super::requirement::{Requirement, RequirementList};
 use super::scope::{PackageScope, ScopeError, ScopeIntersect, ScopeReduce};
 use super::variant::PackageVariant;
-use std::collections::{HashMap, HashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::rc::Rc;
 
 /// A full copy of the resolve state. Mirrors rez's `_ResolvePhase`.
@@ -30,9 +30,9 @@ pub struct ResolvePhase {
     /// Why the phase failed, if it did.
     failure_reason: Option<FailureReason>,
     /// `(scope_name, extracted_name) -> requirement` — every extraction so far.
-    extractions: HashMap<(String, String), Requirement>,
+    extractions: FxHashMap<(String, String), Requirement>,
     /// Indices of scopes changed since the last reduce — seeds the next reduce.
-    changed_scopes_i: HashSet<usize>,
+    changed_scopes_i: FxHashSet<usize>,
     /// The phase's current status.
     pub status: SolverStatus,
 }
@@ -50,7 +50,7 @@ impl ResolvePhase {
             ctx: Rc::clone(ctx),
             scopes,
             failure_reason: None,
-            extractions: HashMap::new(),
+            extractions: FxHashMap::default(),
             // Force an initial all-pairs reduction in a fresh phase.
             changed_scopes_i: (0..n).collect(),
             status: SolverStatus::Pending,
@@ -63,8 +63,8 @@ impl ResolvePhase {
             ctx: Rc::clone(ctx),
             scopes: Vec::new(),
             failure_reason: Some(failure_reason),
-            extractions: HashMap::new(),
-            changed_scopes_i: HashSet::new(),
+            extractions: FxHashMap::default(),
+            changed_scopes_i: FxHashSet::default(),
             status: SolverStatus::Failed,
         }
     }
@@ -85,7 +85,7 @@ impl ResolvePhase {
         &self,
         scopes: Vec<Rc<PackageScope>>,
         failure_reason: Option<FailureReason>,
-        extractions: HashMap<(String, String), Requirement>,
+        extractions: FxHashMap<(String, String), Requirement>,
         status: Option<SolverStatus>,
     ) -> ResolvePhase {
         let status = status.unwrap_or_else(|| {
@@ -100,7 +100,7 @@ impl ResolvePhase {
             scopes,
             failure_reason,
             extractions,
-            changed_scopes_i: HashSet::new(),
+            changed_scopes_i: FxHashSet::default(),
             status,
         }
     }
@@ -113,13 +113,13 @@ impl ResolvePhase {
         }
 
         let mut scopes = self.scopes.clone();
-        let mut extractions = HashMap::new();
+        let mut extractions = FxHashMap::default();
         let mut changed_scopes_i = self.changed_scopes_i.clone();
 
         // Outer loop: iteratively reduce until no more reductions are possible.
         loop {
             let prev_num_scopes = scopes.len();
-            let mut widened_scopes_i: HashSet<usize> = HashSet::new();
+            let mut widened_scopes_i: FxHashSet<usize> = FxHashSet::default();
 
             // Inner loop: iteratively extract until no more extractions.
             loop {
@@ -163,7 +163,7 @@ impl ResolvePhase {
                 }
 
                 // INTERSECT extracted requests into the existing scopes.
-                let mut req_fams: HashSet<String> = HashSet::new();
+                let mut req_fams: FxHashSet<String> = FxHashSet::default();
                 for i in 0..scopes.len() {
                     let extracted_req = match extracted_requests.get(scopes[i].package_name()) {
                         Some(req) => req.clone(),
@@ -254,7 +254,7 @@ impl ResolvePhase {
 
             // REDUCE: build the pending (x, y) reduction pairs — "reduce
             // scope[x] by scope[y].package_request".
-            let mut pending_set: HashSet<(usize, usize)> = HashSet::new();
+            let mut pending_set: FxHashSet<(usize, usize)> = FxHashSet::default();
             // existing scopes reduce against changed scopes
             for x in 0..prev_num_scopes {
                 for &y in &changed_scopes_i {
@@ -335,7 +335,7 @@ impl ResolvePhase {
         // Build the minimal dependency graph over the solved (non-conflict)
         // scopes, and a name -> index map into `scopes`.
         let mut graph = DepGraph::new();
-        let mut index_by_name: HashMap<String, usize> = HashMap::new();
+        let mut index_by_name: FxHashMap<String, usize> = FxHashMap::default();
         for i in 0..scopes.len() {
             if scopes[i].is_conflict() {
                 continue;
@@ -372,7 +372,7 @@ impl ResolvePhase {
                 scopes: final_scopes,
                 failure_reason: Some(FailureReason::Cycle(cycle)),
                 extractions: self.extractions.clone(),
-                changed_scopes_i: HashSet::new(),
+                changed_scopes_i: FxHashSet::default(),
                 status: SolverStatus::Cyclic,
             };
         }
@@ -404,7 +404,7 @@ impl ResolvePhase {
             scopes: final_scopes,
             failure_reason: None,
             extractions: self.extractions.clone(),
-            changed_scopes_i: HashSet::new(),
+            changed_scopes_i: FxHashSet::default(),
             status: self.status,
         }
     }
@@ -441,7 +441,7 @@ impl ResolvePhase {
             scopes,
             failure_reason: None,
             extractions: self.extractions.clone(),
-            changed_scopes_i: HashSet::from([split_i]),
+            changed_scopes_i: [split_i].into_iter().collect(),
             status: SolverStatus::Pending,
         };
         let next_phase = ResolvePhase {
