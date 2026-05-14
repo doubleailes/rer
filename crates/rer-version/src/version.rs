@@ -3,6 +3,7 @@ use lazy_static::lazy_static;
 use rand::{distributions::Alphanumeric, Rng};
 use regex::Regex;
 use std::fmt;
+use std::rc::Rc;
 
 lazy_static! {
     static ref ALPHABET_REGEX: Regex =
@@ -13,7 +14,7 @@ lazy_static! {
     static ref NUMERIC_REGEX: Regex = Regex::new(r"[0-9]+").expect("Can't compile NUMERIC_REGEX regex");
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Hash)]
 struct SubToken {
     s: String,
     n: Option<i64>,
@@ -115,7 +116,7 @@ impl fmt::Display for SubToken {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, PartialOrd, Ord)]
+#[derive(Debug, PartialEq, Eq, Clone, PartialOrd, Ord, Hash)]
 struct AlphanumericVersionToken {
     subtokens: Vec<SubToken>,
 }
@@ -232,8 +233,16 @@ fn test_bump_alpha_num() {
 /// let v: RerVersion = "1.2.3-alpha+beta".try_into().unwrap();
 /// assert_eq!(v.to_string(), "1.2.3-alpha+beta");
 /// ```
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct RerVersion {
+///
+/// Internally `Rc`-wrapped so cloning a version — which happens constantly,
+/// since versions are embedded in every `Ranges` the solver copies — is a
+/// refcount bump rather than a deep `Vec`/`String` copy.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct RerVersion(Rc<RerVersionInner>);
+
+/// Token/separator representation behind a [`RerVersion`].
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+struct RerVersionInner {
     tokens: Vec<AlphanumericVersionToken>,
     seps: Vec<char>,
 }
@@ -266,36 +275,36 @@ impl RerVersion {
                     }
                 }
             }
-            Ok(Self { tokens, seps })
+            Ok(RerVersion(Rc::new(RerVersionInner { tokens, seps })))
         }
     }
 }
 impl RerVersion {
     pub fn lowest() -> Self {
-        RerVersion {
+        RerVersion(Rc::new(RerVersionInner {
             tokens: vec![AlphanumericVersionToken::lowest()],
             seps: vec![],
-        }
+        }))
     }
     pub fn bump(&self) -> Self {
-        let mut next_tokens = self.tokens.clone();
+        let mut next_tokens = self.0.tokens.clone();
         let last = next_tokens
             .pop()
             .expect("Token should have at least one subtoken");
         next_tokens.push(last.bump());
-        RerVersion {
+        RerVersion(Rc::new(RerVersionInner {
             tokens: next_tokens,
-            seps: self.seps.clone(),
-        }
+            seps: self.0.seps.clone(),
+        }))
     }
 }
 impl fmt::Display for RerVersion {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut s = String::new();
-        for (i, token) in self.tokens.iter().enumerate() {
+        for (i, token) in self.0.tokens.iter().enumerate() {
             s.push_str(&token.to_string());
-            if i < self.seps.len() {
-                s.push(self.seps[i]);
+            if i < self.0.seps.len() {
+                s.push(self.0.seps[i]);
             }
         }
         write!(f, "{}", s)
@@ -328,17 +337,17 @@ fn test_display() {
 #[test]
 fn test_from_str() {
     let v = RerVersion::parse_from_string("1.2.3").unwrap();
-    assert_eq!(v.tokens.len(), 3);
-    assert_eq!(v.seps.len(), 2);
+    assert_eq!(v.0.tokens.len(), 3);
+    assert_eq!(v.0.seps.len(), 2);
     let v = RerVersion::parse_from_string("1.2.3-alpha").unwrap();
-    assert_eq!(v.tokens.len(), 4);
-    assert_eq!(v.seps.len(), 3);
+    assert_eq!(v.0.tokens.len(), 4);
+    assert_eq!(v.0.seps.len(), 3);
     let v = RerVersion::parse_from_string("1.2.3-alpha+beta").unwrap();
-    assert_eq!(v.tokens.len(), 5);
-    assert_eq!(v.seps.len(), 4);
+    assert_eq!(v.0.tokens.len(), 5);
+    assert_eq!(v.0.seps.len(), 4);
     let v: RerVersion = "2.0.0_".try_into().unwrap();
-    assert_eq!(v.tokens[2], AlphanumericVersionToken::new("0_").unwrap());
-    assert_eq!(v.seps, vec!['.', '.']);
+    assert_eq!(v.0.tokens[2], AlphanumericVersionToken::new("0_").unwrap());
+    assert_eq!(v.0.seps, vec!['.', '.']);
 }
 #[test]
 fn test_order() {
