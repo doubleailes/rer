@@ -17,3 +17,6 @@ crate-type = ["cdylib", "lib"]
 [dependencies]
 pyo3 = { workspace = true, features = ["abi3-py39"] }
 rer-resolver = { workspace = true }
+# The package repository is passed across the bridge as JSON in the
+# `PackageData` schema (name -> version -> {requires, variants}).
+serde_json = { workspace = true }
