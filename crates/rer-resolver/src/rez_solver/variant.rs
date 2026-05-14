@@ -851,7 +851,7 @@ mod tests {
     fn ctx_with(repo: PackageRepo, requests: &[&str]) -> Rc<SolverContext> {
         let request_list =
             RequirementList::new(requests.iter().map(|s| Requirement::parse(s)).collect());
-        Rc::new(SolverContext::new(repo, request_list))
+        Rc::new(SolverContext::new(Rc::new(repo), request_list))
     }
 
     #[test]

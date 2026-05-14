@@ -26,6 +26,7 @@ use serde::Deserialize;
 use std::collections::HashMap;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::PathBuf;
+use std::rc::Rc;
 
 /// `package name → version → PackageData`, as produced by the prep script.
 type PackageRepo = HashMap<String, HashMap<String, PackageData>>;
@@ -77,7 +78,7 @@ fn normalize_rez(entries: &[String]) -> Vec<(String, String)> {
 /// Returns `Some(set)` of `(name, version)` pairs on success, or `None` if the
 /// solve failed (including a construction error — rez would error, but the
 /// benchmark records no error cases, so we treat it as a failed solve).
-fn solve(request: &[String], repo: PackageRepo) -> Option<Vec<(String, String)>> {
+fn solve(request: &[String], repo: Rc<PackageRepo>) -> Option<Vec<(String, String)>> {
     let reqs: Vec<Requirement> = request.iter().map(|s| Requirement::parse(s)).collect();
     let mut solver = Solver::new(reqs, repo).ok()?;
     solver.solve();
@@ -100,7 +101,7 @@ fn solve(request: &[String], repo: PackageRepo) -> Option<Vec<(String, String)>>
 
 #[test]
 fn test_rez_benchmark_correctness() {
-    let Some(repo) = load_json::<PackageRepo>("benchmark_packages.json") else {
+    let Some(repo) = load_json::<PackageRepo>("benchmark_packages.json").map(Rc::new) else {
         eprintln!(
             "benchmark fixtures missing — skipping. Generate them with:\n  \
              git submodule update --init\n  \
@@ -130,7 +131,7 @@ fn test_rez_benchmark_correctness() {
 
     for (i, case) in cases.iter().enumerate() {
         let rez_solved = case.status == "success";
-        let outcome = catch_unwind(AssertUnwindSafe(|| solve(&case.request, repo.clone())));
+        let outcome = catch_unwind(AssertUnwindSafe(|| solve(&case.request, Rc::clone(&repo))));
 
         let rer_result = match outcome {
             Ok(result) => result,

@@ -25,9 +25,13 @@ pub struct Solver {
 impl Solver {
     /// Create a solver for `package_requests` against `repo`.
     ///
-    /// Fails only if a top-level request names a package family or version
-    /// that is absent from the repository (rez raises here too).
-    pub fn new(package_requests: Vec<Requirement>, repo: PackageRepo) -> Result<Self, ScopeError> {
+    /// The repository is shared via `Rc`, so resolving many requests against
+    /// the same repo never copies it. Fails only if a top-level request names
+    /// a package family or version absent from the repository (rez raises too).
+    pub fn new(
+        package_requests: Vec<Requirement>,
+        repo: Rc<PackageRepo>,
+    ) -> Result<Self, ScopeError> {
         let request_list = RequirementList::new(package_requests);
 
         // A conflicting request fails immediately, with no scopes.
@@ -201,7 +205,7 @@ mod tests {
 
     fn solve(repo: PackageRepo, requests: &[&str]) -> Solver {
         let reqs = requests.iter().map(|s| Requirement::parse(s)).collect();
-        let mut solver = Solver::new(reqs, repo).expect("solver construction");
+        let mut solver = Solver::new(reqs, Rc::new(repo)).expect("solver construction");
         solver.solve();
         solver
     }

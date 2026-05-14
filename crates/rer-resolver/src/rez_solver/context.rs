@@ -24,8 +24,8 @@ pub type PackageRepo = HashMap<String, HashMap<String, PackageData>>;
 /// a logically read-only operation that mutates a memo).
 #[derive(Debug)]
 pub struct SolverContext {
-    /// The package repository.
-    pub repo: PackageRepo,
+    /// The package repository, shared (never cloned per solve).
+    pub repo: Rc<PackageRepo>,
     /// The merged, optimised top-level request.
     pub request_list: RequirementList,
     /// Per-family variant cache — built lazily, shared for the whole solve.
@@ -34,7 +34,7 @@ pub struct SolverContext {
 
 impl SolverContext {
     /// Build a context from a repository and an already-merged request list.
-    pub fn new(repo: PackageRepo, request_list: RequirementList) -> Self {
+    pub fn new(repo: Rc<PackageRepo>, request_list: RequirementList) -> Self {
         SolverContext {
             repo,
             request_list,
