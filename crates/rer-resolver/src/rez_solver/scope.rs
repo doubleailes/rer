@@ -253,8 +253,15 @@ impl PackageScope {
             return None;
         }
         let (new_slice, package_request) = self.variant_slice.as_ref().unwrap().extract()?;
-        let mut scope = self.clone();
-        scope.variant_slice = Some(new_slice);
+        // Build the scope directly rather than `self.clone()` + overwrite — that
+        // would needlessly deep-clone the old (now-discarded) variant slice.
+        let scope = PackageScope {
+            ctx: Rc::clone(&self.ctx),
+            package_name: self.package_name.clone(),
+            package_request: self.package_request.clone(),
+            variant_slice: Some(new_slice),
+            is_ephemeral: self.is_ephemeral,
+        };
         Some((scope, package_request))
     }
 
@@ -348,7 +355,7 @@ mod tests {
     fn ctx_with(repo: PackageRepo, requests: &[&str]) -> Rc<SolverContext> {
         let request_list =
             RequirementList::new(requests.iter().map(|s| Requirement::parse(s)).collect());
-        Rc::new(SolverContext::new(repo, request_list))
+        Rc::new(SolverContext::new(Rc::new(repo), request_list))
     }
 
     #[test]
