@@ -79,12 +79,17 @@ impl VersionRange {
 
     /// rez `VersionRange.from_versions`: a range containing exactly the given
     /// versions and nothing else (e.g. `==3|==4|==5.1`).
+    ///
+    /// Built in a single pass via `Ranges`'s `FromIterator` rather than folding
+    /// `union` over singletons (which reallocated and was O(n²)) — this is hot,
+    /// it backs `_PackageScope._update`.
     pub fn from_versions<I: IntoIterator<Item = RerVersion>>(versions: I) -> Self {
-        let mut range = Ranges::empty();
-        for version in versions {
-            range = range.union(&Ranges::singleton(version));
-        }
-        VersionRange(range)
+        VersionRange(
+            versions
+                .into_iter()
+                .map(|v| (Bound::Included(v.clone()), Bound::Included(v)))
+                .collect(),
+        )
     }
 
     /// rez `VersionRange.is_any`: true for the range that contains all versions.
