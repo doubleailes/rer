@@ -1,255 +1,102 @@
-"""Differential test harness: rer vs rez solve comparison.
+"""Differential test: ``rer_solver`` vs recorded expectations.
 
-Runs the rer (Rust) solver — and optionally the rez (Python) solver — on
-the same inputs and compares results.  Test cases are loaded from
-``tests/differential_cases.json``.
+Runs the rer (Rust) solver — rez's own phase-based algorithm, ported — on the
+cases in ``tests/differential_cases.json`` and checks each against its
+recorded expected outcome.
 
-Usage
------
-After building the ``rer_solver`` module (``maturin develop`` inside a venv)::
+This exercises the Python bridge (``rer_solver.solve``) end to end. The
+authoritative head-to-head against rez itself is the Rust integration test
+``test_rez_benchmark`` (rez's bundled 188-case benchmark, bit-exact 1:1).
+
+Build the module first (``maturin develop`` inside a venv), then::
 
     pytest tests/test_differential.py -v
 
-If ``rer_solver`` is not installed the entire module is skipped.  If ``rez``
-is also installed, an additional set of live-comparison tests run.
-
-Known-Acceptable Divergences
-----------------------------
-The pubgrub-based Rust solver may produce *different but equally valid*
-solutions compared to rez's Python solver.  Two solutions are both correct
-if every resolved version satisfies the original request and all transitive
-dependency constraints.  The ``real_deps`` category documents 8 cases where
-the Rust solver currently fails on complex real-world data — these are
-tracked as known divergences and will be resolved as dependency-reading
-support improves (Phase 0 in the project roadmap).
+If ``rer_solver`` is not installed the whole module is skipped.
 """
 
 from __future__ import annotations
 
 import json
-import os
 import pathlib
 
 import pytest
 
-# ---------------------------------------------------------------------------
-# Optional imports — skip gracefully when not available
-# ---------------------------------------------------------------------------
-
-rer_solver = pytest.importorskip("rer_solver", reason="rer_solver not built (run maturin develop)")
-
-try:
-    from rez.resolved_context import ResolvedContext  # type: ignore[import-untyped]
-
-    HAS_REZ = True
-except ImportError:
-    HAS_REZ = False
-
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
+rer_solver = pytest.importorskip(
+    "rer_solver", reason="rer_solver not built (run maturin develop)"
+)
 
 TESTS_DIR = pathlib.Path(__file__).resolve().parent
 CASES_PATH = TESTS_DIR / "differential_cases.json"
-FIXTURES_DIR = (
-    TESTS_DIR.parent / "crates" / "rer-resolver" / "tests" / "fixtures" / "packages"
-)
 
 
 def _load_cases() -> list[dict]:
     with open(CASES_PATH) as fh:
-        data = json.load(fh)
-    return data["cases"]
+        return json.load(fh)["cases"]
 
 
 ALL_CASES = _load_cases()
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
+
+def _repo_json(packages: dict) -> str:
+    """Convert a case's ``{name: {version: [deps]}}`` to the repository JSON
+    ``rer_solver.solve`` expects: ``{name: {version: {requires, variants}}}``."""
+    return json.dumps(
+        {
+            name: {
+                version: {"requires": list(deps), "variants": []}
+                for version, deps in versions.items()
+            }
+            for name, versions in packages.items()
+        }
+    )
 
 
-def _create_package_tree(tmp_path: pathlib.Path, packages: dict) -> str:
-    """Create a minimal filesystem package tree for ``rer_solver.solve()``.
-
-    Each package version gets a directory ``<tmp>/<name>/<version>/``
-    containing an empty ``package.py`` marker file.
-
-    Note: dependency information is NOT encoded in the filesystem because
-    ``rer``'s legacy ``package.py`` parser has been removed.  These tests
-    therefore only verify version selection — **not** transitive dependency
-    resolution — when using the filesystem path solver.
-    """
-    for pkg_name, versions in packages.items():
-        for version in versions:
-            version_dir = tmp_path / pkg_name / version
-            version_dir.mkdir(parents=True, exist_ok=True)
-            (version_dir / "package.py").touch()
-    return str(tmp_path)
+def _resolved_set(result) -> set[tuple[str, str]]:
+    return {(name, version) for name, version, _idx in result.resolved}
 
 
-def _parse_resolved(result) -> set[tuple[str, str]]:
-    """Extract ``{(name, version)}`` from a ``SolveResult``."""
-    return {(name, ver) for name, ver, _idx in result.resolved}
+# Categories whose recorded outcomes are rez-unambiguous and authoritative.
+#
+# `real_deps` is excluded: those baselines were snapshots of rer's *old*
+# pubgrub solver, not rez — and rez itself fails several of them (verified
+# directly). For those cases we only assert the solver runs cleanly. The
+# authoritative head-to-head against rez is the Rust integration test
+# `test_rez_benchmark` (rez's bundled 188-case benchmark, bit-exact 1:1).
+_STRICT_CATEGORIES = frozenset(
+    {"leaf", "multi_leaf", "exact_version", "conflict", "missing"}
+)
 
 
-# ---------------------------------------------------------------------------
-# Parametrized test IDs
-# ---------------------------------------------------------------------------
+@pytest.mark.parametrize("case", ALL_CASES, ids=lambda c: c["id"])
+def test_rer_solver(case: dict):
+    """The Rust solver runs cleanly and matches each case's recorded outcome."""
+    result = rer_solver.solve(case["requests"], _repo_json(case.get("packages", {})))
 
+    # "error" means malformed input or a panic — always a real bug.
+    assert result.status in ("solved", "failed"), (
+        f"[{case['id']}] solver errored: {result.failure_description}"
+    )
 
-# Categories where packages have no transitive dependencies, so the
-# filesystem solver (which lacks dependency data) can still validate results.
-_NO_DEPS_CATEGORIES = frozenset({"leaf", "multi_leaf", "exact_version", "missing", "conflict"})
-
-
-def _case_id(case: dict) -> str:
-    return case["id"]
-
-
-# ---------------------------------------------------------------------------
-# Tests — Rust solver against expected outcomes
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.parametrize("case", ALL_CASES, ids=_case_id)
-def test_rer_solver_status(case: dict, tmp_path: pathlib.Path):
-    """Verify that the Rust solver runs without panicking and returns the
-    expected status for cases whose results can be validated through the
-    filesystem solver.
-
-    **Validated categories** (``_NO_DEPS_CATEGORIES``): cases whose packages
-    have no transitive dependencies.  For these, ``result.status`` is
-    compared against ``expected_status``.  When the status is ``"solved"``
-    and ``expected_resolved`` is provided, the exact resolved set is also
-    checked.
-
-    **Dep-aware categories** (e.g. ``real_deps``): the filesystem solver
-    cannot read dependency metadata, so the resolved status may differ from
-    the baseline recorded in ``expected_status``.  For these cases the test
-    only asserts that the solver completes without error, returning either
-    ``"solved"`` or ``"failed"``.  Full status validation for dep-aware
-    cases is covered by the Rust integration test (``test_differential.rs``)
-    via ``solver_with_packages()`` / ``from_packages()``.
-    """
-    packages = case.get("packages", {})
-    if not packages:
-        # Missing-package case — use empty temp dir
-        pkg_path = str(tmp_path)
-    else:
-        pkg_path = _create_package_tree(tmp_path, packages)
-
-    result = rer_solver.solve(case["requests"], [pkg_path])
+    # `real_deps` baselines are not authoritative — clean-run check only.
+    if case["category"] not in _STRICT_CATEGORIES:
+        return
 
     expected = case["expected_status"]
+    assert result.status == expected, (
+        f"[{case['id']}] expected status '{expected}', got '{result.status}'"
+    )
 
-    # Categories that have no transitive deps and can be fully validated
-    # through the filesystem solver (no dependency data needed).
-    if case["category"] in _NO_DEPS_CATEGORIES:
-        assert result.status == expected, (
-            f"[{case['id']}] expected status '{expected}', got '{result.status}'"
+    # When the case pins an exact resolution, the solved set must match it.
+    if result.status == "solved" and case.get("expected_resolved"):
+        resolved = _resolved_set(result)
+        expected_set = {(pair[0], pair[1]) for pair in case["expected_resolved"]}
+        assert resolved == expected_set, (
+            f"[{case['id']}] resolved mismatch: "
+            f"extra={resolved - expected_set}, missing={expected_set - resolved}"
         )
-
-        if result.status == "solved" and case.get("expected_resolved"):
-            resolved = _parse_resolved(result)
-            expected_set = {(pair[0], pair[1]) for pair in case["expected_resolved"]}
-            assert resolved == expected_set, (
-                f"[{case['id']}] resolved mismatch: "
-                f"extra={resolved - expected_set}, missing={expected_set - resolved}"
-            )
-    else:
-        # real_deps and other dep-aware cases: filesystem solver won't have
-        # dependency data, so status may differ from the baseline.  We only
-        # verify the solver doesn't panic/crash.
-        assert result.status in ("solved", "failed"), (
-            f"[{case['id']}] unexpected status '{result.status}'"
-        )
-
-
-# ---------------------------------------------------------------------------
-# Tests — filesystem fixture packages
-# ---------------------------------------------------------------------------
-
-
-def test_rer_fixture_packages():
-    """Smoke test: resolve the ``many`` package from the fixture tree."""
-    if not FIXTURES_DIR.is_dir():
-        pytest.skip("fixture packages directory not found")
-
-    result = rer_solver.solve(["many"], [str(FIXTURES_DIR)])
-    assert result.status == "solved"
-    assert len(result.resolved) == 1
-    name, version, _idx = result.resolved[0]
-    assert name == "many"
-    assert version == "1.2.0"
-
-
-# ---------------------------------------------------------------------------
-# Tests — live rez comparison (only when rez is installed)
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.skipif(not HAS_REZ, reason="rez not installed")
-@pytest.mark.parametrize("case", ALL_CASES, ids=_case_id)
-def test_rer_vs_rez(case: dict, tmp_path: pathlib.Path):
-    """Compare rer and rez results when both solvers are available.
-
-    This is the full differential comparison described in the issue.
-    When both solve successfully, the resolved package sets should match
-    (modulo known-acceptable divergences).
-    """
-    packages = case.get("packages", {})
-    if not packages:
-        pkg_path = str(tmp_path)
-    else:
-        pkg_path = _create_package_tree(tmp_path, packages)
-
-    # --- Rust solve ---
-    rust_result = rer_solver.solve(case["requests"], [pkg_path])
-
-    # --- Python (rez) solve ---
-    try:
-        context = ResolvedContext(
-            case["requests"],
-            package_paths=[pkg_path],
-        )
-        rez_status = context.status.name  # "solved" / "failed"
-    except Exception:
-        rez_status = "failed"
-
-    # Compare statuses
-    if rust_result.status == "solved" and rez_status == "solved":
-        rust_set = _parse_resolved(rust_result)
-        rez_set = set()
-        for pkg in context.resolved_packages:
-            rez_set.add((pkg.name, str(pkg.version)))
-
-        if rust_set != rez_set:
-            # Log divergence for analysis rather than hard-failing.
-            # Both solutions may be valid — pubgrub can pick different
-            # versions than rez's backtracking solver.
-            extra = rust_set - rez_set
-            missing = rez_set - rust_set
-            pytest.xfail(
-                reason=(
-                    f"[{case['id']}] Acceptable divergence: "
-                    f"rer_extra={extra}, rez_extra={missing}"
-                ),
-            )
-    elif rust_result.status != rez_status:
-        pytest.xfail(
-            reason=(
-                f"[{case['id']}] Status divergence: "
-                f"rer={rust_result.status}, rez={rez_status}"
-            ),
-        )
-
-
-# ---------------------------------------------------------------------------
-# Meta test — ensure fixture file has ≥ 50 cases
-# ---------------------------------------------------------------------------
 
 
 def test_case_count():
-    """The fixture file must contain at least 50 test cases."""
-    assert len(ALL_CASES) >= 50, f"Expected ≥50 cases, got {len(ALL_CASES)}"
+    """The fixture file must contain a reasonable number of cases."""
+    assert len(ALL_CASES) >= 50, f"expected >= 50 cases, got {len(ALL_CASES)}"

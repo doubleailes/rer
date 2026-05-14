@@ -5,54 +5,81 @@ Run after ``maturin develop`` inside a virtualenv::
     python tests/test_solve.py
 """
 
-import os
-import sys
+import json
+
+
+def _repo(packages):
+    """Build the JSON repository string ``rer_solver.solve`` expects.
+
+    ``packages`` maps ``name -> version -> requires-list``; this wraps each
+    into the ``{"requires": [...], "variants": [...]}`` schema.
+    """
+    return json.dumps(
+        {
+            name: {
+                version: {"requires": list(requires), "variants": []}
+                for version, requires in versions.items()
+            }
+            for name, versions in packages.items()
+        }
+    )
 
 
 def main():
     import rer_solver
 
-    fixtures = os.path.join(
-        os.path.dirname(__file__),
-        "..",
-        "crates",
-        "rer-resolver",
-        "tests",
-        "fixtures",
-        "packages",
+    # --- 1. Successful resolve with a transitive dependency ---
+    repo = _repo({"app": {"1.0.0": ["lib-2"]}, "lib": {"1.0.0": [], "2.0.0": []}})
+    result = rer_solver.solve(["app"], repo)
+    assert result.status == "solved", (
+        f"expected solved, got {result.status}: {result.failure_description}"
     )
-    fixtures = os.path.abspath(fixtures)
-
-    # --- 1. Successful resolve ---
-    result = rer_solver.solve(["many"], [fixtures])
-    assert result.status == "solved", f"expected solved, got {result.status}"
-    assert len(result.resolved) == 1, f"expected 1 package, got {len(result.resolved)}"
-    name, version, variant_index = result.resolved[0]
-    assert name == "many", f"expected 'many', got {name}"
-    assert version == "1.2.0", f"expected '1.2.0', got {version}"
-    assert variant_index == 0, f"expected variant 0, got {variant_index}"
+    resolved = {(n, v) for n, v, _ in result.resolved}
+    assert resolved == {("app", "1.0.0"), ("lib", "2.0.0")}, resolved
     assert result.failure_description is None
     assert result.solve_time_ms >= 0
-    print("PASS: successful resolve")
+    assert result.num_iterations >= 1
+    print("PASS: transitive resolve")
 
-    # --- 2. Failed resolve (unknown package) ---
-    result = rer_solver.solve(["nonexistent-pkg"], [fixtures])
+    # --- 2. Highest-version selection ---
+    result = rer_solver.solve(
+        ["foo"], _repo({"foo": {"1.0.0": [], "2.0.0": [], "1.5.0": []}})
+    )
+    assert result.status == "solved"
+    assert result.resolved == [("foo", "2.0.0", None)], result.resolved
+    print("PASS: highest-version selection")
+
+    # --- 3. Failed resolve (conflicting requests) ---
+    result = rer_solver.solve(
+        ["foo-1", "foo-2"], _repo({"foo": {"1.0.0": [], "2.0.0": []}})
+    )
     assert result.status == "failed", f"expected failed, got {result.status}"
     assert result.resolved == []
     assert result.failure_description is not None
-    print("PASS: failed resolve returns status='failed'")
+    print("PASS: conflicting requests fail")
 
-    # --- 3. Empty request list ---
-    result = rer_solver.solve([], [fixtures])
-    assert result.status == "solved", f"expected solved, got {result.status}"
+    # --- 4. Missing top-level package -> failed (rez reports this as a
+    #        failed resolve, not a crash) ---
+    result = rer_solver.solve(["nonexistent"], _repo({"foo": {"1.0.0": []}}))
+    assert result.status == "failed", f"expected failed, got {result.status}"
+    assert result.failure_description is not None
+    print("PASS: missing package -> failed")
+
+    # --- 5. Empty request list ---
+    result = rer_solver.solve([], _repo({"foo": {"1.0.0": []}}))
+    assert result.status == "solved"
     assert result.resolved == []
     print("PASS: empty request list")
 
-    # --- 4. SolveResult repr ---
-    result = rer_solver.solve(["many"], [fixtures])
+    # --- 6. Invalid packages JSON -> error ---
+    result = rer_solver.solve(["foo"], "not json")
+    assert result.status == "error"
+    print("PASS: invalid JSON -> error")
+
+    # --- 7. SolveResult repr ---
+    result = rer_solver.solve(["foo"], _repo({"foo": {"1.0.0": []}}))
     r = repr(result)
-    assert "SolveResult" in r
-    assert "solved" in r
+    assert "SolveResult" in r and "solved" in r
     print("PASS: SolveResult repr")
 
     print("\nAll tests passed.")
