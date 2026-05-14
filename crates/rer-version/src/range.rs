@@ -203,9 +203,73 @@ fn clone_bound(bound: Bound<&RerVersion>) -> Bound<RerVersion> {
     }
 }
 
+/// Format one contiguous segment in rez's range syntax, mirroring rez's
+/// `_Bound.__str__` (`rez/src/rez/version/_version.py:506`).
+fn format_segment(lower: &Bound<RerVersion>, upper: &Bound<RerVersion>) -> String {
+    // 1. Infinite upper bound -> just the lower bound string.
+    if matches!(upper, Bound::Unbounded) {
+        return match lower {
+            Bound::Unbounded => String::new(),
+            Bound::Included(v) => format!("{v}+"),
+            Bound::Excluded(v) => format!(">{v}"),
+        };
+    }
+    let (upper_version, upper_inclusive) = match upper {
+        Bound::Included(v) => (v, true),
+        Bound::Excluded(v) => (v, false),
+        Bound::Unbounded => unreachable!(),
+    };
+    let lower_version = match lower {
+        Bound::Included(v) | Bound::Excluded(v) => Some(v),
+        Bound::Unbounded => None,
+    };
+    let lower_inclusive = !matches!(lower, Bound::Excluded(_));
+
+    // 2. Single exact version -> "==v".
+    if lower_version == Some(upper_version) {
+        return format!("=={upper_version}");
+    }
+    // 3. Both bounds inclusive.
+    if lower_inclusive && upper_inclusive {
+        return match lower_version {
+            Some(lv) => format!("{lv}..{upper_version}"),
+            None => format!("<={upper_version}"),
+        };
+    }
+    // 4. The "superset" form: [v, v.next()) prints as just "v".
+    if lower_inclusive && !upper_inclusive {
+        if let Some(lv) = lower_version {
+            if &lv.bump() == upper_version {
+                return lv.to_string();
+            }
+        }
+    }
+    // 5. General case: lower string followed by upper string.
+    let lower_str = match lower {
+        Bound::Unbounded => String::new(),
+        Bound::Included(v) => format!("{v}+"),
+        Bound::Excluded(v) => format!(">{v}"),
+    };
+    let upper_str = if upper_inclusive {
+        format!("<={upper_version}")
+    } else {
+        format!("<{upper_version}")
+    };
+    format!("{lower_str}{upper_str}")
+}
+
 impl fmt::Display for VersionRange {
+    /// Renders in rez's compact range syntax (`3`, `3+<5`, `==1.0`, `2|6+`).
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
+        let mut first = true;
+        for (lower, upper) in self.0.iter() {
+            if !first {
+                write!(f, "|")?;
+            }
+            first = false;
+            write!(f, "{}", format_segment(lower, upper))?;
+        }
+        Ok(())
     }
 }
 
@@ -291,6 +355,19 @@ mod tests {
         assert_eq!(versions, vec![v("3"), v("4"), v("5.1")]);
         // a non-exact range has no exact versions
         assert!(VersionRange::parse("1+<2").to_versions().is_none());
+    }
+
+    #[test]
+    fn test_display_rez_format() {
+        // Compact rez range syntax, not the underlying Ranges debug format.
+        assert_eq!(VersionRange::parse("4").to_string(), "4");
+        assert_eq!(VersionRange::parse("1.0").to_string(), "1.0");
+        assert_eq!(VersionRange::parse("3+<5").to_string(), "3+<5");
+        assert_eq!(VersionRange::parse("3+").to_string(), "3+");
+        assert_eq!(VersionRange::parse("<3").to_string(), "<3");
+        assert_eq!(VersionRange::parse("==1.0.1").to_string(), "==1.0.1");
+        assert_eq!(VersionRange::parse("2|5").to_string(), "2|5");
+        assert_eq!(VersionRange::any().to_string(), "");
     }
 
     #[test]

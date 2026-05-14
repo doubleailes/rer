@@ -13,3 +13,4 @@ pub use solver::{
     solver, solver_with_packages, solver_with_packages_filtered, solver_with_packages_ordered,
 };
 pub mod resolver;
+pub mod rez_solver;
