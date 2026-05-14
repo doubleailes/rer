@@ -17,6 +17,10 @@ path = "rez_benchmark.rs"
 name = "new_solver"
 path = "new_solver.rs"
 
+[[example]]
+name = "rez_benchmark_dataset"
+path = "rez_benchmark_dataset.rs"
+
 [dependencies]
 pubgrub = { workspace = true }
 rer-version = { workspace = true }
