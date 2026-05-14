@@ -13,12 +13,15 @@
 //!
 //! # What is checked
 //!
+//! Every case must match rez exactly — this is a strict 1:1 gate:
 //! * **Solve status** must match rez (`success` ↔ solved, `failed` ↔ failed).
-//!   A mismatch is a hard failure.
-//! * For solved cases, rer's resolved package set must match rez's exactly
-//!   (ignoring order and variant index). A divergence is reported; once the
-//!   port is fully faithful, divergences become hard failures too.
+//! * For solved cases, rer's resolved package set must equal rez's exactly
+//!   (ignoring order and variant index).
 //! * A solver panic is always a hard failure.
+//!
+//! The test is `#[ignore]`d because the full release run takes minutes; it is
+//! run explicitly by the `benchmark` CI workflow (`cargo test --release ...
+//! -- --ignored`), and can be chunked locally with `BENCH_RANGE=start:end`.
 
 use rer_resolver::rez_solver::{Requirement, Solver, SolverStatus};
 use rer_resolver::PackageData;
@@ -44,6 +47,22 @@ struct BenchmarkCase {
 
 fn data_set_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../data_set")
+}
+
+/// The `[start, end)` slice of cases to run, from the `BENCH_RANGE=start:end`
+/// environment variable (default: all cases). Lets the otherwise ~9-minute
+/// release run be split across several invocations under a test timeout.
+fn bench_range(total: usize) -> (usize, usize) {
+    match std::env::var("BENCH_RANGE") {
+        Ok(spec) => {
+            let (s, e) = spec.split_once(':').expect("BENCH_RANGE must be start:end");
+            (
+                s.parse().expect("BENCH_RANGE start"),
+                e.parse::<usize>().expect("BENCH_RANGE end").min(total),
+            )
+        }
+        Err(_) => (0, total),
+    }
 }
 
 /// Load and parse a fixture file, or `None` if it does not exist yet.
@@ -100,6 +119,8 @@ fn solve(request: &[String], repo: Rc<PackageRepo>) -> Option<Vec<(String, Strin
 }
 
 #[test]
+#[ignore = "full release run takes minutes; run via the benchmark CI job or \
+            `cargo test --release -p rer-resolver --test test_rez_benchmark -- --ignored`"]
 fn test_rez_benchmark_correctness() {
     let Some(repo) = load_json::<PackageRepo>("benchmark_packages.json").map(Rc::new) else {
         eprintln!(
@@ -129,7 +150,11 @@ fn test_rez_benchmark_correctness() {
     let prev_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(|_| {}));
 
-    for (i, case) in cases.iter().enumerate() {
+    let (range_start, range_end) = bench_range(cases.len());
+    for (i, case) in cases.iter().enumerate().take(range_end).skip(range_start) {
+        if (i - range_start) % 25 == 0 {
+            eprintln!("  ... case {i}/{range_end}");
+        }
         let rez_solved = case.status == "success";
         let outcome = catch_unwind(AssertUnwindSafe(|| solve(&case.request, Rc::clone(&repo))));
 
@@ -177,7 +202,8 @@ fn test_rez_benchmark_correctness() {
     std::panic::set_hook(prev_hook);
 
     println!(
-        "exact: {exact}  divergent: {}  both-failed: {both_failed}  \
+        "range [{range_start}, {range_end})  —  \
+         exact: {exact}  divergent: {}  both-failed: {both_failed}  \
          status-mismatch: {}  panicked: {}",
         divergent.len(),
         status_mismatch.len(),
@@ -200,5 +226,10 @@ fn test_rez_benchmark_correctness() {
         panicked.is_empty(),
         "{} resolve(s) panicked the solver (indices: {panicked:?})",
         panicked.len(),
+    );
+    assert!(
+        divergent.is_empty(),
+        "{} resolve(s) solved to a different package set than rez (indices: {divergent:?})",
+        divergent.len(),
     );
 }
