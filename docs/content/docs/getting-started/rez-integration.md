@@ -226,10 +226,6 @@ solver for those resolves:
   above falls back when these are configured.
 - **Cyclic-failure detail.** Both solvers detect cycles; the human-
   readable failure message differs in wording.
-- **Variant-index parity.** The differential test currently checks
-  the resolved `(name, version)` set, not the variant index — variant
-  selection is rez-faithful by construction but is not enforced by
-  the test suite. See the [README's *Validated 1:1* note](../../../../#status).
 
 ## Sanity-checking against rez
 

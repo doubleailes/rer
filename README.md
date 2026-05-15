@@ -24,10 +24,10 @@ via PyO3 that accelerates rez resolves while leaving the rest of rez untouched.
 ### Status
 
 - ✅ **Solver** — complete and rez-faithful.
-- ✅ **Validated 1:1** against rez's bundled 188-case benchmark dataset on
-  **solve status** and the **resolved `(name, version)` set** — the
-  differential test currently does not enforce variant-index parity, only
-  same packages at the same versions.
+- ✅ **Validated 1:1** against rez's bundled 188-case benchmark dataset
+  on **solve status**, the **resolved `(name, version)` set**, **and the
+  variant index** rez picked for each. The differential test enforces all
+  three; a divergence on any is a release blocker.
 - ✅ **Fast** — see the [Benchmark](#benchmark) section below for a local
   apples-to-apples measurement against rez 3.3.0.
 - ✅ **Python bridge** — `pyrer.solve(...)` runs the ported solver (the
