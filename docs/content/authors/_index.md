@@ -1,8 +1,8 @@
 +++
 title = "Authors"
-description = "The authurs of the blog articles."
-date = 2021-04-01T08:00:00+00:00
-updated = 2021-04-01T08:00:00+00:00
+description = "The authors of rer."
+date = 2026-05-15T08:00:00+00:00
+updated = 2026-05-15T08:00:00+00:00
 draft = false
 
 # If add a new author page in this section, please add a new item,
@@ -12,7 +12,11 @@ draft = false
 #
 # Note: We use quoted keys here.
 [extra.author_pages]
-"aaran-xu" = "authors/aaran-xu.md"
+"lorenzo-montant" = "authors/lorenzo-montant.md"
+"maxim-doucet" = "authors/maxim-doucet.md"
+"philippe-llerena" = "authors/philippe-llerena.md"
+"remi-viette" = "authors/remi-viette.md"
 +++
 
-The authors of the blog articles.
+The authors of rer, mirroring the workspace `authors` list in
+[`Cargo.toml`](https://github.com/doubleailes/rer/blob/main/Cargo.toml).
