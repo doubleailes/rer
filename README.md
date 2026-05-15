@@ -99,13 +99,8 @@ for v in result.resolved_packages:
 ```
 
 `solve()` reports failures and bad input via `result.status`
-(`"solved"` / `"failed"` / `"error"`), never as a Python exception
-(except a `TypeError` if `packages` isn't a list of `PackageData` or a
-JSON string).
-
-`pyrer.solve` also still accepts the original JSON-string form
-(`pyrer.solve(["app"], json.dumps(repo_dict))`) for callers that
-prefer it; the resolution is identical.
+(`"solved"` / `"failed"` / `"error"`), never as a Python exception —
+except a `TypeError` if `packages` isn't a list of `PackageData`.
 
 ### Wiring `pyrer` behind `rez`
 

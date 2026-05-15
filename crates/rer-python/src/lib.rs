@@ -4,19 +4,13 @@
 //! Rust port of rez's own phase-based solver) against an in-memory package
 //! repository.
 //!
-//! The Python-facing API accepts the package repository as either:
-//! - a `list[PackageData]` — the ergonomic form, mirroring how `rez` carries
-//!   already-loaded packages, or
-//! - a JSON string of `{name: {version: {requires, variants}}}` — the
-//!   original form, kept so existing call sites do not have to migrate.
-//!
-//! Resolved packages come back as a list of [`ResolvedVariant`] objects with
-//! the same attribute surface a `rez.Variant` consumer expects
+//! The Python-facing API takes the package repository as a
+//! `list[PackageData]`, mirroring the shape `rez` carries already-loaded
+//! packages in. Resolved packages come back as a list of [`ResolvedVariant`]
+//! objects with the attribute surface a `rez.Variant` consumer expects
 //! (`name`, `version`, `variant_index`, `requires`, `uri`).
 
-use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
-use pyo3::types::PyAny;
 use rer_resolver::rez_solver::{PackageRepo, Requirement, ScopeError, Solver, SolverStatus};
 use std::collections::HashMap;
 use std::panic::{catch_unwind, AssertUnwindSafe};
@@ -197,22 +191,6 @@ fn packages_to_repo(packages: Vec<PackageData>) -> Result<PackageRepo, String> {
     Ok(repo)
 }
 
-/// Dispatch on the `packages` argument: a JSON string falls through to the
-/// existing serde path; a Python sequence is interpreted as
-/// `list[PackageData]`. Anything else is an error.
-fn extract_repo(packages: &Bound<'_, PyAny>) -> Result<PackageRepo, String> {
-    if let Ok(json_str) = packages.extract::<String>() {
-        serde_json::from_str(&json_str).map_err(|e| format!("invalid packages JSON: {e}"))
-    } else if let Ok(list) = packages.extract::<Vec<PackageData>>() {
-        packages_to_repo(list)
-    } else {
-        Err(
-            "packages must be a JSON string or a list of pyrer.PackageData instances"
-                .to_string(),
-        )
-    }
-}
-
 // ---------------------------------------------------------------------------
 // solve
 // ---------------------------------------------------------------------------
@@ -223,10 +201,10 @@ fn extract_repo(packages: &Bound<'_, PyAny>) -> Result<PackageRepo, String> {
 ///
 /// * `package_requests` — rez-style requirement strings, e.g.
 ///   `["python-3", "maya-2024"]`.
-/// * `packages` — either:
-///   - a `list[PackageData]` (preferred), or
-///   - a JSON string mapping `name → version → {"requires": [...],
-///     "variants": [[...]]}` (the original form, kept for compatibility).
+/// * `packages` — a `list[PackageData]`, mirroring rez's already-loaded
+///   packages. Construct each entry from a `rez.Package` (via
+///   `rez.packages.iter_package_families` etc.) — `pyrer` does not read
+///   the filesystem itself.
 /// * `filters` — Optional `(filter_type, pattern)` tuples (reserved, ignored).
 /// * `max_iterations` — Optional iteration cap (reserved, ignored).
 ///
@@ -239,23 +217,16 @@ fn extract_repo(packages: &Bound<'_, PyAny>) -> Result<PackageRepo, String> {
 #[pyo3(signature = (package_requests, packages, /, filters=None, max_iterations=None))]
 fn solve(
     package_requests: Vec<String>,
-    packages: &Bound<'_, PyAny>,
+    packages: Vec<PackageData>,
     filters: Option<Vec<(String, String)>>,
     max_iterations: Option<u32>,
-) -> PyResult<SolveResult> {
+) -> SolveResult {
     let _ = (filters, max_iterations);
     let start = Instant::now();
 
-    let repo: PackageRepo = match extract_repo(packages) {
+    let repo: PackageRepo = match packages_to_repo(packages) {
         Ok(repo) => repo,
-        Err(msg) => {
-            // Type-mismatch is the one case we raise a Python exception:
-            // the call site is wrong, not the package data.
-            if msg.starts_with("packages must be") {
-                return Err(PyTypeError::new_err(msg));
-            }
-            return Ok(SolveResult::error(msg, start));
-        }
+        Err(msg) => return SolveResult::error(msg, start),
     };
 
     // `Requirement::parse` panics on a syntactically invalid version range;
@@ -276,27 +247,27 @@ fn solve(
         // A missing top-level package family/version. rez reports this as a
         // failed resolve (not a crash), so we do too.
         Ok(Err(scope_err)) => {
-            return Ok(SolveResult {
+            return SolveResult {
                 status: "failed".to_string(),
                 resolved_packages: Vec::new(),
                 resolved: Vec::new(),
                 failure_description: Some(scope_err.to_string()),
                 solve_time_ms: start.elapsed().as_secs_f64() * 1000.0,
                 num_iterations: 0,
-            });
+            };
         }
         Err(_) => {
-            return Ok(SolveResult::error(
+            return SolveResult::error(
                 "solver panicked (an invalid request string?)".to_string(),
                 start,
-            ));
+            );
         }
     };
 
     let solve_time_ms = start.elapsed().as_secs_f64() * 1000.0;
     let num_iterations = solver.num_solves() as u32;
 
-    Ok(match solver.status() {
+    match solver.status() {
         SolverStatus::Solved => {
             let variants = solver.resolved_packages().unwrap_or_default();
             let resolved_packages: Vec<ResolvedVariant> = variants
@@ -339,7 +310,7 @@ fn solve(
             num_iterations,
         },
         other => SolveResult::error(format!("unexpected solver status: {other:?}"), start),
-    })
+    }
 }
 
 /// The `pyrer` Python module — Rez-compatible package resolver.
