@@ -39,10 +39,10 @@ include_description = false
 include_content = true
 
 [markdown]
-# Whether to do syntax highlighting.
-# Theme can be customised by setting the `highlight_theme`
-# variable to a theme supported by Zola
-highlight_code = true
+# Syntax highlighting. The old `highlight_code = true` flag was replaced
+# in newer Zola — set a theme under `[markdown.highlighting]` instead.
+[markdown.highlighting]
+theme = "catppuccin-mocha"
 
 [extra]
 # Put all your custom variables here
