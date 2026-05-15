@@ -97,6 +97,48 @@ print(result.resolved)  # [("app", "1.0.0", None), ("lib", "2.0.0", None)]
 `solve()` reports failures and bad input via `result.status`
 (`"solved"` / `"failed"` / `"error"`), never as a Python exception.
 
+### Wiring `pyrer` behind `rez`
+
+`pyrer` only does the solve; `rez` still does package discovery, env
+construction, and the whole `ResolvedContext` lifecycle. To plug
+`pyrer` in behind a normal `rez env` / `ResolvedContext` flow:
+
+1. Walk rez's package paths into the `pyrer` repo shape — once per
+   process, reusable across many solves:
+
+   ```python
+   from rez.packages import iter_package_families
+
+   def build_pyrer_repo(package_paths):
+       repo = {}
+       for fam in iter_package_families(paths=package_paths):
+           repo[fam.name] = {
+               str(pkg.version): {
+                   "requires": [str(r) for r in (pkg.requires or [])],
+                   "variants": [
+                       [str(r) for r in v] for v in (pkg.variants or [])
+                   ],
+               }
+               for pkg in fam.iter_packages()
+           }
+       return repo
+   ```
+
+2. Call `pyrer.solve(requests, json.dumps(repo))` instead of
+   `rez.solver.Solver.solve()`.
+
+3. Translate `result.resolved` back into rez `Variant` objects with
+   `rez.packages.get_package(name, version).get_variant(idx)` and feed
+   them into whatever you'd normally hand to `ResolvedContext`.
+
+The
+[Wiring `pyrer` into `rez`](https://doubleailes.github.io/rer/docs/getting-started/rez-integration/)
+guide has the full walkthrough — a minimal monkey-patch of
+`Resolver._solve`, a fallback for configs `pyrer` doesn't model yet
+(`intersection_priority`, `@early` / `@late` requires, custom
+orderers / filters), and a sanity-check loop for diffing `pyrer`
+against rez on your own repo.
+
 ## Building & testing
 
 ```bash
