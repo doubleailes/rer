@@ -1,8 +1,10 @@
 [package]
 name = "rer-version"
-version = "0.0.1"
+version = { workspace = true }
+description = "Version and range types matching rez's alphanumeric versioning."
 edition = { workspace = true }
 repository = { workspace = true }
+readme = { workspace = true }
 authors = { workspace = true }
 license-file = { workspace = true }
 
