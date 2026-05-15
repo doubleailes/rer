@@ -12,6 +12,7 @@ use crate::requirement::parser::parse_version_range;
 use crate::version::RerVersion;
 use core::fmt;
 use std::ops::Bound;
+use std::rc::Rc;
 use version_ranges::Ranges;
 
 /// A set of one or more contiguous version ranges, with rez's semantics.
@@ -19,20 +20,29 @@ use version_ranges::Ranges;
 /// Construct from a rez range string with [`VersionRange::parse`], from a
 /// single version with [`VersionRange::from_version`], or from an existing
 /// [`Ranges`] with [`VersionRange::from_ranges`].
+///
+/// The inner [`Ranges`] is wrapped in `Rc` so that a `VersionRange::clone` is
+/// a refcount bump rather than a `SmallVec` allocation. The solver clones
+/// requirements (and the ranges inside them) constantly during a solve;
+/// callgrind put `SmallVec::extend` + `Drop` at ~4 % of cycles after #66/
+/// /#67/#68/#70/#71/#72, almost entirely from these clones.
+///
+/// `PartialEq`, `Eq` and `Hash` on `Rc<T>` defer to the inner `T`, so the
+/// semantics are unchanged from the previous `Ranges<RerVersion>` field.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct VersionRange(Ranges<RerVersion>);
+pub struct VersionRange(Rc<Ranges<RerVersion>>);
 
 impl VersionRange {
     /// The "any" range — contains every version. Mirrors rez's empty-string range.
     pub fn any() -> Self {
-        VersionRange(Ranges::full())
+        VersionRange(Rc::new(Ranges::full()))
     }
 
     /// The empty range — contains no version. rez represents "empty" as `None`
     /// at the API boundary, but an empty `VersionRange` is still useful
     /// internally (e.g. as a `from_versions` accumulator).
     pub fn empty() -> Self {
-        VersionRange(Ranges::empty())
+        VersionRange(Rc::new(Ranges::empty()))
     }
 
     /// Parse a rez range string such as `"3"`, `"1+<2"`, `"==1.0"`, `"2|6+"`.
@@ -53,12 +63,12 @@ impl VersionRange {
                 Some(acc) => acc.union(&part_range),
             });
         }
-        VersionRange(range.unwrap_or_else(Ranges::full))
+        VersionRange(Rc::new(range.unwrap_or_else(Ranges::full)))
     }
 
     /// Wrap a raw [`Ranges`] (already produced by the requirement parser).
     pub fn from_ranges(ranges: Ranges<RerVersion>) -> Self {
-        VersionRange(ranges)
+        VersionRange(Rc::new(ranges))
     }
 
     /// Borrow the underlying [`Ranges`].
@@ -66,15 +76,16 @@ impl VersionRange {
         &self.0
     }
 
-    /// Consume into the underlying [`Ranges`].
+    /// Consume into the underlying [`Ranges`]. Clones the inner if the `Rc` is
+    /// shared.
     pub fn into_ranges(self) -> Ranges<RerVersion> {
-        self.0
+        Rc::unwrap_or_clone(self.0)
     }
 
     /// rez `VersionRange.from_version` with `op=None`: the "superset" range
     /// `[version, version.next())`, e.g. `3` contains `3`, `3.0`, `3.1.4`.
     pub fn from_version(version: &RerVersion) -> Self {
-        VersionRange(Ranges::between(version.clone(), version.bump()))
+        VersionRange(Rc::new(Ranges::between(version.clone(), version.bump())))
     }
 
     /// rez `VersionRange.from_versions`: a range containing exactly the given
@@ -84,17 +95,17 @@ impl VersionRange {
     /// `union` over singletons (which reallocated and was O(n²)) — this is hot,
     /// it backs `_PackageScope._update`.
     pub fn from_versions<I: IntoIterator<Item = RerVersion>>(versions: I) -> Self {
-        VersionRange(
+        VersionRange(Rc::new(
             versions
                 .into_iter()
                 .map(|v| (Bound::Included(v.clone()), Bound::Included(v)))
                 .collect(),
-        )
+        ))
     }
 
     /// rez `VersionRange.is_any`: true for the range that contains all versions.
     pub fn is_any(&self) -> bool {
-        self.0 == Ranges::full()
+        *self.0 == Ranges::full()
     }
 
     /// True if this range contains no version.
@@ -108,13 +119,13 @@ impl VersionRange {
         if result.is_empty() {
             None
         } else {
-            Some(VersionRange(result))
+            Some(VersionRange(Rc::new(result)))
         }
     }
 
     /// rez `VersionRange.union` (`|`): always succeeds.
     pub fn union(&self, other: &Self) -> Self {
-        VersionRange(self.0.union(&other.0))
+        VersionRange(Rc::new(self.0.union(&other.0)))
     }
 
     /// rez `VersionRange.inverse` (`~`): `None` if and only if this is the
@@ -123,7 +134,7 @@ impl VersionRange {
         if self.is_any() {
             None
         } else {
-            Some(VersionRange(self.0.complement()))
+            Some(VersionRange(Rc::new(self.0.complement())))
         }
     }
 
@@ -180,10 +191,10 @@ impl VersionRange {
     pub fn span(&self) -> Self {
         match self.0.bounding_range() {
             None => VersionRange::empty(),
-            Some((lower, upper)) => VersionRange(Ranges::from_range_bounds((
+            Some((lower, upper)) => VersionRange(Rc::new(Ranges::from_range_bounds((
                 clone_bound(lower),
                 clone_bound(upper),
-            ))),
+            )))),
         }
     }
 
@@ -193,7 +204,10 @@ impl VersionRange {
         self.0
             .iter()
             .map(|(lower, upper)| {
-                VersionRange(Ranges::from_range_bounds((lower.clone(), upper.clone())))
+                VersionRange(Rc::new(Ranges::from_range_bounds((
+                    lower.clone(),
+                    upper.clone(),
+                ))))
             })
             .collect()
     }
