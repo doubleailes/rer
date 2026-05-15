@@ -14,6 +14,7 @@ use super::graph::DepGraph;
 use super::requirement::{Requirement, RequirementList};
 use super::scope::{PackageScope, ScopeError, ScopeIntersect, ScopeReduce};
 use super::variant::PackageVariant;
+use super::Name;
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::rc::Rc;
 
@@ -30,7 +31,7 @@ pub struct ResolvePhase {
     /// Why the phase failed, if it did.
     failure_reason: Option<FailureReason>,
     /// `(scope_name, extracted_name) -> requirement` — every extraction so far.
-    extractions: FxHashMap<(String, String), Requirement>,
+    extractions: FxHashMap<(Name, Name), Requirement>,
     /// Indices of scopes changed since the last reduce — seeds the next reduce.
     changed_scopes_i: FxHashSet<usize>,
     /// The phase's current status.
@@ -85,7 +86,7 @@ impl ResolvePhase {
         &self,
         scopes: Vec<Rc<PackageScope>>,
         failure_reason: Option<FailureReason>,
-        extractions: FxHashMap<(String, String), Requirement>,
+        extractions: FxHashMap<(Name, Name), Requirement>,
         status: Option<SolverStatus>,
     ) -> ResolvePhase {
         let status = status.unwrap_or_else(|| {
@@ -131,8 +132,8 @@ impl ResolvePhase {
                         match scopes[i].extract() {
                             Some((scope_, extracted_request)) => {
                                 let key = (
-                                    scopes[i].package_name().to_string(),
-                                    extracted_request.name().to_string(),
+                                    Name::from(scopes[i].package_name()),
+                                    Name::from(extracted_request.name()),
                                 );
                                 extractions.insert(key, extracted_request.clone());
                                 extracted_requests.push(extracted_request);
@@ -163,13 +164,13 @@ impl ResolvePhase {
                 }
 
                 // INTERSECT extracted requests into the existing scopes.
-                let mut req_fams: FxHashSet<String> = FxHashSet::default();
+                let mut req_fams: FxHashSet<Name> = FxHashSet::default();
                 for i in 0..scopes.len() {
                     let extracted_req = match extracted_requests.get(scopes[i].package_name()) {
                         Some(req) => req.clone(),
                         None => continue,
                     };
-                    req_fams.insert(extracted_req.name().to_string());
+                    req_fams.insert(Name::from(extracted_req.name()));
 
                     let was_conflict = scopes[i].is_conflict();
                     let range = extracted_req

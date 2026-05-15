@@ -1,6 +1,7 @@
 //! Faithful port of rez's `Requirement` and `RequirementList`
 //! (`rez/src/rez/version/_requirement.py`).
 
+use super::Name;
 use rer_version::VersionRange;
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::cell::RefCell;
@@ -26,7 +27,7 @@ thread_local! {
 ///   "normal" — `negate` is purely for faithful display.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Requirement {
-    name: String,
+    name: Name,
     /// `None` only for the no-effect weak requirement `~foo`. For every other
     /// requirement the range is `Some`.
     range: Option<VersionRange>,
@@ -73,7 +74,7 @@ impl Requirement {
         let mut sep = '-';
         let (name, range) = match body.find(|c| matches!(c, '-' | '@' | '#' | '=' | '<' | '>')) {
             Some(i) => {
-                let name = body[..i].to_string();
+                let name: Name = Name::from(&body[..i]);
                 let mut req_str = &body[i..];
                 let first = req_str.chars().next().unwrap();
                 if matches!(first, '-' | '@' | '#') {
@@ -91,8 +92,8 @@ impl Requirement {
                 (name, range)
             }
             // Rare case: `~foo` is a requirement with no effect.
-            None if negate => (body.to_string(), None),
-            None => (body.to_string(), Some(VersionRange::any())),
+            None if negate => (Name::from(body), None),
+            None => (Name::from(body), Some(VersionRange::any())),
         };
 
         Requirement {
@@ -107,7 +108,7 @@ impl Requirement {
     /// Create a requirement directly from a name and range, mirroring rez's
     /// `Requirement.construct`. A `None` range yields an unversioned ("any")
     /// requirement.
-    pub fn construct(name: impl Into<String>, range: Option<VersionRange>) -> Self {
+    pub fn construct(name: impl Into<Name>, range: Option<VersionRange>) -> Self {
         Requirement {
             name: name.into(),
             range: Some(range.unwrap_or_else(VersionRange::any)),
@@ -249,11 +250,11 @@ impl fmt::Display for Requirement {
 #[derive(Debug, Clone, Default)]
 pub struct RequirementList {
     requirements: Vec<Requirement>,
-    by_name: FxHashMap<String, Requirement>,
+    by_name: FxHashMap<Name, Requirement>,
     /// `Some((existing, incoming))` if two requirements could not be merged.
     conflict: Option<(Requirement, Requirement)>,
-    names: Vec<String>,
-    conflict_names: Vec<String>,
+    names: Vec<Name>,
+    conflict_names: Vec<Name>,
 }
 
 impl RequirementList {
@@ -280,7 +281,7 @@ impl RequirementList {
         }
 
         // Build the optimised list in original request order.
-        let mut seen = FxHashSet::default();
+        let mut seen: FxHashSet<Name> = FxHashSet::default();
         for req in &requirements {
             if seen.insert(req.name.clone()) {
                 let merged = list.by_name[&req.name].clone();
@@ -307,12 +308,12 @@ impl RequirementList {
     }
 
     /// Names of the non-conflict requirements, in request order.
-    pub fn names(&self) -> &[String] {
+    pub fn names(&self) -> &[Name] {
         &self.names
     }
 
     /// Names of the conflict requirements, in request order.
-    pub fn conflict_names(&self) -> &[String] {
+    pub fn conflict_names(&self) -> &[Name] {
         &self.conflict_names
     }
 
@@ -444,7 +445,7 @@ mod tests {
         // foo and bar, in request order, foo merged to 1.5
         assert_eq!(list.requirements().len(), 2);
         assert_eq!(list.get("foo").unwrap().to_string(), "foo-1.5");
-        assert_eq!(list.names(), &["foo".to_string(), "bar".to_string()]);
+        assert_eq!(list.names(), &[Name::from("foo"), Name::from("bar")]);
         assert!(list.conflict_names().is_empty());
     }
 
@@ -466,7 +467,7 @@ mod tests {
             Requirement::parse("!bar-2"),
         ]);
         assert!(list.conflict().is_none());
-        assert_eq!(list.names(), &["foo".to_string()]);
-        assert_eq!(list.conflict_names(), &["bar".to_string()]);
+        assert_eq!(list.names(), &[Name::from("foo")]);
+        assert_eq!(list.conflict_names(), &[Name::from("bar")]);
     }
 }

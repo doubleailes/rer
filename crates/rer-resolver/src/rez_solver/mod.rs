@@ -24,6 +24,16 @@ pub mod scope;
 pub mod solver;
 pub mod variant;
 
+/// Shared, refcounted package-family name. Replaces `String` everywhere on the
+/// solver hot path so that the many `Requirement`/`PackageScope`/
+/// `PackageVariant` clones become refcount bumps instead of heap allocations.
+/// Callgrind on the rez benchmark put `String::clone` at ~2.7 % of cycles and
+/// hashbrown ops at ~10 %, much of it for these family-name keys.
+///
+/// Derefs to `&str`, and `FxHashMap<Name, V>::get(&str)` / `FxHashSet<Name>::
+/// contains(&str)` work transparently — `Rc<str>` `Borrow<str>`s.
+pub type Name = std::rc::Rc<str>;
+
 pub use context::{make_shared_cache, PackageRepo, SharedVariantCache, SolverContext};
 pub use failure::{DependencyConflict, FailureReason, SolverStatus};
 pub use phase::ResolvePhase;
