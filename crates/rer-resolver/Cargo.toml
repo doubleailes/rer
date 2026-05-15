@@ -22,3 +22,9 @@ rustc-hash = "2"
 [dev-dependencies]
 # Only the benchmark integration test deserialises fixtures.
 serde_json = { workspace = true }
+# `solver_micro` criterion bench — see `benches/solver_micro.rs`.
+criterion = "0.5.1"
+
+[[bench]]
+name = "solver_micro"
+harness = false

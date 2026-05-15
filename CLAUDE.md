@@ -17,7 +17,7 @@ cargo build                              # build all crates
 cargo test                               # all tests
 cargo test -p rer-version                # one crate
 cargo test -p rer-version test_bump      # one test (name filter)
-cargo bench                              # benchmarks (rer-version only)
+cargo bench                              # solver micro-benches (rer-resolver/solver_micro)
 cargo run --release -p examples --example rez_benchmark_dataset   # timing report
 ```
 
