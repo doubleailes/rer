@@ -45,7 +45,6 @@ Virtual workspace (root `Cargo.toml` has no `[package]`) — always use `-p <cra
 - **`rer-version`** — version & range types. `RerVersion` (rez token ordering; `Rc`-wrapped internals so clones are cheap), `VersionRange` (a faithful layer over `version_ranges::Ranges`), and a regex-based `Requirement`/`Requirements` parser. Note the solver does **not** use `rer_version::Requirement` — `rez_solver` has its own faithful `Requirement`.
 - **`rer-resolver`** — the solver. `rez_solver` is the rez port: `Solver` (phase-stack driver), `ResolvePhase`, `PackageScope`, the variant structures, `Requirement`/`RequirementList`. `PackageData` is the in-memory unit of the package repository (`PackageRepo = HashMap<family, HashMap<version, PackageData>>`); rer never reads the filesystem — the host hands the data in.
 - **`rer-python`** — PyO3 bridge. Crate lib name is `rer` (so `import rer` loads the cdylib) and ships to PyPI as `rer`; exposes `solve(requests, packages, ...)` where `packages` is the repository as JSON, returning a `SolveResult`. Built into wheels by maturin (`crates/rer-python/pyproject.toml`, no root `pyproject.toml`).
-- **`rer`** — `clap` CLI binary, currently a placeholder.
 - **`examples`** — `rez_benchmark_dataset`, a timing report; a workspace member, not a library.
 
 ## Gotchas

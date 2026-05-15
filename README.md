@@ -32,8 +32,6 @@ via PyO3 that accelerates rez resolves while leaving the rest of rez untouched.
   is version-independent; the timing is same-machine context, not a lab claim.
 - ✅ **Python bridge** — `rer.solve(...)` runs the ported solver (the
   `rer-python` crate ships to PyPI as `rer`; `pip install rer`, `import rer`).
-- 🚧 **CLI** (`rer`) — a placeholder; the build/bind/env subcommands are future
-  work.
 
 ## Workspace
 
@@ -44,7 +42,6 @@ A virtual Cargo workspace — use `-p <crate>` for crate-specific commands.
 | **`rer-version`** | `RerVersion` (rez token ordering) and `VersionRange` (rez range semantics over [`version-ranges`](https://crates.io/crates/version-ranges)). |
 | **`rer-resolver`** | The solver. `rez_solver` is the rez port — `Solver`, `ResolvePhase`, `PackageScope`, the variant structures, `Requirement`/`RequirementList`. `PackageData` is the in-memory unit of the package repository. |
 | **`rer-python`** | PyO3 bridge (Python import name `rer`, PyPI distribution `rer`), built into wheels by maturin. |
-| **`rer`** | `clap` CLI binary (placeholder). |
 | **`examples`** | `rez_benchmark_dataset` — a timing report. |
 
 `rer` works on an **in-memory package repository** (`family → version →
