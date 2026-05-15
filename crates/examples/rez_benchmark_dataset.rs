@@ -11,6 +11,13 @@
 use rer_resolver::rez_solver::{
     make_shared_cache, PackageRepo, Requirement, Solver, SolverStatus,
 };
+
+// Callgrind on this binary shows ~33 % of cycles in libc malloc/free —
+// `SmallVec` extends inside `Ranges`, per-call `FxHashMap`s in `reduce_by`,
+// hashbrown rehashes, and `String::clone`s. mimalloc's small-object path
+// outperforms glibc's `_int_malloc`/`_int_free` on exactly this workload.
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 use serde::Deserialize;
 use std::path::PathBuf;
 use std::rc::Rc;

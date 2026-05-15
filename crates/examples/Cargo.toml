@@ -12,3 +12,6 @@ path = "rez_benchmark_dataset.rs"
 rer-resolver = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+# `mimalloc` is set as the global allocator in `rez_benchmark_dataset` — see
+# the comment in that file. Workspace-pinned for a consistent version.
+mimalloc = { workspace = true }
