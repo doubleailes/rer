@@ -11,6 +11,7 @@
 use super::context::SolverContext;
 use super::requirement::Requirement;
 use super::variant::{PackageVariant, PackageVariantSlice, Reduction, SliceIntersect, SliceReduce};
+use super::Name;
 use rer_version::VersionRange;
 use std::rc::Rc;
 
@@ -57,7 +58,7 @@ pub enum ScopeReduce {
 #[derive(Debug, Clone)]
 pub struct PackageScope {
     ctx: Rc<SolverContext>,
-    package_name: String,
+    package_name: Name,
     /// For conflict/ephemeral scopes this is the defining requirement; for a
     /// normal scope it is reconstructed from `variant_slice`'s range.
     package_request: Option<Requirement>,
@@ -71,7 +72,7 @@ impl PackageScope {
     /// requirements become slice-less scopes; everything else loads a variant
     /// slice (and fails if the family/version cannot be found).
     pub fn new(package_request: Requirement, ctx: &Rc<SolverContext>) -> Result<Self, ScopeError> {
-        let package_name = package_request.name().to_string();
+        let package_name: Name = Name::from(package_request.name());
         let is_ephemeral = package_name.starts_with('.');
 
         if package_request.is_conflict() || is_ephemeral {
@@ -103,7 +104,7 @@ impl PackageScope {
             }
             None => {
                 if ctx.family_missing(&package_name) {
-                    Err(ScopeError::FamilyNotFound(package_name))
+                    Err(ScopeError::FamilyNotFound(package_name.to_string()))
                 } else {
                     Err(ScopeError::PackageNotFound(Requirement::construct(
                         package_name,

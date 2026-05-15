@@ -9,6 +9,7 @@
 
 use super::context::{PackageRepo, SolverContext};
 use super::requirement::{Requirement, RequirementList};
+use super::Name;
 use rer_version::{RerVersion, VersionRange};
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::cell::{OnceCell, RefCell};
@@ -80,7 +81,7 @@ struct VariantKey {
     neg_additional_len: i32,
     /// `(range_key, name)` for the variant's other dependencies — prefer
     /// higher versions of those, then alphabetical by name.
-    additional_key: Vec<(RangeKey, String)>,
+    additional_key: Vec<(RangeKey, Name)>,
     /// Final tiebreak; should only matter for otherwise-identical variants.
     index: Option<usize>,
 }
@@ -95,21 +96,21 @@ struct VariantKey {
 /// in-memory, so there is no lazy-load cost to defer.
 #[derive(Debug)]
 pub struct PackageVariant {
-    name: String,
+    name: Name,
     version: RerVersion,
     /// `None` for a package with no variants defined (rendered as `pkg[]`).
     index: Option<usize>,
     /// Base `requires` plus this variant's own requires, merged.
     requires: RequirementList,
     /// Non-conflict dependency family names (`requires_list.names`).
-    request_fams: FxHashSet<String>,
+    request_fams: FxHashSet<Name>,
     /// Conflict dependency family names (`requires_list.conflict_names`).
-    conflict_request_fams: FxHashSet<String>,
+    conflict_request_fams: FxHashSet<Name>,
 }
 
 impl PackageVariant {
     fn new(
-        name: String,
+        name: Name,
         version: RerVersion,
         index: Option<usize>,
         requires: RequirementList,
@@ -152,12 +153,12 @@ impl PackageVariant {
     }
 
     /// Non-conflict dependency family names.
-    pub fn request_fams(&self) -> &FxHashSet<String> {
+    pub fn request_fams(&self) -> &FxHashSet<Name> {
         &self.request_fams
     }
 
     /// Conflict dependency family names.
-    pub fn conflict_request_fams(&self) -> &FxHashSet<String> {
+    pub fn conflict_request_fams(&self) -> &FxHashSet<Name> {
         &self.conflict_request_fams
     }
 
@@ -181,7 +182,7 @@ impl std::fmt::Display for PackageVariant {
 #[derive(Debug, Clone)]
 pub struct Reduction {
     /// The reduced variant.
-    pub name: String,
+    pub name: Name,
     /// The reduced variant's version.
     pub version: RerVersion,
     /// The reduced variant's index.
@@ -295,10 +296,10 @@ fn variant_sort_key(variant: &PackageVariant, ctx: &SolverContext) -> VariantKey
         }
     }
 
-    let mut additional_key: Vec<(RangeKey, String)> = Vec::new();
+    let mut additional_key: Vec<(RangeKey, Name)> = Vec::new();
     for request in variant.requires().iter() {
         if !request.is_conflict() && !names.contains(request.name()) {
-            additional_key.push((range_sort_key(request.range()), request.name().to_string()));
+            additional_key.push((range_sort_key(request.range()), Name::from(request.name())));
         }
     }
 
@@ -336,7 +337,7 @@ struct LazyEntry {
 /// this was added).
 #[derive(Debug)]
 pub struct PackageVariantList {
-    package_name: String,
+    package_name: Name,
     repo: Rc<PackageRepo>,
     /// One entry per version, version-sorted ascending for deterministic
     /// iteration; `_PackageVariantSlice::sort_versions` re-sorts when ordering
@@ -365,7 +366,7 @@ impl PackageVariantList {
         entries.sort_by(|a, b| a.version.cmp(&b.version));
 
         Some(PackageVariantList {
-            package_name: package_name.to_string(),
+            package_name: Name::from(package_name),
             repo: Rc::clone(&ctx.repo),
             entries,
         })
@@ -383,7 +384,7 @@ impl PackageVariantList {
             }
             let mut slot = lazy.entry.borrow_mut();
             let built = slot.get_or_insert_with(|| {
-                let data = &self.repo[&self.package_name][&lazy.version_str];
+                let data = &self.repo[self.package_name.as_ref()][&lazy.version_str];
                 Rc::new(PackageEntry {
                     version: lazy.version.clone(),
                     variants: build_variants(&self.package_name, &lazy.version, data),
@@ -406,7 +407,7 @@ impl PackageVariantList {
 /// requires are just the base `requires`; otherwise each variant `i` has
 /// `requires = base requires ++ variants[i]`.
 fn build_variants(
-    name: &str,
+    name: &Name,
     version: &RerVersion,
     data: &crate::PackageData,
 ) -> Vec<Rc<PackageVariant>> {
@@ -417,7 +418,7 @@ fn build_variants(
     if data.variants.is_empty() {
         let requires = parse_all(&data.requires);
         vec![Rc::new(PackageVariant::new(
-            name.to_string(),
+            Name::clone(name),
             version.clone(),
             None,
             requires,
@@ -431,7 +432,7 @@ fn build_variants(
                 all.extend_from_slice(variant_reqs);
                 let requires = parse_all(&all);
                 Rc::new(PackageVariant::new(
-                    name.to_string(),
+                    Name::clone(name),
                     version.clone(),
                     Some(i),
                     requires,
@@ -475,28 +476,28 @@ pub enum SliceReduce {
 #[derive(Debug, Clone)]
 pub struct PackageVariantSlice {
     ctx: Rc<SolverContext>,
-    package_name: String,
+    package_name: Name,
     /// Entries are `Rc`-shared: `intersect`/`reduce_by`/`split` keep most
     /// entries unchanged, so passing them through is a refcount bump rather
     /// than a deep `Vec<Rc<PackageVariant>>` clone. `sort`/`split` of an entry
     /// go through `Rc::make_mut` (copy-on-write).
     entries: Vec<Rc<PackageEntry>>,
     /// Families already extracted from this slice as common requirements.
-    extracted_fams: FxHashSet<String>,
+    extracted_fams: FxHashSet<Name>,
     /// Whether `entries` is version-sorted (descending).
     sorted: bool,
     // Lazily-computed, entries-derived caches.
     len_cache: OnceCell<usize>,
     range_cache: OnceCell<VersionRange>,
-    common_fams_cache: OnceCell<FxHashSet<String>>,
-    fam_requires_cache: OnceCell<FxHashSet<String>>,
+    common_fams_cache: OnceCell<FxHashSet<Name>>,
+    fam_requires_cache: OnceCell<FxHashSet<Name>>,
 }
 
 impl PackageVariantSlice {
     /// Build a slice over the given entries.
     pub fn new(
         ctx: Rc<SolverContext>,
-        package_name: String,
+        package_name: Name,
         entries: Vec<Rc<PackageEntry>>,
     ) -> Self {
         PackageVariantSlice {
@@ -553,7 +554,7 @@ impl PackageVariantSlice {
     }
 
     /// Families every variant depends on (non-conflict). Mirrors `common_fams`.
-    pub fn common_fams(&self) -> &FxHashSet<String> {
+    pub fn common_fams(&self) -> &FxHashSet<Name> {
         self.common_fams_cache.get_or_init(|| {
             let mut iter = self.iter_variants();
             let Some(first) = iter.next() else {
@@ -568,7 +569,7 @@ impl PackageVariantSlice {
     }
 
     /// Every family any variant mentions, conflict or not. Mirrors `fam_requires`.
-    pub fn fam_requires(&self) -> &FxHashSet<String> {
+    pub fn fam_requires(&self) -> &FxHashSet<Name> {
         self.fam_requires_cache.get_or_init(|| {
             let mut all = FxHashSet::default();
             for variant in self.iter_variants() {
@@ -633,7 +634,7 @@ impl PackageVariantSlice {
                             .or_insert_with(|| req.conflicts_with(package_request));
                         if conflicts {
                             reductions.push(Reduction {
-                                name: variant.name().to_string(),
+                                name: Name::clone(&variant.name),
                                 version: variant.version().clone(),
                                 variant_index: variant.index(),
                                 dependency: req.clone(),
@@ -682,13 +683,13 @@ impl PackageVariantSlice {
         if !self.extractable() {
             return None;
         }
-        let extractable: FxHashSet<String> = self
+        let extractable: FxHashSet<Name> = self
             .common_fams()
             .difference(&self.extracted_fams)
             .cloned()
             .collect();
         // Sorted pick — required for deterministic solves.
-        let fam = extractable
+        let fam: Name = extractable
             .iter()
             .min()
             .expect("extractable is non-empty")
@@ -723,7 +724,7 @@ impl PackageVariantSlice {
 
         // Decide whether to look for the first variant without a common
         // dependency, or just peel off the single best variant.
-        let mut fams: FxHashSet<String> = if self.len() > 2 {
+        let mut fams: FxHashSet<Name> = if self.len() > 2 {
             let first = self.first_variant();
             first
                 .request_fams()
@@ -833,7 +834,7 @@ impl std::fmt::Display for PackageVariantSlice {
 #[derive(Debug, Default)]
 pub struct PackageVariantCache {
     /// `family -> Some(list)` if found, `family -> None` if absent.
-    variant_lists: FxHashMap<String, Option<Rc<PackageVariantList>>>,
+    variant_lists: FxHashMap<Name, Option<Rc<PackageVariantList>>>,
 }
 
 impl PackageVariantCache {
@@ -852,26 +853,35 @@ impl PackageVariantCache {
         package_name: &str,
         range: &VersionRange,
     ) -> Option<PackageVariantSlice> {
-        let list = self
-            .variant_lists
-            .entry(package_name.to_string())
-            .or_insert_with(|| PackageVariantList::new(ctx, package_name).map(Rc::new))
-            .clone()?;
-
+        let list = self.get_or_build(ctx, package_name)?;
         let entries = list.get_intersection(range)?;
         Some(PackageVariantSlice::new(
             Rc::clone(ctx),
-            package_name.to_string(),
+            Name::clone(&list.package_name),
             entries,
         ))
     }
 
     /// True if the family is known to be absent from the repository.
     pub fn family_missing(&mut self, ctx: &Rc<SolverContext>, package_name: &str) -> bool {
+        self.get_or_build(ctx, package_name).is_none()
+    }
+
+    /// Look up the cached `PackageVariantList` for `package_name`, building it
+    /// on first access. Lookup is by `&str` (`Borrow<str>` on `Rc<str>`), so a
+    /// cache hit avoids allocating a fresh `Name` key.
+    fn get_or_build(
+        &mut self,
+        ctx: &Rc<SolverContext>,
+        package_name: &str,
+    ) -> Option<Rc<PackageVariantList>> {
+        if let Some(slot) = self.variant_lists.get(package_name) {
+            return slot.clone();
+        }
+        let built = PackageVariantList::new(ctx, package_name).map(Rc::new);
         self.variant_lists
-            .entry(package_name.to_string())
-            .or_insert_with(|| PackageVariantList::new(ctx, package_name).map(Rc::new))
-            .is_none()
+            .insert(Name::from(package_name), built.clone());
+        built
     }
 }
 
