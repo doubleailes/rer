@@ -581,8 +581,20 @@ impl PackageVariantSlice {
     }
 
     /// True if a common dependency family remains to be extracted.
+    ///
+    /// `extracted_fams` is only ever populated by inserting an element of
+    /// `common_fams.difference(extracted_fams)` (in [`Self::extract`]), and
+    /// `copy_with_entries` resets it to empty. So `extracted_fams ⊆
+    /// common_fams` always holds; under that invariant
+    /// `common_fams.is_subset(extracted_fams)` is equivalent to
+    /// `common_fams.len() == extracted_fams.len()`.
+    ///
+    /// Profile data (post-#66/#67/#68/#70): the equivalent
+    /// `HashSet::is_subset` was 11.8 % of inclusive cycles — nearly half of
+    /// `extract`'s total. Replacing it with the length compare is O(1) and
+    /// shrinks the early-return path of every `extract` call to ~nothing.
     pub fn extractable(&self) -> bool {
-        !self.common_fams().is_subset(&self.extracted_fams)
+        self.common_fams().len() > self.extracted_fams.len()
     }
 
     /// Remove variants whose version falls outside `range`.
