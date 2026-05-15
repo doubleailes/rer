@@ -15,8 +15,12 @@
 //!
 //! Every case must match rez exactly — this is a strict 1:1 gate:
 //! * **Solve status** must match rez (`success` ↔ solved, `failed` ↔ failed).
-//! * For solved cases, rer's resolved package set must equal rez's exactly
-//!   (ignoring order and variant index).
+//! * For solved cases, rer's resolved package set must equal rez's exactly,
+//!   including the variant index (rez records each variant as
+//!   `"name/version/package.py[idx]"` — `[]` means "no variant", `[N]` means
+//!   variant N). A divergence on variant index — same package, same version,
+//!   different variant — is a real semantic difference (the variant's own
+//!   `requires` differ) and is treated as a test failure.
 //! * A solver panic is always a hard failure.
 //!
 //! The test is `#[ignore]`d because the full release run takes minutes; it is
@@ -75,16 +79,28 @@ fn load_json<T: for<'de> Deserialize<'de>>(name: &str) -> Option<T> {
     )
 }
 
-/// Normalize rez's resolved-package list (`"name/version/package.py[idx]"`) to
-/// a sorted, deduped `(name, version)` set.
-fn normalize_rez(entries: &[String]) -> Vec<(String, String)> {
-    let mut out: Vec<(String, String)> = entries
+/// Normalize rez's resolved-package list (`"name/version/package.py[idx]"`)
+/// to a sorted, deduped `(name, version, variant_index)` set.
+///
+/// `[]` (empty brackets) → `None`; `[N]` → `Some(N)`. Anything else is
+/// skipped as malformed.
+fn normalize_rez(entries: &[String]) -> Vec<(String, String, Option<usize>)> {
+    let mut out: Vec<(String, String, Option<usize>)> = entries
         .iter()
         .filter_map(|entry| {
             let mut parts = entry.splitn(3, '/');
             let name = parts.next()?.to_string();
             let version = parts.next()?.to_string();
-            Some((name, version))
+            let suffix = parts.next()?; // e.g. "package.py[1]" or "package.py[]"
+            let open = suffix.find('[')?;
+            let close = suffix.rfind(']')?;
+            let inner = &suffix[open + 1..close];
+            let variant_index = if inner.is_empty() {
+                None
+            } else {
+                Some(inner.parse::<usize>().ok()?)
+            };
+            Some((name, version, variant_index))
         })
         .collect();
     out.sort();
@@ -94,20 +110,21 @@ fn normalize_rez(entries: &[String]) -> Vec<(String, String)> {
 
 /// Run one resolve through the rez-faithful solver.
 ///
-/// Returns `Some(set)` of `(name, version)` pairs on success, or `None` if the
-/// solve failed (including a construction error — rez would error, but the
-/// benchmark records no error cases, so we treat it as a failed solve).
-fn solve(request: &[String], repo: Rc<PackageRepo>) -> Option<Vec<(String, String)>> {
+/// Returns `Some(set)` of `(name, version, variant_index)` triples on
+/// success, or `None` if the solve failed (including a construction error —
+/// rez would error, but the benchmark records no error cases, so we treat
+/// it as a failed solve).
+fn solve(request: &[String], repo: Rc<PackageRepo>) -> Option<Vec<(String, String, Option<usize>)>> {
     let reqs: Vec<Requirement> = request.iter().map(|s| Requirement::parse(s)).collect();
     let mut solver = Solver::new(reqs, repo).ok()?;
     solver.solve();
     match solver.status() {
         SolverStatus::Solved => {
-            let mut set: Vec<(String, String)> = solver
+            let mut set: Vec<(String, String, Option<usize>)> = solver
                 .resolved_packages()
                 .unwrap()
                 .iter()
-                .map(|v| (v.name().to_string(), v.version().to_string()))
+                .map(|v| (v.name().to_string(), v.version().to_string(), v.index()))
                 .collect();
             set.sort();
             set.dedup();
@@ -142,6 +159,7 @@ fn test_rez_benchmark_correctness() {
     let mut exact = 0usize;
     let mut both_failed = 0usize;
     let mut divergent: Vec<usize> = Vec::new();
+    let mut divergent_details: Vec<String> = Vec::new();
     let mut status_mismatch: Vec<String> = Vec::new();
     let mut panicked: Vec<usize> = Vec::new();
 
@@ -183,7 +201,17 @@ fn test_rez_benchmark_correctness() {
                 if rer_set == rez_set {
                     exact += 1;
                 } else {
+                    // Build a compact diff: which (name, version, variant)
+                    // entries are only in one side. Helps narrow down whether
+                    // the divergence is a missing package, a wrong version,
+                    // or just a different variant index.
+                    let rer_only: Vec<_> = rer_set.iter().filter(|t| !rez_set.contains(t)).collect();
+                    let rez_only: Vec<_> = rez_set.iter().filter(|t| !rer_set.contains(t)).collect();
                     divergent.push(i);
+                    divergent_details.push(format!(
+                        "case {i}: request={:?}\n  rer-only: {:?}\n  rez-only: {:?}",
+                        case.request, rer_only, rez_only
+                    ));
                 }
             }
             None => {
@@ -211,6 +239,9 @@ fn test_rez_benchmark_correctness() {
     );
     if !divergent.is_empty() {
         println!("divergent cases (solved, but a different set than rez): {divergent:?}");
+        for line in &divergent_details {
+            println!("{line}");
+        }
     }
     if !panicked.is_empty() {
         println!("cases that panicked the solver: {panicked:?}");
