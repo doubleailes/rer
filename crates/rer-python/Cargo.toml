@@ -6,7 +6,12 @@ edition = { workspace = true }
 repository = { workspace = true }
 readme = { workspace = true }
 authors = { workspace = true }
-license-file = { workspace = true }
+# Use the SPDX expression here instead of inheriting `license-file = "LICENSE"`
+# from the workspace. Maturin echoes the Cargo `license-file` into PKG-INFO as
+# `License-File: LICENSE`, but in the sdist layout the file lives at
+# `crates/rer-python/LICENSE`, not at the sdist root — PyPI rejects the
+# mismatch. `License-Expression: MIT` is enough on its own.
+license = "MIT"
 publish = false
 
 [lib]
