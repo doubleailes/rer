@@ -66,13 +66,21 @@ fn range_sort_key(range: Option<&VersionRange>) -> RangeKey {
         .collect()
 }
 
-/// The variant sort key for `VariantSelectMode.version_priority` (rez's
-/// default), from `_PackageEntry.sort`'s `key()` (`solver.py:423`).
+/// The variant sort key, ported from `_PackageEntry.sort`'s `key()` in
+/// `solver.py:423-455`. The same struct serves both
+/// [`VariantSelectMode`](super::context::VariantSelectMode) flavours: only
+/// `requested_match_count` differs between them.
 ///
-/// Field order is the comparison order; variants are then sorted with this key
-/// in *descending* order ("most correct to consume, to least").
+/// Field order is the comparison order; variants are then sorted with this
+/// key in *descending* order ("most correct to consume, to least").
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 struct VariantKey {
+    /// `intersection_priority` only — number of top-level requests this
+    /// variant satisfies. Always `0` in `version_priority`, which makes this
+    /// field uniform across all variants of the same entry in that mode and
+    /// so a no-op for the sort (the secondary keys then drive entirely).
+    /// In `intersection_priority`, this is the primary key (`solver.py:449`).
+    requested_match_count: i32,
     /// `(-request_index, range_key)` for each top-level request the variant
     /// depends on — prefer variants using higher versions of request-shared
     /// packages, earliest request weighted most.
@@ -280,8 +288,13 @@ impl PackageEntry {
     }
 }
 
-/// Compute a variant's sort key — the `version_priority` `key()` of
-/// `_PackageEntry.sort` (`solver.py:423`).
+/// Compute a variant's sort key — the `key()` of `_PackageEntry.sort`
+/// (`solver.py:423-455`). Shared between `version_priority` and
+/// `intersection_priority`: the only difference is that
+/// `intersection_priority` puts the request-match *count* in front of the
+/// rest of the key (`solver.py:449`), and we encode that by setting
+/// `requested_match_count` to the real count in that mode and to `0` (a
+/// constant across all variants of the same entry) in `version_priority`.
 fn variant_sort_key(variant: &PackageVariant, ctx: &SolverContext) -> VariantKey {
     let mut requested_key: Vec<(i32, RangeKey)> = Vec::new();
     let mut names: FxHashSet<&str> = FxHashSet::default();
@@ -303,7 +316,13 @@ fn variant_sort_key(variant: &PackageVariant, ctx: &SolverContext) -> VariantKey
         }
     }
 
+    let requested_match_count = match ctx.variant_select_mode {
+        super::context::VariantSelectMode::VersionPriority => 0,
+        super::context::VariantSelectMode::IntersectionPriority => requested_key.len() as i32,
+    };
+
     VariantKey {
+        requested_match_count,
         requested_key,
         neg_additional_len: -(additional_key.len() as i32),
         additional_key,

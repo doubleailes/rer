@@ -33,6 +33,29 @@ pub fn make_shared_cache() -> SharedVariantCache {
     Rc::new(RefCell::new(PackageVariantCache::new()))
 }
 
+/// How a [`PackageVariantSlice`] orders its variants — mirrors rez's
+/// `config.variant_select_mode` (`solver.py:59-65`).
+///
+/// rez's `_PackageEntry.sort` is shared between the two modes:
+/// `version_priority` orders by *which versions* of the requested packages
+/// each variant pulls in, while `intersection_priority` orders first by
+/// *how many* of the requested packages each variant satisfies (and only
+/// then falls back to the version_priority key for ties).
+///
+/// `VersionPriority` is rez's default and is what the differential test
+/// validates against. `IntersectionPriority` is opt-in for callers whose
+/// rezconfig has it set.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum VariantSelectMode {
+    /// rez's default. Pick the variant using the highest versions of the
+    /// packages already in the request.
+    #[default]
+    VersionPriority,
+    /// Pick the variant matching the *most* of the request, with the
+    /// version_priority key as a tiebreak (`solver.py:449`).
+    IntersectionPriority,
+}
+
 /// Context for a single solve.
 ///
 /// Mirrors the subset of rez's `Solver` state that the variant structures,
@@ -46,6 +69,9 @@ pub struct SolverContext {
     pub repo: Rc<PackageRepo>,
     /// The merged, optimised top-level request.
     pub request_list: RequirementList,
+    /// rez's `config.variant_select_mode` — selects the variant ordering
+    /// key. Defaults to `VersionPriority` to match rez out of the box.
+    pub variant_select_mode: VariantSelectMode,
     /// Per-family variant cache. Sharing it across solves of the same repo is
     /// the dominant single optimisation: it skips re-parsing every variant's
     /// requires every solve.
@@ -56,17 +82,20 @@ impl SolverContext {
     /// Build a context from a repository and an already-merged request list.
     /// A fresh, unshared variant cache is created — every solve will rebuild
     /// it from scratch. For repeated solves against the same repo, use
-    /// [`Self::new_with_cache`].
+    /// [`Self::new_with_cache`]. Uses the default variant-select mode
+    /// (`version_priority`).
     pub fn new(repo: Rc<PackageRepo>, request_list: RequirementList) -> Self {
         SolverContext {
             repo,
             request_list,
+            variant_select_mode: VariantSelectMode::default(),
             cache: make_shared_cache(),
         }
     }
 
     /// Build a context with a pre-existing variant cache. The caller is
     /// responsible for ensuring the cache was built from the same repository.
+    /// Uses the default variant-select mode (`version_priority`).
     pub fn new_with_cache(
         repo: Rc<PackageRepo>,
         request_list: RequirementList,
@@ -75,8 +104,18 @@ impl SolverContext {
         SolverContext {
             repo,
             request_list,
+            variant_select_mode: VariantSelectMode::default(),
             cache,
         }
+    }
+
+    /// Replace this context's variant-select mode. Chainable on the
+    /// builder-style constructors. Note: when sharing a cache across
+    /// solves with different modes, take care — the cached
+    /// `PackageEntry.sorted` flag depends on the mode used to compute it.
+    pub fn with_variant_select_mode(mut self, mode: VariantSelectMode) -> Self {
+        self.variant_select_mode = mode;
+        self
     }
 
     /// A slice of `name`'s variants intersected with `range`, or `None` if the

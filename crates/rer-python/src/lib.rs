@@ -10,9 +10,13 @@
 //! objects with the attribute surface a `rez.Variant` consumer expects
 //! (`name`, `version`, `variant_index`, `requires`, `uri`).
 
+use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::PyType;
-use rer_resolver::rez_solver::{PackageRepo, Requirement, ScopeError, Solver, SolverStatus};
+use rer_resolver::rez_solver::{
+    make_shared_cache, PackageRepo, Requirement, ScopeError, Solver, SolverStatus,
+    VariantSelectMode,
+};
 use std::collections::HashMap;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::rc::Rc;
@@ -249,6 +253,19 @@ fn packages_to_repo(packages: Vec<PackageData>) -> Result<PackageRepo, String> {
 // solve
 // ---------------------------------------------------------------------------
 
+/// Parse rez's `variant_select_mode` string into the Rust enum. Matches
+/// rez's string values (`"version_priority"`, `"intersection_priority"`).
+fn parse_variant_select_mode(s: &str) -> PyResult<VariantSelectMode> {
+    match s {
+        "version_priority" => Ok(VariantSelectMode::VersionPriority),
+        "intersection_priority" => Ok(VariantSelectMode::IntersectionPriority),
+        other => Err(PyValueError::new_err(format!(
+            "variant_select_mode must be 'version_priority' or 'intersection_priority' \
+             (got {other:?})"
+        ))),
+    }
+}
+
 /// Resolve `package_requests` against the given package repository.
 ///
 /// # Arguments
@@ -259,6 +276,9 @@ fn packages_to_repo(packages: Vec<PackageData>) -> Result<PackageRepo, String> {
 ///   packages. Construct each entry from a `rez.Package` (via
 ///   `rez.packages.iter_package_families` etc.) — `pyrer` does not read
 ///   the filesystem itself.
+/// * `variant_select_mode` — either `"version_priority"` (default, rez's
+///   default config) or `"intersection_priority"`. Mirrors rez's
+///   `config.variant_select_mode`.
 /// * `filters` — Optional `(filter_type, pattern)` tuples (reserved, ignored).
 /// * `max_iterations` — Optional iteration cap (reserved, ignored).
 ///
@@ -268,19 +288,28 @@ fn packages_to_repo(packages: Vec<PackageData>) -> Result<PackageRepo, String> {
 /// `result.status`, never as a Python exception. Use
 /// `result.resolved_packages` for the rich [`ResolvedVariant`] form.
 #[pyfunction]
-#[pyo3(signature = (package_requests, packages, /, filters=None, max_iterations=None))]
+#[pyo3(
+    signature = (
+        package_requests, packages, /,
+        variant_select_mode="version_priority",
+        filters=None, max_iterations=None,
+    )
+)]
 fn solve(
     package_requests: Vec<String>,
     packages: Vec<PackageData>,
+    variant_select_mode: &str,
     filters: Option<Vec<(String, String)>>,
     max_iterations: Option<u32>,
-) -> SolveResult {
+) -> PyResult<SolveResult> {
     let _ = (filters, max_iterations);
     let start = Instant::now();
 
+    let mode = parse_variant_select_mode(variant_select_mode)?;
+
     let repo: PackageRepo = match packages_to_repo(packages) {
         Ok(repo) => repo,
-        Err(msg) => return SolveResult::error(msg, start),
+        Err(msg) => return Ok(SolveResult::error(msg, start)),
     };
 
     // `Requirement::parse` panics on a syntactically invalid version range;
@@ -291,7 +320,8 @@ fn solve(
             .iter()
             .map(|s| Requirement::parse(s))
             .collect();
-        let mut solver = Solver::new(reqs, Rc::new(repo))?;
+        let mut solver =
+            Solver::new_with_options(reqs, Rc::new(repo), make_shared_cache(), mode)?;
         solver.solve();
         Ok::<Solver, ScopeError>(solver)
     }));
@@ -301,27 +331,27 @@ fn solve(
         // A missing top-level package family/version. rez reports this as a
         // failed resolve (not a crash), so we do too.
         Ok(Err(scope_err)) => {
-            return SolveResult {
+            return Ok(SolveResult {
                 status: "failed".to_string(),
                 resolved_packages: Vec::new(),
                 resolved: Vec::new(),
                 failure_description: Some(scope_err.to_string()),
                 solve_time_ms: start.elapsed().as_secs_f64() * 1000.0,
                 num_iterations: 0,
-            };
+            });
         }
         Err(_) => {
-            return SolveResult::error(
+            return Ok(SolveResult::error(
                 "solver panicked (an invalid request string?)".to_string(),
                 start,
-            );
+            ));
         }
     };
 
     let solve_time_ms = start.elapsed().as_secs_f64() * 1000.0;
     let num_iterations = solver.num_solves() as u32;
 
-    match solver.status() {
+    Ok(match solver.status() {
         SolverStatus::Solved => {
             let variants = solver.resolved_packages().unwrap_or_default();
             let resolved_packages: Vec<ResolvedVariant> = variants
@@ -364,7 +394,7 @@ fn solve(
             num_iterations,
         },
         other => SolveResult::error(format!("unexpected solver status: {other:?}"), start),
-    }
+    })
 }
 
 /// The `pyrer` Python module — Rez-compatible package resolver.

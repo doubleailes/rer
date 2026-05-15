@@ -222,6 +222,72 @@ def test_from_rez_missing_attribute_raises_attributeerror():
         pyrer.PackageData.from_rez(NotAPackage())
 
 
+# ---------------------------------------------------------------------------
+# variant_select_mode — rez's intersection_priority vs version_priority
+# ---------------------------------------------------------------------------
+
+
+def test_variant_select_mode_default_is_version_priority():
+    """No-kwarg solve is the same as variant_select_mode='version_priority'."""
+    packages = [
+        _pkg("python", "3.10.0"),
+        _pkg("python", "3.11.0"),
+        _pkg("maya", "2024.0", variants=[["python-3.10"], ["python-3.11"]]),
+    ]
+    a = pyrer.solve(["maya"], packages)
+    b = pyrer.solve(["maya"], packages, variant_select_mode="version_priority")
+    assert a.resolved == b.resolved
+
+
+def test_variant_select_mode_intersection_priority_changes_pick():
+    """intersection_priority prefers the variant matching MORE of the request,
+    even if it pins a lower version.
+
+    Request: [maya, python-3, qt-5]
+    Variants of maya-2024:
+      [python-3.11]                — matches 1 (python), at higher version
+      [python-3.10, qt-5]          — matches 2 (python + qt), at lower python
+
+    version_priority's sort breaks on the python comparison FIRST (both
+    variants share `python` in `requested_key`; 3.11 > 3.10) — variant 0
+    wins before qt is even considered.
+
+    intersection_priority's primary key is the match count itself (2 > 1) —
+    variant 1 wins.
+    """
+    packages = [
+        _pkg("python", "3.10.0"),
+        _pkg("python", "3.11.0"),
+        _pkg("qt", "5.15.0"),
+        _pkg(
+            "maya",
+            "2024.0",
+            variants=[
+                ["python-3.11"],
+                ["python-3.10", "qt-5"],
+            ],
+        ),
+    ]
+    request = ["maya", "python-3", "qt-5"]
+    vp = pyrer.solve(request, packages, variant_select_mode="version_priority")
+    ip = pyrer.solve(request, packages, variant_select_mode="intersection_priority")
+    assert vp.status == "solved"
+    assert ip.status == "solved"
+
+    vp_maya = next(v for v in vp.resolved_packages if v.name == "maya")
+    ip_maya = next(v for v in ip.resolved_packages if v.name == "maya")
+    assert vp_maya.variant_index == 0, "version_priority picks the higher-python variant"
+    assert ip_maya.variant_index == 1, "intersection_priority picks the wider-match variant"
+
+
+def test_variant_select_mode_invalid_raises_valueerror():
+    """An unknown mode string is a user error — raise."""
+    import pytest
+
+    with pytest.raises(ValueError, match="variant_select_mode"):
+        pyrer.solve(["foo"], [_pkg("foo", "1.0.0")], variant_select_mode="nope")
+
+
 def test_from_rez_used_in_solve():
     """End-to-end: from_rez → solve produces the same result as constructor."""
 

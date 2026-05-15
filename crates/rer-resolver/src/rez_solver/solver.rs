@@ -5,7 +5,7 @@
 //! next step pops and archives it, then resumes the alternative phase beneath
 //! (the "without selection" half produced by an earlier `split`).
 
-use super::context::{SharedVariantCache, SolverContext};
+use super::context::{SharedVariantCache, SolverContext, VariantSelectMode};
 use super::failure::{FailureReason, SolverStatus};
 use super::phase::ResolvePhase;
 use super::requirement::{Requirement, RequirementList};
@@ -49,13 +49,39 @@ impl Solver {
     /// The caller is responsible for ensuring that `cache` was built from the
     /// same `repo`. A cache memoises both "family present?" and the parsed
     /// `PackageVariantList` for each family — both of which are wrong against
-    /// a different repository.
+    /// a different repository. Uses the default variant-select mode
+    /// (`version_priority`); for `intersection_priority`, use
+    /// [`Self::new_with_options`].
     pub fn new_with_cache(
         package_requests: Vec<Requirement>,
         repo: Rc<PackageRepo>,
         cache: SharedVariantCache,
     ) -> Result<Self, ScopeError> {
+        Self::new_with_options(
+            package_requests,
+            repo,
+            cache,
+            VariantSelectMode::default(),
+        )
+    }
+
+    /// Create a solver with full control over both the shared cache and the
+    /// variant-select mode. Use this when you need `intersection_priority`
+    /// or when wiring rez's `config.variant_select_mode` through.
+    pub fn new_with_options(
+        package_requests: Vec<Requirement>,
+        repo: Rc<PackageRepo>,
+        cache: SharedVariantCache,
+        variant_select_mode: VariantSelectMode,
+    ) -> Result<Self, ScopeError> {
         let request_list = RequirementList::new(package_requests);
+
+        let build_ctx = |repo: Rc<PackageRepo>, request_list: RequirementList| -> Rc<SolverContext> {
+            Rc::new(
+                SolverContext::new_with_cache(repo, request_list, Rc::clone(&cache))
+                    .with_variant_select_mode(variant_select_mode),
+            )
+        };
 
         // A conflicting request fails immediately, with no scopes.
         if let Some((req1, req2)) = request_list.conflict() {
@@ -64,7 +90,7 @@ impl Solver {
                     dependency: req1.clone(),
                     conflicting_request: req2.clone(),
                 }]);
-            let ctx = Rc::new(SolverContext::new_with_cache(repo, request_list, cache));
+            let ctx = build_ctx(repo, request_list);
             let phase = ResolvePhase::failed(&ctx, failure);
             return Ok(Solver {
                 ctx,
@@ -74,7 +100,7 @@ impl Solver {
             });
         }
 
-        let ctx = Rc::new(SolverContext::new_with_cache(repo, request_list, cache));
+        let ctx = build_ctx(repo, request_list);
         let phase = ResolvePhase::new(&ctx)?;
         Ok(Solver {
             ctx,
