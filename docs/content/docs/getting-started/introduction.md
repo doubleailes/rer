@@ -72,6 +72,9 @@ builds the environment, and manages contexts. rer just does the solving.
 - **[Wiring `pyrer` into `rez` →](../rez-integration/)** — how to plug
   `pyrer` in behind a normal `rez env` / `ResolvedContext` flow, with a
   minimal shim and the caveats.
+- **[Stability commitments →](../../engineering/stability/)** — what 1.0
+  commits us to (supported Pythons, supported rez range, semver scope,
+  what's modelled and what's not).
 - **[Engineering notes →](../../engineering/)** — design decisions and
   measurements behind the port (e.g. why some rez optimisations are
   intentionally absent).
