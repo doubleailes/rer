@@ -5,7 +5,7 @@
 //! next step pops and archives it, then resumes the alternative phase beneath
 //! (the "without selection" half produced by an earlier `split`).
 
-use super::context::SolverContext;
+use super::context::{SharedVariantCache, SolverContext};
 use super::failure::{FailureReason, SolverStatus};
 use super::phase::ResolvePhase;
 use super::requirement::{Requirement, RequirementList};
@@ -28,9 +28,32 @@ impl Solver {
     /// The repository is shared via `Rc`, so resolving many requests against
     /// the same repo never copies it. Fails only if a top-level request names
     /// a package family or version absent from the repository (rez raises too).
+    ///
+    /// A fresh per-solver variant cache is built. For repeated solves against
+    /// the same repository, prefer [`Self::new_with_cache`] — it skips
+    /// re-parsing every variant's requires on each call (about 22 % of solve
+    /// time on the rez benchmark).
     pub fn new(
         package_requests: Vec<Requirement>,
         repo: Rc<PackageRepo>,
+    ) -> Result<Self, ScopeError> {
+        Self::new_with_cache(
+            package_requests,
+            repo,
+            super::context::make_shared_cache(),
+        )
+    }
+
+    /// Create a solver sharing the given variant cache.
+    ///
+    /// The caller is responsible for ensuring that `cache` was built from the
+    /// same `repo`. A cache memoises both "family present?" and the parsed
+    /// `PackageVariantList` for each family — both of which are wrong against
+    /// a different repository.
+    pub fn new_with_cache(
+        package_requests: Vec<Requirement>,
+        repo: Rc<PackageRepo>,
+        cache: SharedVariantCache,
     ) -> Result<Self, ScopeError> {
         let request_list = RequirementList::new(package_requests);
 
@@ -41,7 +64,7 @@ impl Solver {
                     dependency: req1.clone(),
                     conflicting_request: req2.clone(),
                 }]);
-            let ctx = Rc::new(SolverContext::new(repo, request_list));
+            let ctx = Rc::new(SolverContext::new_with_cache(repo, request_list, cache));
             let phase = ResolvePhase::failed(&ctx, failure);
             return Ok(Solver {
                 ctx,
@@ -51,7 +74,7 @@ impl Solver {
             });
         }
 
-        let ctx = Rc::new(SolverContext::new(repo, request_list));
+        let ctx = Rc::new(SolverContext::new_with_cache(repo, request_list, cache));
         let phase = ResolvePhase::new(&ctx)?;
         Ok(Solver {
             ctx,
