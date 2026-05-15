@@ -24,7 +24,7 @@ pub mod scope;
 pub mod solver;
 pub mod variant;
 
-pub use context::{PackageRepo, SolverContext};
+pub use context::{make_shared_cache, PackageRepo, SharedVariantCache, SolverContext};
 pub use failure::{DependencyConflict, FailureReason, SolverStatus};
 pub use phase::ResolvePhase;
 pub use requirement::{Requirement, RequirementList};
