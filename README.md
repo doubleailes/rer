@@ -82,20 +82,30 @@ cd crates/rer-python && maturin develop
 ```
 
 ```python
-import json, pyrer
+import pyrer
 
-repo = {
-    "app": {"1.0.0": {"requires": ["lib-2"], "variants": []}},
-    "lib": {"1.0.0": {"requires": [], "variants": []},
-            "2.0.0": {"requires": [], "variants": []}},
-}
-result = pyrer.solve(["app"], json.dumps(repo))
-print(result.status)    # "solved"
-print(result.resolved)  # [("app", "1.0.0", None), ("lib", "2.0.0", None)]
+packages = [
+    pyrer.PackageData("app", "1.0.0", requires=["lib-2"]),
+    pyrer.PackageData("lib", "1.0.0"),
+    pyrer.PackageData("lib", "2.0.0"),
+]
+result = pyrer.solve(["app"], packages)
+
+print(result.status)                         # "solved"
+for v in result.resolved_packages:
+    print(v.name, v.version, v.variant_index, v.uri)
+# app 1.0.0 None app/1.0.0/package.py
+# lib 2.0.0 None lib/2.0.0/package.py
 ```
 
 `solve()` reports failures and bad input via `result.status`
-(`"solved"` / `"failed"` / `"error"`), never as a Python exception.
+(`"solved"` / `"failed"` / `"error"`), never as a Python exception
+(except a `TypeError` if `packages` isn't a list of `PackageData` or a
+JSON string).
+
+`pyrer.solve` also still accepts the original JSON-string form
+(`pyrer.solve(["app"], json.dumps(repo_dict))`) for callers that
+prefer it; the resolution is identical.
 
 ### Wiring `pyrer` behind `rez`
 
@@ -103,33 +113,32 @@ print(result.resolved)  # [("app", "1.0.0", None), ("lib", "2.0.0", None)]
 construction, and the whole `ResolvedContext` lifecycle. To plug
 `pyrer` in behind a normal `rez env` / `ResolvedContext` flow:
 
-1. Walk rez's package paths into the `pyrer` repo shape — once per
-   process, reusable across many solves:
+1. Walk rez's package paths into `pyrer.PackageData` objects — once
+   per process, reusable across many solves:
 
    ```python
+   import pyrer
    from rez.packages import iter_package_families
 
-   def build_pyrer_repo(package_paths):
-       repo = {}
+   def build_pyrer_packages(package_paths):
        for fam in iter_package_families(paths=package_paths):
-           repo[fam.name] = {
-               str(pkg.version): {
-                   "requires": [str(r) for r in (pkg.requires or [])],
-                   "variants": [
-                       [str(r) for r in v] for v in (pkg.variants or [])
-                   ],
-               }
-               for pkg in fam.iter_packages()
-           }
-       return repo
+           for pkg in fam.iter_packages():
+               yield pyrer.PackageData(
+                   name=fam.name,
+                   version=str(pkg.version),
+                   requires=[str(r) for r in (pkg.requires or [])],
+                   variants=[[str(r) for r in v] for v in (pkg.variants or [])],
+               )
    ```
 
-2. Call `pyrer.solve(requests, json.dumps(repo))` instead of
-   `rez.solver.Solver.solve()`.
+2. Call `pyrer.solve(requests, list(build_pyrer_packages(paths)))`
+   instead of `rez.solver.Solver.solve()`.
 
-3. Translate `result.resolved` back into rez `Variant` objects with
-   `rez.packages.get_package(name, version).get_variant(idx)` and feed
-   them into whatever you'd normally hand to `ResolvedContext`.
+3. Read `result.resolved_packages` — each entry already has `.name`,
+   `.version`, `.variant_index`, `.requires` and a rez-shaped `.uri`.
+   If a downstream consumer needs the full rez `Variant` (for
+   `commands`, `tools`, etc.), look it up with
+   `rez.packages.get_package(rv.name, rv.version).get_variant(rv.variant_index or 0)`.
 
 The
 [Wiring `pyrer` into `rez`](https://doubleailes.github.io/rer/docs/getting-started/rez-integration/)

@@ -29,39 +29,48 @@ pip install pyrer
 ### Resolve
 
 ```python
-import json, pyrer
+import pyrer
 
-repo = {
-    "app": {"1.0.0": {"requires": ["lib-2"], "variants": []}},
-    "lib": {
-        "1.0.0": {"requires": [], "variants": []},
-        "2.0.0": {"requires": [], "variants": []},
-    },
-}
+packages = [
+    pyrer.PackageData("app", "1.0.0", requires=["lib-2"]),
+    pyrer.PackageData("lib", "1.0.0"),
+    pyrer.PackageData("lib", "2.0.0"),
+]
 
-result = pyrer.solve(["app"], json.dumps(repo))
-print(result.status)    # "solved"
-print(result.resolved)  # [("app", "1.0.0", None), ("lib", "2.0.0", None)]
+result = pyrer.solve(["app"], packages)
+print(result.status)        # "solved"
+for v in result.resolved_packages:
+    print(v.name, v.version, v.variant_index, v.uri)
+# app 1.0.0 None app/1.0.0/package.py
+# lib 2.0.0 None lib/2.0.0/package.py
 ```
 
-`pyrer.solve(requests, packages)` takes:
+`pyrer.solve(package_requests, packages)` takes:
 
-- `requests` — a list of rez-style requirement strings, e.g.
+- `package_requests` — a list of rez-style requirement strings, e.g.
   `["python-3", "maya-2024"]`.
-- `packages` — the package repository as a JSON object mapping
-  `name -> version -> {"requires": [...], "variants": [[...]]}`. This is
-  the data rez has already loaded; `rer` does not read the filesystem.
+- `packages` — either:
+  - a `list[pyrer.PackageData]` (preferred), or
+  - a JSON string mapping `name -> version -> {"requires": [...],
+    "variants": [[...]]}` (kept for legacy callers).
+
+  The data is the host (rez)'s already-loaded packages; `rer` does not
+  read the filesystem itself.
 
 It returns a `SolveResult` with:
 
 - `status` — `"solved"`, `"failed"` (a real resolve conflict), or
   `"error"` (bad input).
-- `resolved` — list of `(name, version, variant_index)` tuples.
+- `resolved_packages` — list of `pyrer.ResolvedVariant` objects with
+  `name`, `version`, `variant_index`, `requires`, and a rez-shaped
+  `uri` (`"name/version/package.py[idx]"`).
+- `resolved` — same resolution as `(name, version, variant_index)`
+  tuples, kept for callers that prefer the simpler shape.
 - `failure_description` — populated on `"failed"` / `"error"`.
 - `solve_time_ms`, `num_iterations` — timing and solver-step counts.
 
 Failures and bad input are reported via `status`, never as Python
-exceptions.
+exceptions (except `TypeError` if `packages` is the wrong type).
 
 ## From Rust
 
