@@ -254,29 +254,44 @@ impl ResolvePhase {
 
             // REDUCE: build the pending (x, y) reduction pairs — "reduce
             // scope[x] by scope[y].package_request".
+            //
+            // We pre-filter pairs where scope[x]'s variants never mention
+            // scope[y]'s family: `reduce_by` would hit `fam_requires().contains`
+            // and short-circuit anyway. On the rez 188-case benchmark this is
+            // 98.5 % of pairs, so skipping at generation time avoids tens of
+            // millions of function-call round-trips.
             let mut pending_set: FxHashSet<(usize, usize)> = FxHashSet::default();
+            let maybe_push = |pending: &mut FxHashSet<(usize, usize)>,
+                              scopes: &[Rc<PackageScope>],
+                              x: usize,
+                              y: usize| {
+                if x != y && scopes[x].fam_requires_contains(scopes[y].package_name()) {
+                    pending.insert((x, y));
+                }
+            };
+
             // existing scopes reduce against changed scopes
             for x in 0..prev_num_scopes {
                 for &y in &changed_scopes_i {
-                    pending_set.insert((x, y));
+                    maybe_push(&mut pending_set, &scopes, x, y);
                 }
             }
             // existing scopes reduce against newly added scopes
             for x in 0..prev_num_scopes {
                 for y in prev_num_scopes..num_scopes {
-                    pending_set.insert((x, y));
+                    maybe_push(&mut pending_set, &scopes, x, y);
                 }
             }
             // newly added scopes reduce against all scopes
             for x in prev_num_scopes..num_scopes {
                 for y in 0..num_scopes {
-                    pending_set.insert((x, y));
+                    maybe_push(&mut pending_set, &scopes, x, y);
                 }
             }
             // widened scopes reduce against all scopes
             for &x in &widened_scopes_i {
                 for y in 0..num_scopes {
-                    pending_set.insert((x, y));
+                    maybe_push(&mut pending_set, &scopes, x, y);
                 }
             }
 
@@ -307,8 +322,11 @@ impl ResolvePhase {
                     ScopeReduce::Reduced(new_scope) => {
                         scopes[x] = Rc::new(new_scope);
                         // Every other scope must reduce against the narrower x.
+                        // Same family filter as above: skip scopes that don't
+                        // depend on x's family.
+                        let x_name = scopes[x].package_name().to_string();
                         for j in 0..num_scopes {
-                            if j != x {
+                            if j != x && scopes[j].fam_requires_contains(&x_name) {
                                 pending.push((j, x));
                             }
                         }

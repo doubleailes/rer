@@ -220,6 +220,25 @@ impl PackageScope {
         }
     }
 
+    /// True if any variant in this scope depends on `family_name` (either as a
+    /// normal or a conflict requirement). False for conflict/ephemeral scopes,
+    /// which carry no variants.
+    ///
+    /// The phase loop uses this to filter `(x, y)` reduction pairs at
+    /// generation time — when scope `x`'s variants never mention `y`'s family,
+    /// the corresponding `reduce_by` call would short-circuit anyway. Skipping
+    /// the call entirely avoids the function-call overhead, which adds up at
+    /// the call volumes the solver hits (tens of millions per benchmark).
+    pub fn fam_requires_contains(&self, family_name: &str) -> bool {
+        if self.is_conflict() || self.is_ephemeral {
+            return false;
+        }
+        self.variant_slice
+            .as_ref()
+            .map(|s| s.fam_requires().contains(family_name))
+            .unwrap_or(false)
+    }
+
     /// Reduce this scope by a package request — remove variants whose
     /// dependencies conflict with it. Conflict/ephemeral scopes have no
     /// variants and are returned unchanged.
