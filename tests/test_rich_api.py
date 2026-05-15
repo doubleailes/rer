@@ -135,3 +135,110 @@ def test_solveresult_repr_uses_resolved_packages_count():
     result = pyrer.solve(["foo"], [_pkg("foo", "1.0.0")])
     r = repr(result)
     assert "SolveResult" in r and "1 packages" in r
+
+
+# ---------------------------------------------------------------------------
+# PackageData.from_rez — duck-typed convenience for rez integration
+# ---------------------------------------------------------------------------
+
+
+def test_from_rez_plain_attributes():
+    """Anything duck-typed with name/version/requires/variants works."""
+
+    class Pkg:
+        name = "maya"
+        version = "2024.0"
+        requires = ["python-3"]
+        variants = [["python-3.10"], ["python-3.11"]]
+
+    pd = pyrer.PackageData.from_rez(Pkg())
+    assert pd.name == "maya"
+    assert pd.version == "2024.0"
+    assert pd.requires == ["python-3"]
+    assert pd.variants == [["python-3.10"], ["python-3.11"]]
+
+
+def test_from_rez_none_collections_become_empty():
+    """rez packages with no requires / no variants come through as `None`."""
+
+    class Pkg:
+        name = "foo"
+        version = "1.0.0"
+        requires = None
+        variants = None
+
+    pd = pyrer.PackageData.from_rez(Pkg())
+    assert pd.requires == []
+    assert pd.variants == []
+
+
+def test_from_rez_stringifies_requirement_objects():
+    """rez's `Requirement` objects are not strings — they render via __str__."""
+
+    class FakeReq:
+        def __init__(self, s):
+            self._s = s
+
+        def __str__(self):
+            return self._s
+
+    class Pkg:
+        name = "tool"
+        version = "1.0.0"
+        requires = [FakeReq("python-3"), FakeReq("qt-5")]
+        variants = [[FakeReq("linux"), FakeReq("python-3.10")]]
+
+    pd = pyrer.PackageData.from_rez(Pkg())
+    assert pd.requires == ["python-3", "qt-5"]
+    assert pd.variants == [["linux", "python-3.10"]]
+
+
+def test_from_rez_stringifies_version():
+    """rez's `Version` is not a `str`; from_rez calls `str(version)` for us."""
+
+    class V:
+        def __str__(self):
+            return "2024.0"
+
+    class Pkg:
+        name = "maya"
+        version = V()
+        requires = None
+        variants = None
+
+    pd = pyrer.PackageData.from_rez(Pkg())
+    assert pd.version == "2024.0"
+
+
+def test_from_rez_missing_attribute_raises_attributeerror():
+    """A non-Package object missing one of the four attributes is a user bug."""
+    import pytest
+
+    class NotAPackage:
+        name = "x"
+        # no `version`, no `requires`, no `variants`
+
+    with pytest.raises(AttributeError):
+        pyrer.PackageData.from_rez(NotAPackage())
+
+
+def test_from_rez_used_in_solve():
+    """End-to-end: from_rez → solve produces the same result as constructor."""
+
+    class Pkg:
+        def __init__(self, name, version, requires=None, variants=None):
+            self.name = name
+            self.version = version
+            self.requires = requires
+            self.variants = variants
+
+    fakes = [
+        Pkg("app", "1.0.0", requires=["lib-2"]),
+        Pkg("lib", "1.0.0"),
+        Pkg("lib", "2.0.0"),
+    ]
+    packages = [pyrer.PackageData.from_rez(p) for p in fakes]
+    result = pyrer.solve(["app"], packages)
+    assert result.status == "solved"
+    names = {v.name for v in result.resolved_packages}
+    assert names == {"app", "lib"}
