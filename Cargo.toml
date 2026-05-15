@@ -3,7 +3,7 @@ members = ["crates/*"]
 resolver = "2"
 
 [workspace.package]
-version = "0.1.0-rc.5"
+version = "0.1.0-rc.6"
 authors = [
     "Lorenzo Montant <lo.montant.pro@gmail.com>",
     "Maxim Doucet <maxim.doucet@gmail.com>",
@@ -23,6 +23,6 @@ lazy_static = "1.5.0"
 rand = "0.8.5"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-rer-version = { path = "crates/rer-version", version = "0.1.0-rc.5" }
-rer-resolver = { path = "crates/rer-resolver", version = "0.1.0-rc.5" }
+rer-version = { path = "crates/rer-version", version = "0.1.0-rc.6" }
+rer-resolver = { path = "crates/rer-resolver", version = "0.1.0-rc.6" }
 pyo3 = { version = "0.23.5", features = ["extension-module"] }
