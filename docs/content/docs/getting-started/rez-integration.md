@@ -187,9 +187,15 @@ def _pyrer_resolve(self):
     if self.package_filter or self.package_orderers:
         return _original_resolve(self)
 
+    from rez.config import config as _rez_config
+
     packages = list(build_pyrer_packages(self.package_paths))
     requests = [str(r) for r in self.package_requests]
-    result = pyrer.solve(requests, packages)
+    result = pyrer.solve(
+        requests,
+        packages,
+        variant_select_mode=_rez_config.variant_select_mode,
+    )
 
     if result.status != "solved":
         return _original_resolve(self)  # let rez produce the canonical failure
@@ -215,9 +221,6 @@ through `pyrer` for the solve.
 by it — if your studio depends on any of these, fall back to rez's
 solver for those resolves:
 
-- **`VariantSelectMode::intersection_priority`.** `pyrer` implements
-  rez's default `version_priority` only; see
-  [issue #63](https://github.com/doubleailes/rer/issues/63).
 - **`@early` / `@late` binding requires.** `pyrer` takes already-
   parsed strings; if a package's requires depend on the resolve
   context, rez has to evaluate them first.

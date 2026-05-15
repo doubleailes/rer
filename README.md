@@ -136,9 +136,11 @@ The
 [Wiring `pyrer` into `rez`](https://doubleailes.github.io/rer/docs/getting-started/rez-integration/)
 guide has the full walkthrough — a minimal monkey-patch of
 `Resolver._solve`, a fallback for configs `pyrer` doesn't model yet
-(`intersection_priority`, `@early` / `@late` requires, custom
-orderers / filters), and a sanity-check loop for diffing `pyrer`
-against rez on your own repo.
+(`@early` / `@late` requires, custom orderers / filters), and a
+sanity-check loop for diffing `pyrer` against rez on your own repo.
+Both `version_priority` and `intersection_priority` variant-select
+modes are supported — pass `variant_select_mode="intersection_priority"`
+to `pyrer.solve` (or wire it through from `rez.config`).
 
 ## Building & testing
 

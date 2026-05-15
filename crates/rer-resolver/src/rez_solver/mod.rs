@@ -34,7 +34,9 @@ pub mod variant;
 /// contains(&str)` work transparently — `Rc<str>` `Borrow<str>`s.
 pub type Name = std::rc::Rc<str>;
 
-pub use context::{make_shared_cache, PackageRepo, SharedVariantCache, SolverContext};
+pub use context::{
+    make_shared_cache, PackageRepo, SharedVariantCache, SolverContext, VariantSelectMode,
+};
 pub use failure::{DependencyConflict, FailureReason, SolverStatus};
 pub use phase::ResolvePhase;
 pub use requirement::{Requirement, RequirementList};
