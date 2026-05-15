@@ -1,8 +1,8 @@
 +++
 title = "Docs"
-description = "The documents of the AdiDoks theme."
-date = 2025-05-01T08:00:00+00:00
-updated = 2021-05-01T08:00:00+00:00
+description = "Documentation for rer — a Rust port of rez's package solver, callable from Python."
+date = 2026-05-15T08:00:00+00:00
+updated = 2026-05-15T08:00:00+00:00
 sort_by = "weight"
 weight = 1
 template = "docs/section.html"

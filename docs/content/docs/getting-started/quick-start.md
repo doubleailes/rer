@@ -1,94 +1,145 @@
 +++
 title = "Quick Start"
-description = "One page summary of how to start a new AdiDoks project."
-date = 2021-05-01T08:20:00+00:00
-updated = 2021-05-01T08:20:00+00:00
+description = "Install rer and run your first resolve from Python or Rust."
+date = 2026-05-15T08:20:00+00:00
+updated = 2026-05-15T08:20:00+00:00
 draft = false
 weight = 20
 sort_by = "weight"
 template = "docs/page.html"
 
 [extra]
-lead = "One page summary of how to start a new AdiDoks project."
+lead = "Install rer and run your first resolve from Python or Rust."
 toc = true
 top = false
 +++
 
-## Requirements
+## From Python
 
-Before using the theme, you need to install the [Zola](https://www.getzola.org/documentation/getting-started/installation/) ≥ 0.15.0.
+The Python package is published to PyPI as `pyrer` (the name `rer` is
+taken on PyPI). The wheel is a stable-ABI build that works on
+**CPython 3.9+** on Linux, macOS, and Windows.
 
-## Run the Theme Directly
-
-```bash
-git clone https://github.com/aaranxu/adidoks.git
-cd adidoks
-zola serve
-```
-
-Visit `http://127.0.0.1:1111/` in the browser.
-
-## Installation
-
-Just earlier we showed you how to run the theme directly. Now we start to
-install the theme in an existing site step by step.
-
-### Step 1: Create a new zola site
+### Install
 
 ```bash
-zola init mysite
+pip install pyrer
 ```
 
-### Step 2: Install AdiDoks
+### Resolve
 
-Download this theme to your themes directory:
+```python
+import json, pyrer
 
-```bash
-cd mysite/themes
-git clone https://github.com/aaranxu/adidoks.git
+repo = {
+    "app": {"1.0.0": {"requires": ["lib-2"], "variants": []}},
+    "lib": {
+        "1.0.0": {"requires": [], "variants": []},
+        "2.0.0": {"requires": [], "variants": []},
+    },
+}
+
+result = pyrer.solve(["app"], json.dumps(repo))
+print(result.status)    # "solved"
+print(result.resolved)  # [("app", "1.0.0", None), ("lib", "2.0.0", None)]
 ```
 
-Or install as a submodule:
+`pyrer.solve(requests, packages)` takes:
 
-```bash
-cd mysite
-git init  # if your project is a git repository already, ignore this command
-git submodule add https://github.com/aaranxu/adidoks.git themes/adidoks
-```
+- `requests` — a list of rez-style requirement strings, e.g.
+  `["python-3", "maya-2024"]`.
+- `packages` — the package repository as a JSON object mapping
+  `name -> version -> {"requires": [...], "variants": [[...]]}`. This is
+  the data rez has already loaded; `rer` does not read the filesystem.
 
-### Step 3: Configuration
+It returns a `SolveResult` with:
 
-Enable the theme in your `config.toml` in the site derectory:
+- `status` — `"solved"`, `"failed"` (a real resolve conflict), or
+  `"error"` (bad input).
+- `resolved` — list of `(name, version, variant_index)` tuples.
+- `failure_description` — populated on `"failed"` / `"error"`.
+- `solve_time_ms`, `num_iterations` — timing and solver-step counts.
+
+Failures and bad input are reported via `status`, never as Python
+exceptions.
+
+## From Rust
+
+Add the resolver crate to your `Cargo.toml`:
 
 ```toml
-theme = "adidoks"
+[dependencies]
+rer-resolver = "0.1.0-rc.3"
 ```
 
-Or copy the `config.toml.example` from the theme directory to your project's
-root directory:
+Then call the solver against an in-memory repository:
+
+```rust
+use std::collections::HashMap;
+use std::rc::Rc;
+use rer_resolver::PackageData;
+use rer_resolver::rez_solver::{Requirement, Solver, SolverStatus};
+
+let mut repo: HashMap<String, HashMap<String, PackageData>> = HashMap::new();
+
+// app-1.0.0 requires lib-2; lib has versions 1.0.0 and 2.0.0
+repo.insert(
+    "app".into(),
+    [(
+        "1.0.0".to_string(),
+        PackageData { requires: vec!["lib-2".into()], variants: vec![] },
+    )]
+    .into_iter()
+    .collect(),
+);
+repo.insert(
+    "lib".into(),
+    [
+        ("1.0.0".to_string(), PackageData::default()),
+        ("2.0.0".to_string(), PackageData::default()),
+    ]
+    .into_iter()
+    .collect(),
+);
+
+let reqs = vec![Requirement::parse("app")];
+let mut solver = Solver::new(reqs, Rc::new(repo)).unwrap();
+solver.solve();
+
+assert_eq!(solver.status(), SolverStatus::Solved);
+// Resolves to app-1.0.0 + lib-2.0.0
+```
+
+## Building from source
+
+If you need to hack on rer, clone the repo and build it with `maturin`
+inside a virtualenv:
 
 ```bash
-cp themes/adidoks/config.toml.example config.toml
+git clone https://github.com/doubleailes/rer.git
+cd rer
+
+python -m venv .venv && . .venv/bin/activate
+pip install maturin pytest
+
+cd crates/rer-python && maturin develop   # builds + installs `pyrer`
+cd ../..
+pytest tests/test_differential.py -v      # 58 cases
 ```
 
-### Step 4: Add new content
-
-You can copy the content from the theme directory to your project:
+For the full Rust-side test suite:
 
 ```bash
-cp -r themes/adidoks/content .
+cargo build
+cargo test
 ```
 
-You can modify or add new posts in the `content/blog`, `content/docs` or other
-content directories as needed.
-
-### Step 5: Run the project
-
-Just run `zola serve` in the root path of the project:
+The `test_rez_benchmark` integration test (the 188-case rez differential)
+is `#[ignore]`d because the release run takes several minutes. It needs
+the `rez` git submodule:
 
 ```bash
-zola serve
+git submodule update --init
+python scripts/prepare_benchmark_data.py
+cargo test --release -p rer-resolver --test test_rez_benchmark -- --ignored
 ```
-
-AdiDoks will start the Zola development web server accessible by default at 
-`http://127.0.0.1:1111`. Saved changes will live reload in the browser.
