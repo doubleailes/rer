@@ -235,6 +235,13 @@ contributions, in rough order of impact on this benchmark:
 
 Compounding from 43.0 s (post-port baseline) down to 11.35 s.
 
+## Release notes & stability
+
+- [`CHANGELOG.md`](CHANGELOG.md) — what changed in every release.
+- [Stability commitments](https://doubleailes.github.io/rer/docs/engineering/stability/)
+  — what 1.0 commits us to (supported Pythons, supported rez range,
+  semver scope, what is and isn't modelled).
+
 ## License
 
 See [LICENSE](LICENSE).
