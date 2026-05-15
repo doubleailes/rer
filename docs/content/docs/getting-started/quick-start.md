@@ -69,7 +69,7 @@ Add the resolver crate to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-rer-resolver = "0.1.0-rc.3"
+rer-resolver = "0.1.0-rc.4"
 ```
 
 Then call the solver against an in-memory repository:
