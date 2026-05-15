@@ -30,8 +30,9 @@ via PyO3 that accelerates rez resolves while leaving the rest of rez untouched.
 - ✅ **Fast** — on that benchmark, on one machine, `rer` resolves all 188
   requests in ~44 s versus ~206 s for rez 3.3.0 (`rez benchmark`). Correctness
   is version-independent; the timing is same-machine context, not a lab claim.
-- ✅ **Python bridge** — `rer.solve(...)` runs the ported solver (the
-  `rer-python` crate ships to PyPI as `rer`; `pip install rer`, `import rer`).
+- ✅ **Python bridge** — `pyrer.solve(...)` runs the ported solver (the
+  `rer-python` crate ships to PyPI as `pyrer` — `rer` is taken;
+  `pip install pyrer`, `import pyrer`).
 
 ## Workspace
 
@@ -41,7 +42,7 @@ A virtual Cargo workspace — use `-p <crate>` for crate-specific commands.
 |---|---|
 | **`rer-version`** | `RerVersion` (rez token ordering) and `VersionRange` (rez range semantics over [`version-ranges`](https://crates.io/crates/version-ranges)). |
 | **`rer-resolver`** | The solver. `rez_solver` is the rez port — `Solver`, `ResolvePhase`, `PackageScope`, the variant structures, `Requirement`/`RequirementList`. `PackageData` is the in-memory unit of the package repository. |
-| **`rer-python`** | PyO3 bridge (Python import name `rer`, PyPI distribution `rer`), built into wheels by maturin. |
+| **`rer-python`** | PyO3 bridge (Python import name `pyrer`, PyPI distribution `pyrer`), built into wheels by maturin. |
 | **`examples`** | `rez_benchmark_dataset` — a timing report. |
 
 `rer` works on an **in-memory package repository** (`family → version →
@@ -81,14 +82,14 @@ cd crates/rer-python && maturin develop
 ```
 
 ```python
-import json, rer
+import json, pyrer
 
 repo = {
     "app": {"1.0.0": {"requires": ["lib-2"], "variants": []}},
     "lib": {"1.0.0": {"requires": [], "variants": []},
             "2.0.0": {"requires": [], "variants": []}},
 }
-result = rer.solve(["app"], json.dumps(repo))
+result = pyrer.solve(["app"], json.dumps(repo))
 print(result.status)    # "solved"
 print(result.resolved)  # [("app", "1.0.0", None), ("lib", "2.0.0", None)]
 ```

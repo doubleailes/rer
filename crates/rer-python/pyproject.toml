@@ -3,11 +3,13 @@ requires = ["maturin>=1.0,<2.0"]
 build-backend = "maturin"
 
 [project]
-name = "rer"
+# PyPI distribution name. `rer` is already taken on PyPI, so this ships as
+# `pyrer` and is imported in Python as `import pyrer`.
+name = "pyrer"
 # Version is taken from the Cargo manifest (workspace.package.version)
 # so the wheel filename always matches what `cargo publish` will tag.
 dynamic = ["version"]
-description = "rer (\"Rez En Rust\") — a rez-compatible package resolver, in Rust."
+description = "pyrer — rer (\"Rez En Rust\"), a rez-compatible package resolver, in Rust."
 license = "MIT"
 requires-python = ">=3.9"
 classifiers = [

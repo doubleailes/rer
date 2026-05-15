@@ -1,7 +1,7 @@
 [package]
 name = "rer-python"
 version = { workspace = true }
-description = "PyO3 bridge for the rer solver (published to PyPI as `rer`)."
+description = "PyO3 bridge for the rer solver (published to PyPI as `pyrer`)."
 edition = { workspace = true }
 repository = { workspace = true }
 readme = { workspace = true }
@@ -10,9 +10,9 @@ license-file = { workspace = true }
 publish = false
 
 [lib]
-# The Python import name — `rer-python` ships to PyPI as `rer`, so
-# `import rer` in Python loads this cdylib.
-name = "rer"
+# The Python import name — `rer-python` ships to PyPI as `pyrer`, so
+# `import pyrer` in Python loads this cdylib.
+name = "pyrer"
 crate-type = ["cdylib", "lib"]
 
 # abi3-py39 builds a single stable-ABI wheel that works on Python 3.9+,

@@ -46,7 +46,7 @@ jobs:
           python-version: '3.12'
       - name: 🧪 Rust solver tests
         run: cargo test -p rer-resolver
-      - name: 📦 Build rer Python module
+      - name: 📦 Build pyrer Python module
         run: |
           python -m venv .venv
           . .venv/bin/activate

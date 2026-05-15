@@ -29,12 +29,13 @@ python scripts/prepare_benchmark_data.py          # generates data_set/benchmark
 cargo test --release -p rer-resolver --test test_rez_benchmark -- --ignored
 ```
 
-Python / PyO3 module (`rer` — `rer-python` crate, ships to PyPI as `rer`):
+Python / PyO3 module (`pyrer` — `rer-python` crate, ships to PyPI as `pyrer`
+because `rer` is already taken on PyPI):
 
 ```bash
 python -m venv .venv && . .venv/bin/activate
 pip install maturin pytest
-cd crates/rer-python && maturin develop   # builds + installs `rer` into the venv
+cd crates/rer-python && maturin develop   # builds + installs `pyrer` into the venv
 pytest tests/test_differential.py -v      # run from repo root
 ```
 
@@ -44,7 +45,7 @@ Virtual workspace (root `Cargo.toml` has no `[package]`) — always use `-p <cra
 
 - **`rer-version`** — version & range types. `RerVersion` (rez token ordering; `Rc`-wrapped internals so clones are cheap), `VersionRange` (a faithful layer over `version_ranges::Ranges`), and a regex-based `Requirement`/`Requirements` parser. Note the solver does **not** use `rer_version::Requirement` — `rez_solver` has its own faithful `Requirement`.
 - **`rer-resolver`** — the solver. `rez_solver` is the rez port: `Solver` (phase-stack driver), `ResolvePhase`, `PackageScope`, the variant structures, `Requirement`/`RequirementList`. `PackageData` is the in-memory unit of the package repository (`PackageRepo = HashMap<family, HashMap<version, PackageData>>`); rer never reads the filesystem — the host hands the data in.
-- **`rer-python`** — PyO3 bridge. Crate lib name is `rer` (so `import rer` loads the cdylib) and ships to PyPI as `rer`; exposes `solve(requests, packages, ...)` where `packages` is the repository as JSON, returning a `SolveResult`. Built into wheels by maturin (`crates/rer-python/pyproject.toml`, no root `pyproject.toml`).
+- **`rer-python`** — PyO3 bridge. Crate lib name is `pyrer` (so `import pyrer` loads the cdylib) and ships to PyPI as `pyrer` (since `rer` is taken on PyPI); exposes `solve(requests, packages, ...)` where `packages` is the repository as JSON, returning a `SolveResult`. Built into wheels by maturin (`crates/rer-python/pyproject.toml`, no root `pyproject.toml`).
 - **`examples`** — `rez_benchmark_dataset`, a timing report; a workspace member, not a library.
 
 ## Gotchas
