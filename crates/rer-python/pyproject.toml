@@ -3,13 +3,26 @@ requires = ["maturin>=1.0,<2.0"]
 build-backend = "maturin"
 
 [project]
-name = "rer-solver"
-version = "0.0.1"
-requires-python = ">=3.8"
+name = "rer"
+# Version is taken from the Cargo manifest (workspace.package.version)
+# so the wheel filename always matches what `cargo publish` will tag.
+dynamic = ["version"]
+description = "rer (\"Rez En Rust\") — a rez-compatible package resolver, in Rust."
+license = "MIT"
+requires-python = ">=3.9"
 classifiers = [
     "Programming Language :: Rust",
     "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Development Status :: 4 - Beta",
 ]
+
+[project.urls]
+Repository = "https://github.com/doubleailes/rer"
 
 [tool.maturin]
 features = ["pyo3/extension-module"]

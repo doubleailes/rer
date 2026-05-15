@@ -1,8 +1,10 @@
 [package]
 name = "rer-resolver"
-version = "0.0.1"
+version = { workspace = true }
+description = "A faithful Rust port of rez's phase-based package solver."
 edition = { workspace = true }
 repository = { workspace = true }
+readme = { workspace = true }
 authors = { workspace = true }
 license-file = { workspace = true }
 

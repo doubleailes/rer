@@ -1,4 +1,4 @@
-"""Basic round-trip test for the rer_solver Python module.
+"""Basic round-trip test for the rer Python module.
 
 Run after ``maturin develop`` inside a virtualenv::
 
@@ -9,7 +9,7 @@ import json
 
 
 def _repo(packages):
-    """Build the JSON repository string ``rer_solver.solve`` expects.
+    """Build the JSON repository string ``rer.solve`` expects.
 
     ``packages`` maps ``name -> version -> requires-list``; this wraps each
     into the ``{"requires": [...], "variants": [...]}`` schema.
@@ -26,11 +26,11 @@ def _repo(packages):
 
 
 def main():
-    import rer_solver
+    import rer
 
     # --- 1. Successful resolve with a transitive dependency ---
     repo = _repo({"app": {"1.0.0": ["lib-2"]}, "lib": {"1.0.0": [], "2.0.0": []}})
-    result = rer_solver.solve(["app"], repo)
+    result = rer.solve(["app"], repo)
     assert result.status == "solved", (
         f"expected solved, got {result.status}: {result.failure_description}"
     )
@@ -42,7 +42,7 @@ def main():
     print("PASS: transitive resolve")
 
     # --- 2. Highest-version selection ---
-    result = rer_solver.solve(
+    result = rer.solve(
         ["foo"], _repo({"foo": {"1.0.0": [], "2.0.0": [], "1.5.0": []}})
     )
     assert result.status == "solved"
@@ -50,7 +50,7 @@ def main():
     print("PASS: highest-version selection")
 
     # --- 3. Failed resolve (conflicting requests) ---
-    result = rer_solver.solve(
+    result = rer.solve(
         ["foo-1", "foo-2"], _repo({"foo": {"1.0.0": [], "2.0.0": []}})
     )
     assert result.status == "failed", f"expected failed, got {result.status}"
@@ -60,24 +60,24 @@ def main():
 
     # --- 4. Missing top-level package -> failed (rez reports this as a
     #        failed resolve, not a crash) ---
-    result = rer_solver.solve(["nonexistent"], _repo({"foo": {"1.0.0": []}}))
+    result = rer.solve(["nonexistent"], _repo({"foo": {"1.0.0": []}}))
     assert result.status == "failed", f"expected failed, got {result.status}"
     assert result.failure_description is not None
     print("PASS: missing package -> failed")
 
     # --- 5. Empty request list ---
-    result = rer_solver.solve([], _repo({"foo": {"1.0.0": []}}))
+    result = rer.solve([], _repo({"foo": {"1.0.0": []}}))
     assert result.status == "solved"
     assert result.resolved == []
     print("PASS: empty request list")
 
     # --- 6. Invalid packages JSON -> error ---
-    result = rer_solver.solve(["foo"], "not json")
+    result = rer.solve(["foo"], "not json")
     assert result.status == "error"
     print("PASS: invalid JSON -> error")
 
     # --- 7. SolveResult repr ---
-    result = rer_solver.solve(["foo"], _repo({"foo": {"1.0.0": []}}))
+    result = rer.solve(["foo"], _repo({"foo": {"1.0.0": []}}))
     r = repr(result)
     assert "SolveResult" in r and "solved" in r
     print("PASS: SolveResult repr")

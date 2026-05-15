@@ -1,4 +1,4 @@
-//! `rer_solver` — the Python bridge to rer's rez-faithful package solver.
+//! `rer` — the Python bridge to rer's rez-faithful package solver.
 //!
 //! Exposes [`solve`], which runs [`rer_resolver::rez_solver::Solver`] (the
 //! Rust port of rez's own phase-based solver) against an in-memory package
@@ -154,9 +154,9 @@ fn solve(
     }
 }
 
-/// The `rer_solver` Python module — Rez-compatible package resolver.
+/// The `rer` Python module — Rez-compatible package resolver.
 #[pymodule]
-fn rer_solver(m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn rer(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(solve, m)?)?;
     m.add_class::<SolveResult>()?;
     Ok(())
