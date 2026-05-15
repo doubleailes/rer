@@ -55,31 +55,28 @@ The minimum integration looks like:
 
 ## Building the `pyrer` repo from `rez`
 
-`pyrer.solve()` expects an in-memory repository in the schema
-`{name: {version: {"requires": [...], "variants": [[...]]}}}` — the
-same shape rer's tests use.
-
-A minimal converter from a rez package path looks like this:
+`pyrer.solve()` accepts a Python list of `pyrer.PackageData` objects —
+one per (package, version). Build them straight off rez's loaded
+packages, no JSON serialisation needed:
 
 ```python
+import pyrer
 from rez.packages import iter_package_families
 
 
-def build_pyrer_repo(package_paths):
-    """Walk rez's package paths and produce the JSON-shaped repo pyrer wants."""
-    repo = {}
+def build_pyrer_packages(package_paths):
+    """Walk rez's package paths and yield pyrer.PackageData instances."""
     for family in iter_package_families(paths=package_paths):
-        versions = {}
         for pkg in family.iter_packages():
-            versions[str(pkg.version)] = {
-                "requires": [str(r) for r in (pkg.requires or [])],
-                "variants": [
+            yield pyrer.PackageData(
+                name=family.name,
+                version=str(pkg.version),
+                requires=[str(r) for r in (pkg.requires or [])],
+                variants=[
                     [str(r) for r in variant]
                     for variant in (pkg.variants or [])
                 ],
-            }
-        repo[family.name] = versions
-    return repo
+            )
 ```
 
 Two notes on this step:
@@ -90,63 +87,81 @@ Two notes on this step:
   typically a few seconds; on the rez 188-case benchmark it is the
   dominant pre-solve cost.
 - If you're running many resolves against the same repo (CI, batch
-  validation, a long-lived daemon), build the dict **once** and reuse
-  it. Better still, share a `pyrer.make_shared_cache()` between
-  `Solver::new_with_cache(...)` calls so even rer's internal variant
-  cache lives across solves. See the
-  [`SharedVariantCache`](https://github.com/doubleailes/rer/blob/main/crates/rer-resolver/src/rez_solver/context.rs)
-  type.
+  validation, a long-lived daemon), build the list **once** and reuse
+  it.
 
 ## Solving
 
 ```python
-import json
 import pyrer
 
-repo = build_pyrer_repo(["/sw/pkg", "/sw/site"])
-repo_json = json.dumps(repo)
+packages = list(build_pyrer_packages(["/sw/pkg", "/sw/site"]))
 
-result = pyrer.solve(["maya-2024", "nuke-14"], repo_json)
+result = pyrer.solve(["maya-2024", "nuke-14"], packages)
 
 print(result.status)        # "solved" | "failed" | "error"
 print(result.solve_time_ms) # wall-clock of just the Rust solve
-for name, version, variant_idx in result.resolved:
-    print(name, version, variant_idx)
+for variant in result.resolved_packages:
+    print(variant.name, variant.version, variant.variant_index)
+    print(variant.uri)      # "maya/2024.0/package.py[1]"
+    print(variant.requires) # merged base + variant-specific requires
 ```
 
 `status` distinguishes:
 
-- **`"solved"`** — `result.resolved` is the resolution as a list of
-  `(name, version, variant_index)` tuples. `variant_index` is `None`
-  for packages with no `variants` defined.
+- **`"solved"`** — `result.resolved_packages` is a list of
+  [`ResolvedVariant`] objects with `name`, `version`, `variant_index`,
+  `requires`, and `uri`. `variant_index` is `None` for packages with no
+  `variants` defined. The same resolution is also exposed as a list of
+  `(name, version, variant_index)` tuples on `result.resolved` for
+  callers that prefer that shape.
 - **`"failed"`** — a real resolve conflict; `result.failure_description`
   has a human-readable reason.
-- **`"error"`** — bad input (malformed repo JSON, unparseable
-  requirement string, missing top-level package).
+- **`"error"`** — bad input (malformed repo, unparseable requirement
+  string, missing top-level package).
 
-No Python exception is ever raised from `pyrer.solve()` — even a
-panic inside the Rust solver is caught and reported as `"error"`.
+No Python exception is raised from a failed or errored solve — both
+are reported via `result.status`. Only a `TypeError` is raised, and
+only when the `packages` argument is not a list of `PackageData` (or
+a JSON string — see below).
+
+### Backward compatibility: JSON string
+
+For callers that already serialise the repo as JSON, `pyrer.solve`
+still accepts that shape — `{name: {version: {"requires": [...],
+"variants": [[...]]}}}` rendered with `json.dumps`. The internals
+deserialise it into the same `PackageData` list as the new form, so
+the result is identical.
+
+```python
+import json
+result = pyrer.solve(["app"], json.dumps({"app": {"1.0.0": {...}}}))
+```
 
 ## Translating the result back to `rez`
 
-To hand the resolution back to rez (for environment construction,
-context bundling, etc.), look the resolved tuples up against rez's own
-package iterator:
+`pyrer.ResolvedVariant` objects already expose the attribute surface
+most rez consumers need (`name`, `version`, `variant_index`,
+`requires`, `uri`). If you need rez's own `Variant` object (because
+some downstream code reads attributes beyond that surface — built-in
+`commands`, `private_build_requires`, `tools`, …), look it up from
+rez:
 
 ```python
-from rez.packages import get_package, get_variant
+from rez.packages import get_package
 
 
 def resolve_to_rez_variants(result, package_paths):
-    """Turn pyrer's (name, version, variant_index) tuples into rez Variants."""
+    """Turn pyrer.ResolvedVariant objects into rez Variants."""
     variants = []
-    for name, version, idx in result.resolved:
-        pkg = get_package(name, version, paths=package_paths)
+    for rv in result.resolved_packages:
+        pkg = get_package(rv.name, rv.version, paths=package_paths)
         if pkg is None:
-            raise RuntimeError(f"package vanished after solve: {name}-{version}")
-        # idx is None for packages with no variants — rez models that
-        # as a single variant with index 0 internally.
-        variants.append(pkg.get_variant(idx if idx is not None else 0))
+            raise RuntimeError(f"package vanished after solve: {rv.name}-{rv.version}")
+        # variant_index is None for packages with no variants — rez models
+        # that as a single variant with index 0 internally.
+        idx = rv.variant_index if rv.variant_index is not None else 0
+        variants.append(pkg.get_variant(idx))
     return variants
 ```
 
@@ -174,7 +189,6 @@ The minimum viable shim — for studios with default-configured repos —
 looks roughly like:
 
 ```python
-import json
 import pyrer
 import rez.solver as _rez_solver
 import rez.resolver as _rez_resolver
@@ -187,9 +201,9 @@ def _pyrer_resolve(self):
     if self.package_filter or self.package_orderers:
         return _original_resolve(self)
 
-    repo = build_pyrer_repo(self.package_paths)
+    packages = list(build_pyrer_packages(self.package_paths))
     requests = [str(r) for r in self.package_requests]
-    result = pyrer.solve(requests, json.dumps(repo))
+    result = pyrer.solve(requests, packages)
 
     if result.status != "solved":
         return _original_resolve(self)  # let rez produce the canonical failure
@@ -240,10 +254,12 @@ resolutions:
 ```python
 from rez.resolved_context import ResolvedContext
 
+packages = list(build_pyrer_packages(["/sw/pkg"]))
+
 for request in your_real_requests:
-    rer_result = pyrer.solve(request, repo_json)
+    rer_result = pyrer.solve(request, packages)
     rez_ctx = ResolvedContext(request, package_paths=["/sw/pkg"])
-    rer_set = {(n, v) for n, v, _ in rer_result.resolved}
+    rer_set = {(v.name, v.version) for v in rer_result.resolved_packages}
     rez_set = {(v.name, str(v.version)) for v in rez_ctx.resolved_packages}
     assert rer_set == rez_set, f"diverge on {request}"
 ```
