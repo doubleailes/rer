@@ -49,13 +49,9 @@ for v in result.resolved_packages:
 
 - `package_requests` — a list of rez-style requirement strings, e.g.
   `["python-3", "maya-2024"]`.
-- `packages` — either:
-  - a `list[pyrer.PackageData]` (preferred), or
-  - a JSON string mapping `name -> version -> {"requires": [...],
-    "variants": [[...]]}` (kept for legacy callers).
-
-  The data is the host (rez)'s already-loaded packages; `rer` does not
-  read the filesystem itself.
+- `packages` — a `list[pyrer.PackageData]`. The host (rez) hands
+  these in from its already-loaded packages; `rer` does not read the
+  filesystem itself.
 
 It returns a `SolveResult` with:
 

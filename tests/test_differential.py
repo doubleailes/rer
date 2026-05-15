@@ -38,22 +38,18 @@ def _load_cases() -> list[dict]:
 ALL_CASES = _load_cases()
 
 
-def _repo_json(packages: dict) -> str:
-    """Convert a case's ``{name: {version: [deps]}}`` to the repository JSON
-    ``pyrer.solve`` expects: ``{name: {version: {requires, variants}}}``."""
-    return json.dumps(
-        {
-            name: {
-                version: {"requires": list(deps), "variants": []}
-                for version, deps in versions.items()
-            }
-            for name, versions in packages.items()
-        }
-    )
+def _packages(packages: dict) -> list:
+    """Convert a case's ``{name: {version: [deps]}}`` to the
+    ``list[pyrer.PackageData]`` ``pyrer.solve`` expects."""
+    return [
+        pyrer.PackageData(name=name, version=version, requires=list(deps))
+        for name, versions in packages.items()
+        for version, deps in versions.items()
+    ]
 
 
 def _resolved_set(result) -> set[tuple[str, str]]:
-    return {(name, version) for name, version, _idx in result.resolved}
+    return {(v.name, v.version) for v in result.resolved_packages}
 
 
 # Categories whose recorded outcomes are rez-unambiguous and authoritative.
@@ -71,7 +67,7 @@ _STRICT_CATEGORIES = frozenset(
 @pytest.mark.parametrize("case", ALL_CASES, ids=lambda c: c["id"])
 def test_rer_solver(case: dict):
     """The Rust solver runs cleanly and matches each case's recorded outcome."""
-    result = pyrer.solve(case["requests"], _repo_json(case.get("packages", {})))
+    result = pyrer.solve(case["requests"], _packages(case.get("packages", {})))
 
     # "error" means malformed input or a panic — always a real bug.
     assert result.status in ("solved", "failed"), (

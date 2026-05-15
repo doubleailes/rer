@@ -108,25 +108,16 @@ def test_resolved_variant_requires_merge_base_and_variant():
     assert "python" in names and "qt" in names
 
 
-def test_solve_still_accepts_json_string():
-    """Legacy callers passing a JSON string keep working."""
-    import json
-
-    repo = {
-        "foo": {"1.0.0": {"requires": [], "variants": []}},
-    }
-    result = pyrer.solve(["foo"], json.dumps(repo))
-    assert result.status == "solved"
-    assert len(result.resolved_packages) == 1
-    assert result.resolved_packages[0].name == "foo"
-
-
 def test_solve_wrong_packages_type_raises_typeerror():
-    """Passing nonsense as `packages` is the call site's fault — raise."""
+    """Passing nonsense as `packages` is the call site's fault — raise.
+    PyO3 produces its own TypeError when the argument isn't a list of
+    `PackageData`."""
     import pytest
 
-    with pytest.raises(TypeError, match="JSON string or a list"):
+    with pytest.raises(TypeError):
         pyrer.solve(["foo"], 42)
+    with pytest.raises(TypeError):
+        pyrer.solve(["foo"], "not a list")
 
 
 def test_solve_duplicate_packagedata_reports_error():

@@ -43,7 +43,7 @@ The minimum integration looks like:
                     │
                     ▼
 ┌────────────────────────────────────────────┐
-│ pyrer.solve(requests, json.dumps(repo))    │  ← the fast bit
+│ pyrer.solve(requests, packages)            │  ← the fast bit
 └────────────────────────────────────────────┘
                     │
                     ▼
@@ -122,21 +122,7 @@ for variant in result.resolved_packages:
 
 No Python exception is raised from a failed or errored solve — both
 are reported via `result.status`. Only a `TypeError` is raised, and
-only when the `packages` argument is not a list of `PackageData` (or
-a JSON string — see below).
-
-### Backward compatibility: JSON string
-
-For callers that already serialise the repo as JSON, `pyrer.solve`
-still accepts that shape — `{name: {version: {"requires": [...],
-"variants": [[...]]}}}` rendered with `json.dumps`. The internals
-deserialise it into the same `PackageData` list as the new form, so
-the result is identical.
-
-```python
-import json
-result = pyrer.solve(["app"], json.dumps({"app": {"1.0.0": {...}}}))
-```
+only when the `packages` argument is not a list of `PackageData`.
 
 ## Translating the result back to `rez`
 
