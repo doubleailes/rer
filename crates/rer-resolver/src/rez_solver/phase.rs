@@ -116,6 +116,13 @@ impl ResolvePhase {
         let mut scopes = self.scopes.clone();
         let mut extractions = FxHashMap::default();
         let mut changed_scopes_i = self.changed_scopes_i.clone();
+        // Per-scope "extract returned None last time and the scope hasn't been
+        // replaced since" flag. A scope's extractability only changes when its
+        // entries change, so once `extract()` returns `None` we can skip the
+        // call until intersect/reduce/widen replaces the scope. This skips
+        // the function-call round-trip on tens of millions of would-be no-op
+        // extracts per solve.
+        let mut non_extractable: Vec<bool> = vec![false; scopes.len()];
 
         // Outer loop: iteratively reduce until no more reductions are possible.
         loop {
@@ -128,6 +135,9 @@ impl ResolvePhase {
 
                 // EXTRACT: pull every common dependency from every scope.
                 for i in 0..scopes.len() {
+                    if non_extractable[i] {
+                        continue;
+                    }
                     loop {
                         match scopes[i].extract() {
                             Some((scope_, extracted_request)) => {
@@ -142,6 +152,9 @@ impl ResolvePhase {
                             None => break,
                         }
                     }
+                    // The latest scope[i] just returned `None` — record it so
+                    // the next extract pass skips it unless the scope changes.
+                    non_extractable[i] = true;
                 }
 
                 if extracted_requests.is_empty() {
@@ -198,6 +211,9 @@ impl ResolvePhase {
                             let now_conflict = scope_.is_conflict();
                             scopes[i] = Rc::new(scope_);
                             changed_scopes_i.insert(i);
+                            // Scope entries changed — common_fams may differ
+                            // now, so re-try extraction on the next pass.
+                            non_extractable[i] = false;
                             // A conflict scope that became a normal scope has
                             // *widened* — it must reduce against everything.
                             if was_conflict && !now_conflict {
@@ -216,7 +232,10 @@ impl ResolvePhase {
                     .collect();
                 for req in new_reqs {
                     match PackageScope::new(req, &self.ctx) {
-                        Ok(scope) => scopes.push(Rc::new(scope)),
+                        Ok(scope) => {
+                            scopes.push(Rc::new(scope));
+                            non_extractable.push(false);
+                        }
                         Err(err) => {
                             // rez raises here by default; the benchmark records
                             // no "error" resolves, so treat an unresolvable
@@ -322,6 +341,8 @@ impl ResolvePhase {
                     }
                     ScopeReduce::Reduced(new_scope) => {
                         scopes[x] = Rc::new(new_scope);
+                        // Scope entries changed — re-try extraction next pass.
+                        non_extractable[x] = false;
                         // Every other scope must reduce against the narrower x.
                         // Same family filter as above: skip scopes that don't
                         // depend on x's family.
