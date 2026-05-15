@@ -56,8 +56,8 @@ The minimum integration looks like:
 ## Building the `pyrer` repo from `rez`
 
 `pyrer.solve()` accepts a Python list of `pyrer.PackageData` objects —
-one per (package, version). Build them straight off rez's loaded
-packages, no JSON serialisation needed:
+one per (package, version). Use `PackageData.from_rez(pkg)` to convert
+each rez `Package` in one line:
 
 ```python
 import pyrer
@@ -68,16 +68,16 @@ def build_pyrer_packages(package_paths):
     """Walk rez's package paths and yield pyrer.PackageData instances."""
     for family in iter_package_families(paths=package_paths):
         for pkg in family.iter_packages():
-            yield pyrer.PackageData(
-                name=family.name,
-                version=str(pkg.version),
-                requires=[str(r) for r in (pkg.requires or [])],
-                variants=[
-                    [str(r) for r in variant]
-                    for variant in (pkg.variants or [])
-                ],
-            )
+            yield pyrer.PackageData.from_rez(pkg)
 ```
+
+`from_rez(pkg)` reads `name`, `version`, `requires` and `variants`
+off the rez `Package`, stringifies each `Requirement` (rez's
+`Requirement` instances are not `str` on their own — they render via
+`__str__`), and stringifies `version` (a `rez.version.Version`). It
+is duck-typed — `pyrer` itself does not import rez — so you can also
+pass any object exposing the same four attributes (e.g. a test
+fixture).
 
 Two notes on this step:
 

@@ -11,6 +11,7 @@
 //! (`name`, `version`, `variant_index`, `requires`, `uri`).
 
 use pyo3::prelude::*;
+use pyo3::types::PyType;
 use rer_resolver::rez_solver::{PackageRepo, Requirement, ScopeError, Solver, SolverStatus};
 use std::collections::HashMap;
 use std::panic::{catch_unwind, AssertUnwindSafe};
@@ -65,6 +66,59 @@ impl PackageData {
             self.variants.len()
         )
     }
+
+    /// Build a [`PackageData`] from a rez `Package` (or anything duck-typed
+    /// with the same four attributes — `name`, `version`, `requires`,
+    /// `variants`).
+    ///
+    /// Stringifies each requirement (rez's `Requirement` instances render
+    /// as the rez requirement string via `__str__`) and the `version` (a
+    /// `rez.version.Version` is not a `str` on its own). `None` for either
+    /// `requires` or `variants` is treated as empty.
+    ///
+    /// This is a convenience over the four-field constructor — it lives in
+    /// `pyrer` so every integration site doesn't have to write the same
+    /// extraction loop. `pyrer` itself does not import rez; this method is
+    /// duck-typed and works against any object with the four attributes.
+    #[classmethod]
+    fn from_rez(_cls: &Bound<'_, PyType>, pkg: &Bound<'_, PyAny>) -> PyResult<Self> {
+        let name: String = pkg.getattr("name")?.extract()?;
+        let version: String = pkg.getattr("version")?.str()?.extract()?;
+        let requires = read_requirement_list(&pkg.getattr("requires")?)?;
+        let variants = read_variants_list(&pkg.getattr("variants")?)?;
+        Ok(PackageData {
+            name,
+            version,
+            requires,
+            variants,
+        })
+    }
+}
+
+/// Pull a flat list of requirement strings from a Python object that is
+/// either `None`, a sequence of strings, or a sequence of rez-style
+/// `Requirement` objects (anything whose `__str__` is the rez requirement
+/// form). Used by `PackageData::from_rez` for both the top-level `requires`
+/// and each entry of `variants`.
+fn read_requirement_list(obj: &Bound<'_, PyAny>) -> PyResult<Vec<String>> {
+    if obj.is_none() {
+        return Ok(Vec::new());
+    }
+    obj.try_iter()?
+        .map(|item| item?.str()?.extract::<String>())
+        .collect()
+}
+
+/// Pull `list[list[str]]` from a Python `variants` attribute that is
+/// `None`, an empty list, or a sequence of sequences of `Requirement`s /
+/// strings.
+fn read_variants_list(obj: &Bound<'_, PyAny>) -> PyResult<Vec<Vec<String>>> {
+    if obj.is_none() {
+        return Ok(Vec::new());
+    }
+    obj.try_iter()?
+        .map(|inner| read_requirement_list(&inner?))
+        .collect()
 }
 
 // ---------------------------------------------------------------------------

@@ -109,7 +109,9 @@ construction, and the whole `ResolvedContext` lifecycle. To plug
 `pyrer` in behind a normal `rez env` / `ResolvedContext` flow:
 
 1. Walk rez's package paths into `pyrer.PackageData` objects — once
-   per process, reusable across many solves:
+   per process, reusable across many solves. `PackageData.from_rez(pkg)`
+   does the per-package conversion (stringifies `version` and each
+   `Requirement`) so the integration shim is one line:
 
    ```python
    import pyrer
@@ -118,12 +120,7 @@ construction, and the whole `ResolvedContext` lifecycle. To plug
    def build_pyrer_packages(package_paths):
        for fam in iter_package_families(paths=package_paths):
            for pkg in fam.iter_packages():
-               yield pyrer.PackageData(
-                   name=fam.name,
-                   version=str(pkg.version),
-                   requires=[str(r) for r in (pkg.requires or [])],
-                   variants=[[str(r) for r in v] for v in (pkg.variants or [])],
-               )
+               yield pyrer.PackageData.from_rez(pkg)
    ```
 
 2. Call `pyrer.solve(requests, list(build_pyrer_packages(paths)))`
