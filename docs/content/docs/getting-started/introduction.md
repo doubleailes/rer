@@ -69,6 +69,9 @@ builds the environment, and manages contexts. rer just does the solving.
 
 - **[Quick Start →](../quick-start/)** — install rer and run your first
   resolve from Python or Rust.
+- **[Engineering notes →](../../engineering/)** — design decisions and
+  measurements behind the port (e.g. why some rez optimisations are
+  intentionally absent).
 - **[Contributing →](../../contributing/how-to-contribute/)** — how to
   help.
 - **[FAQ →](../../help/faq/)** — common questions.
