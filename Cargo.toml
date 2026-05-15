@@ -26,3 +26,8 @@ serde_json = "1.0"
 rer-version = { path = "crates/rer-version", version = "0.1.0-rc.6" }
 rer-resolver = { path = "crates/rer-resolver", version = "0.1.0-rc.6" }
 pyo3 = { version = "0.23.5", features = ["extension-module"] }
+# `mimalloc` is wired into the bench binary as a `#[global_allocator]`.
+# Callgrind shows ~33 % of cycles in libc malloc/free; mimalloc has measurably
+# lower per-call cost on the small-object churn rer creates (`SmallVec` in
+# `Ranges`, per-call `FxHashMap`s in `reduce_by`, etc.).
+mimalloc = "0.1"
