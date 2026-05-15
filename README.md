@@ -130,14 +130,19 @@ core and the default solver configuration.
 ```text
 machine: Intel(R) Xeon(R) CPU E5-2699 v4 @ 2.20 GHz, 32 cores
 OS:      Linux 5.14.0 (glibc 2.34)
-Python:  3.9.25
 ```
 
-| Implementation | Total (188 cases) | Mean / case | Median | p95 | Max |
+The headline comparison uses **CPython 3.13** for `rez` — that's the
+fastest current CPython and is the realistic target for modern rez
+deployments. We include a CPython 3.9 row too because rez's solver is
+sensitive to interpreter speed and a lot of VFX studios still run 3.9.
+
+| Implementation                          | Total (188 cases) | Mean / case | Median | p95 | Max |
 |---|---:|---:|---:|---:|---:|
-| **rez 3.3.0** (`rez-benchmark`)                | 405.17 s | 2 152 ms | 1 162 ms | —       | 9 399 ms |
-| **rer 0.1.0-rc.6** (`rez_benchmark_dataset`)   |  11.35 s |    60 ms |    30 ms | 181 ms  |   247 ms |
-| **speedup**                                    |     35.7× |    35.6× |    39.3× | —       |    38.1× |
+| **rez 3.3.0** on CPython 3.13           | 221.43 s | 1 177 ms |   587 ms | —      | 5 770 ms |
+| **rer 0.1.0-rc.6** (no Python in loop)  |  11.35 s |    60 ms |    30 ms | 181 ms |   247 ms |
+| **speedup vs rez on 3.13**              |  **19.5×** | **19.5×** | **19.9×** | —      | **23.4×** |
+| *(rez 3.3.0 on CPython 3.9 — for ref)*  | *405.17 s* | *2 152 ms* | *1 162 ms* | —    | *9 399 ms* |
 
 `rer` solved 187 of 188 requests with the same `(name, version)` set as `rez`
 on every solve; the one failed request fails on both sides. The differential
@@ -147,16 +152,16 @@ test_rez_benchmark -- --ignored`).
 ### How to reproduce
 
 ```bash
-# 1. rez 3.3.0 (vendored as a submodule)
+# 1. rez 3.3.0 (vendored as a submodule), on CPython 3.13 via uv
 git submodule update --init
-python3 -m venv /tmp/rez-bench && source /tmp/rez-bench/bin/activate
-pip install ./rez
-rez-benchmark --out /tmp/rez-bench-out
+uv python install 3.13
+uv venv --python 3.13 /tmp/rez-bench-venv
+uv pip install --python /tmp/rez-bench-venv/bin/python ./rez
+/tmp/rez-bench-venv/bin/rez-benchmark --out /tmp/rez-bench-out
 cat /tmp/rez-bench-out/summary.json   # records hardware + total_run_time
 
 # 2. rer, same machine
-git submodule update --init   # for fixtures
-python3 scripts/prepare_benchmark_data.py
+python3 scripts/prepare_benchmark_data.py   # fixtures from the rez submodule
 cargo run --release -p examples --example rez_benchmark_dataset
 ```
 
