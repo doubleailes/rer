@@ -24,12 +24,12 @@ via PyO3 that accelerates rez resolves while leaving the rest of rez untouched.
 ### Status
 
 - ✅ **Solver** — complete and rez-faithful.
-- ✅ **Validated 1:1** — against rez's bundled 188-case benchmark dataset, every
-  resolve matches rez's own recorded result exactly (same status, same package
-  set).
-- ✅ **Fast** — on that benchmark, on one machine, `rer` resolves all 188
-  requests in ~44 s versus ~206 s for rez 3.3.0 (`rez benchmark`). Correctness
-  is version-independent; the timing is same-machine context, not a lab claim.
+- ✅ **Validated 1:1** against rez's bundled 188-case benchmark dataset on
+  **solve status** and the **resolved `(name, version)` set** — the
+  differential test currently does not enforce variant-index parity, only
+  same packages at the same versions.
+- ✅ **Fast** — see the [Benchmark](#benchmark) section below for a local
+  apples-to-apples measurement against rez 3.3.0.
 - ✅ **Python bridge** — `pyrer.solve(...)` runs the ported solver (the
   `rer-python` crate ships to PyPI as `pyrer` — `rer` is taken;
   `pip install pyrer`, `import pyrer`).
@@ -118,6 +118,72 @@ cargo run  --release -p examples --example rez_benchmark_dataset   # timing repo
 ```
 
 The `benchmark` CI workflow runs this on every PR touching the resolver.
+
+## Benchmark
+
+`rer` and `rez` are timed on the **same machine** running the **same
+188-case workload** (`rez/src/rez/data/benchmarking/`). Both runs use one
+core and the default solver configuration.
+
+### Reference run, 2026-05-15
+
+```text
+machine: Intel(R) Xeon(R) CPU E5-2699 v4 @ 2.20 GHz, 32 cores
+OS:      Linux 5.14.0 (glibc 2.34)
+Python:  3.9.25
+```
+
+| Implementation | Total (188 cases) | Mean / case | Median | p95 | Max |
+|---|---:|---:|---:|---:|---:|
+| **rez 3.3.0** (`rez-benchmark`)                | 405.17 s | 2 152 ms | 1 162 ms | —       | 9 399 ms |
+| **rer 0.1.0-rc.6** (`rez_benchmark_dataset`)   |  11.35 s |    60 ms |    30 ms | 181 ms  |   247 ms |
+| **speedup**                                    |     35.7× |    35.6× |    39.3× | —       |    38.1× |
+
+`rer` solved 187 of 188 requests with the same `(name, version)` set as `rez`
+on every solve; the one failed request fails on both sides. The differential
+test confirms this on every PR (`cargo test --release -p rer-resolver --test
+test_rez_benchmark -- --ignored`).
+
+### How to reproduce
+
+```bash
+# 1. rez 3.3.0 (vendored as a submodule)
+git submodule update --init
+python3 -m venv /tmp/rez-bench && source /tmp/rez-bench/bin/activate
+pip install ./rez
+rez-benchmark --out /tmp/rez-bench-out
+cat /tmp/rez-bench-out/summary.json   # records hardware + total_run_time
+
+# 2. rer, same machine
+git submodule update --init   # for fixtures
+python3 scripts/prepare_benchmark_data.py
+cargo run --release -p examples --example rez_benchmark_dataset
+```
+
+### Historical context
+
+`rez/metrics/benchmarking/artifacts/2022.11.16-3.7-2.112.0/summary.json`
+records a published rez run on a 2-core Azure VM in 382.68 s — useful as
+upstream context, but **not directly comparable** to a `rer` run on
+different hardware. The numbers above are the apples-to-apples comparison.
+
+### Where the speedup comes from
+
+The solver itself is a faithful port; the wall-clock difference is a Rust
+implementation of an algorithm that was tuned for Python. Notable
+contributions, in rough order of impact on this benchmark:
+
+| | Change | Effect |
+|---|---|---|
+| 1 | Variant cache shared across solves | -20 % |
+| 2 | `is_subset` → length compare on the extract hot-path | -30 % |
+| 3 | Pre-filter pending reduction pairs by `fam_requires` | -25 % |
+| 4 | `Rc<str>` for package family names | -15 % |
+| 5 | `Rc<Ranges>` inside `VersionRange` | -11 % |
+| 6 | `mimalloc` as the global allocator in the bench binary | -13 % |
+| 7 | Skip `extract` on scopes known to be exhausted | -5 % |
+
+Compounding from 43.0 s (post-port baseline) down to 11.35 s.
 
 ## License
 
