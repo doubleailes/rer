@@ -194,6 +194,14 @@ pub struct SolveResult {
     /// Number of solve steps the solver performed.
     #[pyo3(get)]
     pub num_iterations: u32,
+    /// Resolved ephemerals as rez-style requirement strings, e.g.
+    /// `[".feature-1.5", ".mode-debug"]`. Each entry is the intersected
+    /// range of every ephemeral (`.foo`) requirement that participated in
+    /// the solve. Empty when no ephemerals were involved, and always empty
+    /// for `"failed"` / `"error"` results. Mirrors rez's
+    /// `Solver.resolved_ephemerals`.
+    #[pyo3(get)]
+    pub resolved_ephemerals: Vec<String>,
 }
 
 #[pymethods]
@@ -218,6 +226,7 @@ impl SolveResult {
             failure_description: Some(message),
             solve_time_ms: start.elapsed().as_secs_f64() * 1000.0,
             num_iterations: 0,
+            resolved_ephemerals: Vec::new(),
         }
     }
 }
@@ -338,6 +347,7 @@ fn solve(
                 failure_description: Some(scope_err.to_string()),
                 solve_time_ms: start.elapsed().as_secs_f64() * 1000.0,
                 num_iterations: 0,
+                resolved_ephemerals: Vec::new(),
             });
         }
         Err(_) => {
@@ -376,6 +386,12 @@ fn solve(
                 .iter()
                 .map(|rv| (rv.name.clone(), rv.version.clone(), rv.variant_index))
                 .collect();
+            let resolved_ephemerals: Vec<String> = solver
+                .resolved_ephemerals()
+                .unwrap_or_default()
+                .iter()
+                .map(|r| r.to_string())
+                .collect();
             SolveResult {
                 status: "solved".to_string(),
                 resolved_packages,
@@ -383,6 +399,7 @@ fn solve(
                 failure_description: None,
                 solve_time_ms,
                 num_iterations,
+                resolved_ephemerals,
             }
         }
         SolverStatus::Failed => SolveResult {
@@ -392,6 +409,7 @@ fn solve(
             failure_description: solver.failure_description(),
             solve_time_ms,
             num_iterations,
+            resolved_ephemerals: Vec::new(),
         },
         other => SolveResult::error(format!("unexpected solver status: {other:?}"), start),
     })

@@ -201,6 +201,16 @@ impl Solver {
         Some(self.phase_stack.last().unwrap().solved_variants())
     }
 
+    /// The resolved ephemerals (intersected ranges of every `.foo` requirement
+    /// that participated in the solve), or `None` if the solve did not
+    /// succeed. Mirrors rez's `Solver.resolved_ephemerals`.
+    pub fn resolved_ephemerals(&self) -> Option<Vec<Requirement>> {
+        if self.status() != SolverStatus::Solved {
+            return None;
+        }
+        Some(self.phase_stack.last().unwrap().solved_ephemerals())
+    }
+
     /// A human-readable failure description, or `None` if the solve did not
     /// fail. Mirrors the gist of rez's `Solver.failure_description`.
     pub fn failure_description(&self) -> Option<String> {
@@ -403,6 +413,63 @@ mod tests {
         assert_eq!(solver.status(), SolverStatus::Solved);
         // only foo is resolved — lib was not requested, only weakly referenced
         assert_eq!(resolved_set(&solver), vec![("foo".into(), "1.0".into())]);
+    }
+
+    #[test]
+    fn test_resolved_ephemerals_intersect_request_only() {
+        // Two ephemerals on the request intersect to the narrower range.
+        let solver = solve(
+            repo(vec![("foo", vec![("1.0", pkg(&[], &[]))])]),
+            &["foo", ".feature-1+<3", ".feature-2+"],
+        );
+        assert_eq!(solver.status(), SolverStatus::Solved);
+        let eph: Vec<String> = solver
+            .resolved_ephemerals()
+            .expect("solved => Some")
+            .iter()
+            .map(|r| r.to_string())
+            .collect();
+        assert_eq!(eph, vec![".feature-2+<3".to_string()]);
+    }
+
+    #[test]
+    fn test_resolved_ephemerals_from_package_requires() {
+        // The ephemeral is contributed by a resolved package's `requires`.
+        let solver = solve(
+            repo(vec![("app", vec![("1.0", pkg(&[".mode-debug"], &[]))])]),
+            &["app"],
+        );
+        assert_eq!(solver.status(), SolverStatus::Solved);
+        let eph: Vec<String> = solver
+            .resolved_ephemerals()
+            .expect("solved => Some")
+            .iter()
+            .map(|r| r.to_string())
+            .collect();
+        assert_eq!(eph, vec![".mode-debug".to_string()]);
+    }
+
+    #[test]
+    fn test_resolved_ephemerals_empty_when_none_in_solve() {
+        let solver = solve(repo(vec![("foo", vec![("1.0", pkg(&[], &[]))])]), &["foo"]);
+        assert_eq!(solver.status(), SolverStatus::Solved);
+        assert_eq!(
+            solver.resolved_ephemerals().expect("solved => Some"),
+            Vec::<Requirement>::new()
+        );
+    }
+
+    #[test]
+    fn test_resolved_ephemerals_none_when_not_solved() {
+        let solver = solve(
+            repo(vec![(
+                "foo",
+                vec![("1.0", pkg(&[], &[])), ("2.0", pkg(&[], &[]))],
+            )]),
+            &["foo-1", "foo-2"],
+        );
+        assert_eq!(solver.status(), SolverStatus::Failed);
+        assert!(solver.resolved_ephemerals().is_none());
     }
 
     #[test]
