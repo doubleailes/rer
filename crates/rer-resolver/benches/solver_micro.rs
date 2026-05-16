@@ -141,7 +141,7 @@ fn fam(
 /// through the same cache code path the solver uses. Used by the slice-level
 /// benches below.
 fn slice_for(family: &str, range: &VersionRange) -> PackageVariantSlice {
-    let repo = Rc::new(build_repo());
+    let repo = Rc::new(rer_resolver::rez_solver::PackageRepo::from_map(build_repo()));
     let ctx = Rc::new(SolverContext::new(repo, RequirementList::new(vec![])));
     ctx.get_variant_slice(family, range)
         .expect("slice for the requested family/range")
@@ -300,7 +300,7 @@ fn bench_slice(c: &mut Criterion) {
 
 fn bench_solve(c: &mut Criterion) {
     let mut group = c.benchmark_group("Solver");
-    let repo = Rc::new(build_repo());
+    let repo = Rc::new(rer_resolver::rez_solver::PackageRepo::from_map(build_repo()));
     let cache = make_shared_cache();
 
     let cases: &[(&str, &[&str])] = &[
