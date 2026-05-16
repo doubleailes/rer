@@ -499,6 +499,16 @@ impl ResolvePhase {
             .filter_map(|s| Rc::make_mut(s).get_solved_variant())
             .collect()
     }
+
+    /// The intersected requirement of each ephemeral (`.foo`) scope in this
+    /// (solved) phase, in scope order. Mirrors rez's
+    /// `_ResolvePhase.get_resolved_ephemerals`.
+    pub fn solved_ephemerals(&self) -> Vec<Requirement> {
+        self.scopes
+            .iter()
+            .filter_map(|s| s.get_solved_ephemeral().cloned())
+            .collect()
+    }
 }
 
 impl std::fmt::Display for ResolvePhase {

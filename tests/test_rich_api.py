@@ -138,6 +138,49 @@ def test_solveresult_repr_uses_resolved_packages_count():
 
 
 # ---------------------------------------------------------------------------
+# resolved_ephemerals — rez's Solver.resolved_ephemerals
+# ---------------------------------------------------------------------------
+
+
+def test_resolved_ephemerals_empty_for_solve_without_ephemerals():
+    result = pyrer.solve(["foo"], [_pkg("foo", "1.0.0")])
+    assert result.status == "solved"
+    assert result.resolved_ephemerals == []
+
+
+def test_resolved_ephemerals_request_only():
+    """A `.foo` requirement on the request should surface intersected."""
+    result = pyrer.solve([".feature-1"], [])
+    assert result.status == "solved"
+    assert result.resolved_ephemerals == [".feature-1"]
+
+
+def test_resolved_ephemerals_intersection_across_request():
+    result = pyrer.solve(
+        ["foo", ".feature-1+<3", ".feature-2+"],
+        [_pkg("foo", "1.0.0")],
+    )
+    assert result.status == "solved"
+    assert result.resolved_ephemerals == [".feature-2+<3"]
+
+
+def test_resolved_ephemerals_from_package_requires():
+    """An ephemeral contributed by a resolved package's `requires`."""
+    result = pyrer.solve(
+        ["app"],
+        [_pkg("app", "1.0.0", requires=[".mode-debug"])],
+    )
+    assert result.status == "solved"
+    assert result.resolved_ephemerals == [".mode-debug"]
+
+
+def test_resolved_ephemerals_empty_on_failure():
+    result = pyrer.solve([".foo-1", ".foo-2"], [])
+    assert result.status == "failed"
+    assert result.resolved_ephemerals == []
+
+
+# ---------------------------------------------------------------------------
 # PackageData.from_rez — duck-typed convenience for rez integration
 # ---------------------------------------------------------------------------
 
