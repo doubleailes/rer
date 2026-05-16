@@ -493,21 +493,41 @@ impl ResolvePhase {
 
     /// The solved variants of this (solved) phase, in scope order.
     pub fn solved_variants(&self) -> Vec<Rc<PackageVariant>> {
+        self.iter_solved_variants().collect()
+    }
+
+    /// Borrowing iterator form of [`Self::solved_variants`]. Lets callers
+    /// iterate the resolved variants without allocating an intermediate `Vec`.
+    /// Internally still clones the scope vec because `get_solved_variant`
+    /// takes `&mut self` (it triggers a deferred sort inside the variant
+    /// slice); the saving vs `solved_variants` is the trailing `.collect()`.
+    ///
+    /// The yielded `Rc<PackageVariant>` are refcount bumps — cheap.
+    pub fn iter_solved_variants(&self) -> impl Iterator<Item = Rc<PackageVariant>> + '_ {
         let mut scopes = self.scopes.clone();
-        scopes
-            .iter_mut()
-            .filter_map(|s| Rc::make_mut(s).get_solved_variant())
-            .collect()
+        std::iter::from_fn(move || loop {
+            let scope = scopes.first_mut()?;
+            let variant = Rc::make_mut(scope).get_solved_variant();
+            scopes.remove(0);
+            if let Some(v) = variant {
+                return Some(v);
+            }
+        })
     }
 
     /// The intersected requirement of each ephemeral (`.foo`) scope in this
     /// (solved) phase, in scope order. Mirrors rez's
     /// `_ResolvePhase.get_resolved_ephemerals`.
     pub fn solved_ephemerals(&self) -> Vec<Requirement> {
-        self.scopes
-            .iter()
-            .filter_map(|s| s.get_solved_ephemeral().cloned())
-            .collect()
+        self.iter_solved_ephemerals().cloned().collect()
+    }
+
+    /// Borrowing iterator form of [`Self::solved_ephemerals`]. Lets callers
+    /// stream resolved ephemerals (`&Requirement`) without allocating an
+    /// intermediate `Vec` or cloning every entry — the heavier of the two
+    /// costs in the existing API.
+    pub fn iter_solved_ephemerals(&self) -> impl Iterator<Item = &Requirement> + '_ {
+        self.scopes.iter().filter_map(|s| s.get_solved_ephemeral())
     }
 }
 
