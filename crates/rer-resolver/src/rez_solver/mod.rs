@@ -35,7 +35,8 @@ pub mod variant;
 pub type Name = std::rc::Rc<str>;
 
 pub use context::{
-    make_shared_cache, PackageRepo, SharedVariantCache, SolverContext, VariantSelectMode,
+    make_shared_cache, FamilyLoader, FamilyMap, PackageRepo, SharedVariantCache, SolverContext,
+    VariantSelectMode,
 };
 pub use failure::{DependencyConflict, FailureReason, SolverStatus};
 pub use phase::ResolvePhase;

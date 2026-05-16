@@ -331,6 +331,126 @@ def test_variant_select_mode_invalid_raises_valueerror():
         pyrer.solve(["foo"], [_pkg("foo", "1.0.0")], variant_select_mode="nope")
 
 
+# ---------------------------------------------------------------------------
+# load_family — lazy package discovery (issue #86)
+# ---------------------------------------------------------------------------
+
+
+def test_load_family_lazy_only_touched_families():
+    """The callback fires only for families the solver actually needs."""
+    calls = []
+
+    def loader(name):
+        calls.append(name)
+        if name == "app":
+            return [_pkg("app", "1.0.0", requires=["lib-2"])]
+        if name == "lib":
+            return [_pkg("lib", "1.0.0"), _pkg("lib", "2.0.0")]
+        if name == "unrelated":
+            return [_pkg("unrelated", "1.0.0")]
+        return []
+
+    result = pyrer.solve(["app"], None, load_family=loader)
+    assert result.status == "solved", result.failure_description
+    names = {v.name: v.version for v in result.resolved_packages}
+    assert names == {"app": "1.0.0", "lib": "2.0.0"}
+
+    assert "app" in calls and "lib" in calls
+    assert "unrelated" not in calls, "loader should not be called for unrelated families"
+
+
+def test_load_family_called_at_most_once_per_family():
+    """Diamond dep: app -> lib & util, util -> lib. lib loaded once only."""
+    calls = []
+
+    def loader(name):
+        calls.append(name)
+        if name == "app":
+            return [_pkg("app", "1.0.0", requires=["lib", "util"])]
+        if name == "util":
+            return [_pkg("util", "1.0.0", requires=["lib"])]
+        if name == "lib":
+            return [_pkg("lib", "1.0.0")]
+        return []
+
+    result = pyrer.solve(["app"], None, load_family=loader)
+    assert result.status == "solved"
+    assert calls.count("lib") == 1, f"loader called {calls.count('lib')}x for 'lib'"
+
+
+def test_load_family_empty_means_no_such_family():
+    """A loader that returns [] for an unknown name produces a failed resolve,
+    not a crash."""
+    def loader(_name):
+        return []
+
+    result = pyrer.solve(["doesnotexist"], None, load_family=loader)
+    assert result.status == "failed"
+    assert result.failure_description
+
+
+def test_load_family_works_with_eager_seed():
+    """Caller can pre-seed some families; the loader is consulted only
+    for ones not in the eager list."""
+    calls = []
+
+    def loader(name):
+        calls.append(name)
+        if name == "lib":
+            return [_pkg("lib", "2.0.0")]
+        return []
+
+    seed = [_pkg("app", "1.0.0", requires=["lib-2"])]
+    result = pyrer.solve(["app"], seed, load_family=loader)
+    assert result.status == "solved"
+    names = {v.name: v.version for v in result.resolved_packages}
+    assert names == {"app": "1.0.0", "lib": "2.0.0"}
+    # 'app' came from the eager seed; loader was only asked for 'lib'.
+    assert "app" not in calls
+    assert calls == ["lib"]
+
+
+def test_load_family_callback_exception_surfaces_as_error():
+    """If the callback raises, the solve returns status='error' with the
+    error in the description — never a Python exception out of pyrer."""
+    def loader(name):
+        raise RuntimeError(f"boom for {name}")
+
+    result = pyrer.solve(["whatever"], None, load_family=loader)
+    assert result.status == "error"
+    assert "boom for whatever" in (result.failure_description or "")
+
+
+def test_load_family_filters_mismatched_name():
+    """A loader that returns entries for the wrong family name has those
+    entries dropped, not silently mixed in."""
+    def loader(name):
+        if name == "app":
+            return [
+                _pkg("app", "1.0.0"),
+                _pkg("not-app", "1.0.0"),  # bogus — must be dropped
+            ]
+        return []
+
+    result = pyrer.solve(["app"], None, load_family=loader)
+    assert result.status == "solved"
+    names = {v.name for v in result.resolved_packages}
+    assert names == {"app"}
+
+
+def test_load_family_duplicate_versions_reports_error():
+    """A loader returning two PackageData for the same (family, version) is
+    a data bug — surface it rather than silently shadowing."""
+    def loader(name):
+        if name == "app":
+            return [_pkg("app", "1.0.0"), _pkg("app", "1.0.0")]
+        return []
+
+    result = pyrer.solve(["app"], None, load_family=loader)
+    assert result.status == "error"
+    assert "duplicate" in (result.failure_description or "").lower()
+
+
 def test_from_rez_used_in_solve():
     """End-to-end: from_rez → solve produces the same result as constructor."""
 

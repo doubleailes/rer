@@ -8,9 +8,8 @@
 //! cargo run --release -p examples --example rez_benchmark_dataset
 //! ```
 
-use rer_resolver::rez_solver::{
-    make_shared_cache, PackageRepo, Requirement, Solver, SolverStatus,
-};
+use rer_resolver::rez_solver::{make_shared_cache, PackageRepo, Requirement, Solver, SolverStatus};
+use std::collections::HashMap;
 
 // Callgrind on this binary shows ~33 % of cycles in libc malloc/free —
 // `SmallVec` extends inside `Ranges`, per-call `FxHashMap`s in `reduce_by`,
@@ -57,13 +56,16 @@ fn percentile(sorted: &[f64], p: f64) -> f64 {
 }
 
 fn main() {
-    let repo: Rc<PackageRepo> = Rc::new(load_json("benchmark_packages.json"));
+    type RepoMap = HashMap<String, HashMap<String, rer_resolver::PackageData>>;
+    let repo_map: RepoMap = load_json("benchmark_packages.json");
+    let family_count = repo_map.len();
+    let repo: Rc<PackageRepo> = Rc::new(PackageRepo::from_map(repo_map));
     let cases: Vec<BenchmarkCase> = load_json("benchmark_expected.json");
 
     println!(
         "running {} requests against {} package families\n",
         cases.len(),
-        repo.len()
+        family_count
     );
 
     let mut times_ms: Vec<f64> = Vec::with_capacity(cases.len());

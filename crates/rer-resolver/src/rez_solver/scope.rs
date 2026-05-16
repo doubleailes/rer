@@ -342,7 +342,7 @@ impl std::fmt::Display for PackageScope {
 
 #[cfg(test)]
 mod tests {
-    use super::super::context::{PackageRepo, SolverContext};
+    use super::super::context::{FamilyMap, PackageRepo, SolverContext};
     use super::super::requirement::{Requirement, RequirementList};
     use super::*;
     use crate::PackageData;
@@ -358,7 +358,7 @@ mod tests {
     }
 
     fn repo(entries: Vec<(&str, Vec<(&str, PackageData)>)>) -> PackageRepo {
-        entries
+        let map: std::collections::HashMap<String, FamilyMap> = entries
             .into_iter()
             .map(|(name, versions)| {
                 (
@@ -369,7 +369,8 @@ mod tests {
                         .collect(),
                 )
             })
-            .collect()
+            .collect();
+        PackageRepo::from_map(map)
     }
 
     fn ctx_with(repo: PackageRepo, requests: &[&str]) -> Rc<SolverContext> {

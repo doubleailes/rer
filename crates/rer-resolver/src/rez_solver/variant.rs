@@ -7,7 +7,7 @@
 //! requirements (`reduce_by`), and by peeling off the search space (`split`).
 //! `extract` pulls out a dependency common to every remaining variant.
 
-use super::context::{PackageRepo, SolverContext};
+use super::context::{FamilyMap, SolverContext};
 use super::requirement::{Requirement, RequirementList};
 use super::Name;
 use rer_version::{RerVersion, VersionRange};
@@ -357,7 +357,11 @@ struct LazyEntry {
 #[derive(Debug)]
 pub struct PackageVariantList {
     package_name: Name,
-    repo: Rc<PackageRepo>,
+    /// The family's `version_str -> PackageData` map. Held as `Rc` so the
+    /// repo and the variant list share storage cheaply; this also lets the
+    /// repo discard the map after handing it out (relevant for the
+    /// loader-backed case).
+    versions: Rc<FamilyMap>,
     /// One entry per version, version-sorted ascending for deterministic
     /// iteration; `_PackageVariantSlice::sort_versions` re-sorts when ordering
     /// actually matters.
@@ -369,7 +373,7 @@ impl PackageVariantList {
     /// absent from the repository. Only version strings are parsed here — the
     /// requirement strings are parsed on demand by [`Self::get_intersection`].
     pub fn new(ctx: &SolverContext, package_name: &str) -> Option<Self> {
-        let versions = ctx.repo.get(package_name)?;
+        let versions = ctx.repo.get_family(package_name)?;
         let mut entries: Vec<LazyEntry> = versions
             .keys()
             .map(|version_str| {
@@ -386,7 +390,7 @@ impl PackageVariantList {
 
         Some(PackageVariantList {
             package_name: Name::from(package_name),
-            repo: Rc::clone(&ctx.repo),
+            versions,
             entries,
         })
     }
@@ -403,7 +407,7 @@ impl PackageVariantList {
             }
             let mut slot = lazy.entry.borrow_mut();
             let built = slot.get_or_insert_with(|| {
-                let data = &self.repo[self.package_name.as_ref()][&lazy.version_str];
+                let data = &self.versions[&lazy.version_str];
                 Rc::new(PackageEntry {
                     version: lazy.version.clone(),
                     variants: build_variants(&self.package_name, &lazy.version, data),
@@ -514,11 +518,7 @@ pub struct PackageVariantSlice {
 
 impl PackageVariantSlice {
     /// Build a slice over the given entries.
-    pub fn new(
-        ctx: Rc<SolverContext>,
-        package_name: Name,
-        entries: Vec<Rc<PackageEntry>>,
-    ) -> Self {
+    pub fn new(ctx: Rc<SolverContext>, package_name: Name, entries: Vec<Rc<PackageEntry>>) -> Self {
         PackageVariantSlice {
             ctx,
             package_name,
@@ -918,7 +918,7 @@ impl PackageVariantCache {
 
 #[cfg(test)]
 mod tests {
-    use super::super::context::PackageRepo;
+    use super::super::context::{FamilyMap, PackageRepo};
     use super::*;
     use crate::PackageData;
 
@@ -933,7 +933,7 @@ mod tests {
     }
 
     fn repo(entries: Vec<(&str, Vec<(&str, PackageData)>)>) -> PackageRepo {
-        entries
+        let map: std::collections::HashMap<String, FamilyMap> = entries
             .into_iter()
             .map(|(name, versions)| {
                 (
@@ -944,7 +944,8 @@ mod tests {
                         .collect(),
                 )
             })
-            .collect()
+            .collect();
+        PackageRepo::from_map(map)
     }
 
     fn ctx_with(repo: PackageRepo, requests: &[&str]) -> Rc<SolverContext> {

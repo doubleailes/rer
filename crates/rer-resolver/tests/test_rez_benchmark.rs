@@ -27,7 +27,7 @@
 //! run explicitly by the `benchmark` CI workflow (`cargo test --release ...
 //! -- --ignored`), and can be chunked locally with `BENCH_RANGE=start:end`.
 
-use rer_resolver::rez_solver::{Requirement, Solver, SolverStatus};
+use rer_resolver::rez_solver::{PackageRepo, Requirement, Solver, SolverStatus};
 use rer_resolver::PackageData;
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -36,7 +36,9 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 /// `package name → version → PackageData`, as produced by the prep script.
-type PackageRepo = HashMap<String, HashMap<String, PackageData>>;
+/// Distinct from the resolver crate's [`PackageRepo`] (which is now a struct
+/// with optional loader support — issue #86); this is just the JSON shape.
+type RepoMap = HashMap<String, HashMap<String, PackageData>>;
 
 /// One trimmed entry from rez's recorded `resolves.json`.
 #[derive(Deserialize)]
@@ -114,7 +116,10 @@ fn normalize_rez(entries: &[String]) -> Vec<(String, String, Option<usize>)> {
 /// success, or `None` if the solve failed (including a construction error —
 /// rez would error, but the benchmark records no error cases, so we treat
 /// it as a failed solve).
-fn solve(request: &[String], repo: Rc<PackageRepo>) -> Option<Vec<(String, String, Option<usize>)>> {
+fn solve(
+    request: &[String],
+    repo: Rc<PackageRepo>,
+) -> Option<Vec<(String, String, Option<usize>)>> {
     let reqs: Vec<Requirement> = request.iter().map(|s| Requirement::parse(s)).collect();
     let mut solver = Solver::new(reqs, repo).ok()?;
     solver.solve();
@@ -139,7 +144,9 @@ fn solve(request: &[String], repo: Rc<PackageRepo>) -> Option<Vec<(String, Strin
 #[ignore = "full release run takes minutes; run via the benchmark CI job or \
             `cargo test --release -p rer-resolver --test test_rez_benchmark -- --ignored`"]
 fn test_rez_benchmark_correctness() {
-    let Some(repo) = load_json::<PackageRepo>("benchmark_packages.json").map(Rc::new) else {
+    let Some(repo) =
+        load_json::<RepoMap>("benchmark_packages.json").map(|m| Rc::new(PackageRepo::from_map(m)))
+    else {
         eprintln!(
             "benchmark fixtures missing — skipping. Generate them with:\n  \
              git submodule update --init\n  \
@@ -152,7 +159,7 @@ fn test_rez_benchmark_correctness() {
 
     println!(
         "loaded {} package families, {} benchmark requests",
-        repo.len(),
+        repo.family_count(),
         cases.len()
     );
 
@@ -205,8 +212,10 @@ fn test_rez_benchmark_correctness() {
                     // entries are only in one side. Helps narrow down whether
                     // the divergence is a missing package, a wrong version,
                     // or just a different variant index.
-                    let rer_only: Vec<_> = rer_set.iter().filter(|t| !rez_set.contains(t)).collect();
-                    let rez_only: Vec<_> = rez_set.iter().filter(|t| !rer_set.contains(t)).collect();
+                    let rer_only: Vec<_> =
+                        rer_set.iter().filter(|t| !rez_set.contains(t)).collect();
+                    let rez_only: Vec<_> =
+                        rez_set.iter().filter(|t| !rer_set.contains(t)).collect();
                     divergent.push(i);
                     divergent_details.push(format!(
                         "case {i}: request={:?}\n  rer-only: {:?}\n  rez-only: {:?}",
