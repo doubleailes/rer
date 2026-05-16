@@ -10,11 +10,130 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-/// The in-memory package repository: `family -> version -> PackageData`.
+/// One package family's `version -> PackageData` map.
+pub type FamilyMap = HashMap<String, PackageData>;
+
+/// Callback invoked on the first lookup for a family that is not already in
+/// the repo. Returns `(version_string, PackageData)` pairs — every version of
+/// the family. An empty result means "no such family"; the repo caches that
+/// answer and never calls the loader for the same name again.
 ///
-/// This replaces rez's on-disk `iter_packages(paths)` — the data is already
-/// loaded, so the port does not need rez's lazy package-loading machinery.
-pub type PackageRepo = HashMap<String, HashMap<String, PackageData>>;
+/// Mirrors the lazy-load behaviour rez gets from its `Package` resource
+/// wrapper (each `package.py` is AST-evaluated on first attribute access).
+/// `pyrer` builds one of these from a Python callable for issue #86.
+pub type FamilyLoader = Box<dyn Fn(&str) -> Vec<(String, PackageData)>>;
+
+/// The package repository — `family -> version -> PackageData`.
+///
+/// Replaces rez's on-disk `iter_packages(paths)` for callers that have the
+/// data already loaded. With a [`FamilyLoader`] attached (see
+/// [`Self::with_loader`]) it can also discover families lazily, the way rez's
+/// own solver does.
+///
+/// Lookups are routed through [`Self::get_family`], which:
+/// 1. Returns the cached `Rc<FamilyMap>` if the family has been seen.
+/// 2. Otherwise calls the loader (if any), memoising both the hit and the
+///    "no such family" answer.
+/// 3. Otherwise returns `None`.
+///
+/// Construction:
+/// - [`Self::from_map`] / `impl From<HashMap<…>>` — eager, no loader.
+/// - [`Self::with_loader`] — lazy; the loader is consulted on miss.
+#[derive(Default)]
+pub struct PackageRepo {
+    /// `Some(map)` for present families, `None` for families the loader
+    /// confirmed as absent (so we don't re-call it on miss).
+    families: RefCell<HashMap<String, Option<Rc<FamilyMap>>>>,
+    loader: Option<FamilyLoader>,
+}
+
+impl std::fmt::Debug for PackageRepo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PackageRepo")
+            .field("families", &self.families)
+            .field("loader", &self.loader.as_ref().map(|_| "<callback>"))
+            .finish()
+    }
+}
+
+impl PackageRepo {
+    /// Empty repo, no loader. Mostly useful as a starting point for tests
+    /// that build the repo via [`Self::insert_family`].
+    pub fn empty() -> Self {
+        Self::default()
+    }
+
+    /// Eager repo from a `family -> version -> PackageData` map. The loader
+    /// is `None`, so any family not in `map` is reported as absent on lookup.
+    pub fn from_map(map: HashMap<String, FamilyMap>) -> Self {
+        let families = map
+            .into_iter()
+            .map(|(name, fam)| (name, Some(Rc::new(fam))))
+            .collect();
+        PackageRepo {
+            families: RefCell::new(families),
+            loader: None,
+        }
+    }
+
+    /// Repo backed by a loader. The loader is called the first time the
+    /// solver asks for a family that isn't already cached — both hits and
+    /// "no such family" answers are memoised, so the loader fires at most
+    /// once per family per repo.
+    ///
+    /// Use [`Self::insert_family`] to pre-seed families that are already
+    /// in memory (e.g. ones produced by the caller's BFS seed pass).
+    pub fn with_loader(loader: FamilyLoader) -> Self {
+        PackageRepo {
+            families: RefCell::default(),
+            loader: Some(loader),
+        }
+    }
+
+    /// Pre-populate a family. Useful with [`Self::with_loader`] to skip
+    /// the loader for families already in memory.
+    pub fn insert_family(&self, name: String, fam: FamilyMap) {
+        self.families.borrow_mut().insert(name, Some(Rc::new(fam)));
+    }
+
+    /// Number of families currently cached in the repo. With a loader
+    /// attached this grows as the solve progresses — it only reflects the
+    /// eager-seeded set + whatever the loader has been asked for so far.
+    pub fn family_count(&self) -> usize {
+        self.families
+            .borrow()
+            .values()
+            .filter(|v| v.is_some())
+            .count()
+    }
+
+    /// `Some(family map)` if the family exists (cached or lazily loaded);
+    /// `None` if there's no loader and it isn't cached, or if the loader
+    /// returned no entries for it.
+    pub fn get_family(&self, name: &str) -> Option<Rc<FamilyMap>> {
+        if let Some(slot) = self.families.borrow().get(name) {
+            return slot.clone();
+        }
+        let loaded = self.loader.as_ref().and_then(|load| {
+            let entries = load(name);
+            if entries.is_empty() {
+                None
+            } else {
+                Some(Rc::new(entries.into_iter().collect::<HashMap<_, _>>()))
+            }
+        });
+        self.families
+            .borrow_mut()
+            .insert(name.to_string(), loaded.clone());
+        loaded
+    }
+}
+
+impl From<HashMap<String, FamilyMap>> for PackageRepo {
+    fn from(map: HashMap<String, FamilyMap>) -> Self {
+        Self::from_map(map)
+    }
+}
 
 /// A `PackageVariantCache` that can be shared between solves of the same
 /// repository. Building a variant list (parsing every variant's requires)

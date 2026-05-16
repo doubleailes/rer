@@ -37,11 +37,7 @@ impl Solver {
         package_requests: Vec<Requirement>,
         repo: Rc<PackageRepo>,
     ) -> Result<Self, ScopeError> {
-        Self::new_with_cache(
-            package_requests,
-            repo,
-            super::context::make_shared_cache(),
-        )
+        Self::new_with_cache(package_requests, repo, super::context::make_shared_cache())
     }
 
     /// Create a solver sharing the given variant cache.
@@ -57,12 +53,7 @@ impl Solver {
         repo: Rc<PackageRepo>,
         cache: SharedVariantCache,
     ) -> Result<Self, ScopeError> {
-        Self::new_with_options(
-            package_requests,
-            repo,
-            cache,
-            VariantSelectMode::default(),
-        )
+        Self::new_with_options(package_requests, repo, cache, VariantSelectMode::default())
     }
 
     /// Create a solver with full control over both the shared cache and the
@@ -76,12 +67,13 @@ impl Solver {
     ) -> Result<Self, ScopeError> {
         let request_list = RequirementList::new(package_requests);
 
-        let build_ctx = |repo: Rc<PackageRepo>, request_list: RequirementList| -> Rc<SolverContext> {
-            Rc::new(
-                SolverContext::new_with_cache(repo, request_list, Rc::clone(&cache))
-                    .with_variant_select_mode(variant_select_mode),
-            )
-        };
+        let build_ctx =
+            |repo: Rc<PackageRepo>, request_list: RequirementList| -> Rc<SolverContext> {
+                Rc::new(
+                    SolverContext::new_with_cache(repo, request_list, Rc::clone(&cache))
+                        .with_variant_select_mode(variant_select_mode),
+                )
+            };
 
         // A conflicting request fails immediately, with no scopes.
         if let Some((req1, req2)) = request_list.conflict() {
@@ -205,9 +197,7 @@ impl Solver {
     /// solve did not succeed; otherwise an iterator that yields each resolved
     /// variant (cheap `Rc` refcount bumps) without allocating an intermediate
     /// `Vec`.
-    pub fn resolved_packages_iter(
-        &self,
-    ) -> Option<impl Iterator<Item = Rc<PackageVariant>> + '_> {
+    pub fn resolved_packages_iter(&self) -> Option<impl Iterator<Item = Rc<PackageVariant>> + '_> {
         if self.status() != SolverStatus::Solved {
             return None;
         }
@@ -273,7 +263,7 @@ mod tests {
     }
 
     fn repo(entries: Vec<(&str, Vec<(&str, PackageData)>)>) -> PackageRepo {
-        entries
+        let map: std::collections::HashMap<String, crate::rez_solver::FamilyMap> = entries
             .into_iter()
             .map(|(name, versions)| {
                 (
@@ -284,7 +274,8 @@ mod tests {
                         .collect(),
                 )
             })
-            .collect()
+            .collect();
+        PackageRepo::from_map(map)
     }
 
     fn solve(repo: PackageRepo, requests: &[&str]) -> Solver {
@@ -303,6 +294,95 @@ mod tests {
             .collect();
         out.sort();
         out
+    }
+
+    #[test]
+    fn test_loader_called_only_for_needed_families() {
+        // Two families on disk: "app" depends on "lib". A bystander
+        // family "unrelated" exists but the solver never touches it,
+        // so the loader must never be called for it.
+        use std::cell::RefCell;
+
+        let calls: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(Vec::new()));
+        let calls_inner = Rc::clone(&calls);
+
+        let repo = crate::rez_solver::PackageRepo::with_loader(Box::new(move |name: &str| {
+            calls_inner.borrow_mut().push(name.to_string());
+            match name {
+                "app" => vec![("1.0".to_string(), pkg(&["lib-2"], &[]))],
+                "lib" => vec![
+                    ("1.0".to_string(), pkg(&[], &[])),
+                    ("2.0".to_string(), pkg(&[], &[])),
+                ],
+                "unrelated" => vec![("1.0".to_string(), pkg(&[], &[]))],
+                _ => Vec::new(),
+            }
+        }));
+
+        let reqs = vec![Requirement::parse("app")];
+        let mut solver = Solver::new(reqs, Rc::new(repo)).expect("solver construction");
+        solver.solve();
+        assert_eq!(solver.status(), SolverStatus::Solved);
+        assert_eq!(
+            resolved_set(&solver),
+            vec![("app".into(), "1.0".into()), ("lib".into(), "2.0".into())]
+        );
+
+        let calls = calls.borrow();
+        // app and lib were touched; unrelated was not.
+        assert!(calls.contains(&"app".to_string()));
+        assert!(calls.contains(&"lib".to_string()));
+        assert!(!calls.contains(&"unrelated".to_string()));
+    }
+
+    #[test]
+    fn test_loader_called_once_per_family() {
+        use std::cell::RefCell;
+
+        let calls: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(Vec::new()));
+        let calls_inner = Rc::clone(&calls);
+
+        // A diamond: app -> lib & util; util -> lib. lib is reached twice
+        // but the loader must only be invoked once.
+        let repo = crate::rez_solver::PackageRepo::with_loader(Box::new(move |name: &str| {
+            calls_inner.borrow_mut().push(name.to_string());
+            match name {
+                "app" => vec![("1.0".into(), pkg(&["lib", "util"], &[]))],
+                "util" => vec![("1.0".into(), pkg(&["lib"], &[]))],
+                "lib" => vec![("1.0".into(), pkg(&[], &[]))],
+                _ => Vec::new(),
+            }
+        }));
+
+        let reqs = vec![Requirement::parse("app")];
+        let mut solver = Solver::new(reqs, Rc::new(repo)).expect("solver construction");
+        solver.solve();
+        assert_eq!(solver.status(), SolverStatus::Solved);
+
+        let calls = calls.borrow();
+        let lib_calls = calls.iter().filter(|n| *n == "lib").count();
+        assert_eq!(
+            lib_calls, 1,
+            "loader should be called at most once per family"
+        );
+    }
+
+    #[test]
+    fn test_loader_empty_means_missing_family() {
+        // The loader returns no entries for an unknown name; the solver
+        // treats that as a missing family (failed resolve), not a panic.
+        let repo = crate::rez_solver::PackageRepo::with_loader(Box::new(|_| Vec::new()));
+        let reqs = vec![Requirement::parse("doesnotexist")];
+        let solver = Solver::new(reqs, Rc::new(repo));
+        // Either Solver::new returns a ScopeError or the solve fails;
+        // both are valid encodings of "no such top-level family".
+        match solver {
+            Err(_) => {} // expected
+            Ok(mut solver) => {
+                solver.solve();
+                assert_ne!(solver.status(), SolverStatus::Solved);
+            }
+        }
     }
 
     #[test]
@@ -492,8 +572,7 @@ mod tests {
         assert_eq!(owned, borrowed);
         // The borrowing form yields `&Requirement` — confirm callers can
         // collect without forcing an owned copy of the requirements.
-        let by_ref: Vec<&Requirement> =
-            solver.resolved_ephemerals_iter().unwrap().collect();
+        let by_ref: Vec<&Requirement> = solver.resolved_ephemerals_iter().unwrap().collect();
         assert_eq!(by_ref.len(), 1);
         assert_eq!(by_ref[0].to_string(), ".feature-2+<3");
     }

@@ -14,9 +14,10 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::PyType;
 use rer_resolver::rez_solver::{
-    make_shared_cache, PackageRepo, Requirement, ScopeError, Solver, SolverStatus,
-    VariantSelectMode,
+    make_shared_cache, FamilyLoader, FamilyMap, PackageRepo, Requirement, ScopeError, Solver,
+    SolverStatus, VariantSelectMode,
 };
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::rc::Rc;
@@ -235,13 +236,13 @@ impl SolveResult {
 // Repository conversion
 // ---------------------------------------------------------------------------
 
-/// Fold a flat `list[PackageData]` into the `family → version → data` repo
+/// Fold a flat `list[PackageData]` into the `family → version → data` map
 /// shape the solver works on. Duplicates (same family + version) raise an
 /// `error` result rather than silently shadowing.
-fn packages_to_repo(packages: Vec<PackageData>) -> Result<PackageRepo, String> {
-    let mut repo: PackageRepo = HashMap::new();
+fn packages_to_map(packages: Vec<PackageData>) -> Result<HashMap<String, FamilyMap>, String> {
+    let mut map: HashMap<String, FamilyMap> = HashMap::new();
     for p in packages {
-        let entry = repo.entry(p.name.clone()).or_default();
+        let entry = map.entry(p.name.clone()).or_default();
         if entry
             .insert(
                 p.version.clone(),
@@ -255,7 +256,68 @@ fn packages_to_repo(packages: Vec<PackageData>) -> Result<PackageRepo, String> {
             return Err(format!("duplicate package: {}-{}", p.name, p.version));
         }
     }
-    Ok(repo)
+    Ok(map)
+}
+
+/// Build a [`FamilyLoader`] that calls the given Python callable for each
+/// family the solver hasn't yet seen, mirroring issue #86's lazy-discovery
+/// shape.
+///
+/// `load_err` is shared with the caller — if the Python callback raises,
+/// the loader stores the error there and returns an empty `Vec`, which the
+/// repo memoises as "no such family". The outer `solve()` checks the
+/// `RefCell` after the solver finishes and surfaces the captured error as
+/// a `"error"`-status `SolveResult`.
+///
+/// Entries whose `name` doesn't match the requested family are dropped
+/// defensively — a misbehaving loader can't poison the repo for unrelated
+/// families.
+fn make_loader(callback: Py<PyAny>, load_err: Rc<RefCell<Option<String>>>) -> FamilyLoader {
+    Box::new(
+        move |name: &str| -> Vec<(String, rer_resolver::PackageData)> {
+            // Already errored on a previous call — short-circuit so we don't
+            // pile up errors and don't keep calling a broken callback.
+            if load_err.borrow().is_some() {
+                return Vec::new();
+            }
+            let result: PyResult<Vec<(String, rer_resolver::PackageData)>> =
+                Python::with_gil(|py| -> PyResult<_> {
+                    let ret = callback.bind(py).call1((name,))?;
+                    let pkgs: Vec<PackageData> = ret.extract()?;
+                    let mut out: Vec<(String, rer_resolver::PackageData)> =
+                        Vec::with_capacity(pkgs.len());
+                    let mut seen_versions: std::collections::HashSet<String> =
+                        std::collections::HashSet::new();
+                    for p in pkgs {
+                        if p.name != name {
+                            continue;
+                        }
+                        if !seen_versions.insert(p.version.clone()) {
+                            return Err(PyValueError::new_err(format!(
+                                "load_family({:?}) returned duplicate version {:?}",
+                                name, p.version
+                            )));
+                        }
+                        out.push((
+                            p.version,
+                            rer_resolver::PackageData {
+                                requires: p.requires,
+                                variants: p.variants,
+                            },
+                        ));
+                    }
+                    Ok(out)
+                });
+            match result {
+                Ok(pairs) => pairs,
+                Err(err) => {
+                    let msg = Python::with_gil(|py| err.value(py).to_string());
+                    *load_err.borrow_mut() = Some(format!("load_family({name:?}) raised: {msg}"));
+                    Vec::new()
+                }
+            }
+        },
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -284,7 +346,12 @@ fn parse_variant_select_mode(s: &str) -> PyResult<VariantSelectMode> {
 /// * `packages` — a `list[PackageData]`, mirroring rez's already-loaded
 ///   packages. Construct each entry from a `rez.Package` (via
 ///   `rez.packages.iter_package_families` etc.) — `pyrer` does not read
-///   the filesystem itself.
+///   the filesystem itself. Optional if `load_family` is supplied.
+/// * `load_family` — Optional `Callable[[str], list[PackageData]]` invoked
+///   on demand the first time the solver needs a family that isn't already
+///   in `packages`. The result is cached for the lifetime of the solve,
+///   so each family is loaded at most once. An empty list means "no such
+///   family" and is treated the same as an absent family. See issue #86.
 /// * `variant_select_mode` — either `"version_priority"` (default, rez's
 ///   default config) or `"intersection_priority"`. Mirrors rez's
 ///   `config.variant_select_mode`.
@@ -299,14 +366,17 @@ fn parse_variant_select_mode(s: &str) -> PyResult<VariantSelectMode> {
 #[pyfunction]
 #[pyo3(
     signature = (
-        package_requests, packages, /,
+        package_requests, packages=None, /,
+        *,
+        load_family=None,
         variant_select_mode="version_priority",
         filters=None, max_iterations=None,
     )
 )]
 fn solve(
     package_requests: Vec<String>,
-    packages: Vec<PackageData>,
+    packages: Option<Vec<PackageData>>,
+    load_family: Option<Py<PyAny>>,
     variant_select_mode: &str,
     filters: Option<Vec<(String, String)>>,
     max_iterations: Option<u32>,
@@ -316,9 +386,25 @@ fn solve(
 
     let mode = parse_variant_select_mode(variant_select_mode)?;
 
-    let repo: PackageRepo = match packages_to_repo(packages) {
-        Ok(repo) => repo,
+    let initial_map = match packages_to_map(packages.unwrap_or_default()) {
+        Ok(map) => map,
         Err(msg) => return Ok(SolveResult::error(msg, start)),
+    };
+
+    // Shared error slot for the loader. Populated if the Python callback
+    // raises; checked after the solver finishes to surface the failure.
+    let load_err: Rc<RefCell<Option<String>>> = Rc::new(RefCell::new(None));
+
+    let repo = if let Some(callback) = load_family {
+        let lazy = PackageRepo::with_loader(make_loader(callback, Rc::clone(&load_err)));
+        // Seed the eager set so the loader is never called for families
+        // the caller already supplied.
+        for (name, fam) in initial_map {
+            lazy.insert_family(name, fam);
+        }
+        lazy
+    } else {
+        PackageRepo::from_map(initial_map)
     };
 
     // `Requirement::parse` panics on a syntactically invalid version range;
@@ -329,11 +415,16 @@ fn solve(
             .iter()
             .map(|s| Requirement::parse(s))
             .collect();
-        let mut solver =
-            Solver::new_with_options(reqs, Rc::new(repo), make_shared_cache(), mode)?;
+        let mut solver = Solver::new_with_options(reqs, Rc::new(repo), make_shared_cache(), mode)?;
         solver.solve();
         Ok::<Solver, ScopeError>(solver)
     }));
+
+    // If the loader raised, that's the user-facing error — surface it
+    // before whatever fallback status the solver may have produced.
+    if let Some(msg) = load_err.borrow_mut().take() {
+        return Ok(SolveResult::error(msg, start));
+    }
 
     let solver = match outcome {
         Ok(Ok(solver)) => solver,
