@@ -201,6 +201,19 @@ impl Solver {
         Some(self.phase_stack.last().unwrap().solved_variants())
     }
 
+    /// Borrowing iterator form of [`Self::resolved_packages`]. `None` if the
+    /// solve did not succeed; otherwise an iterator that yields each resolved
+    /// variant (cheap `Rc` refcount bumps) without allocating an intermediate
+    /// `Vec`.
+    pub fn resolved_packages_iter(
+        &self,
+    ) -> Option<impl Iterator<Item = Rc<PackageVariant>> + '_> {
+        if self.status() != SolverStatus::Solved {
+            return None;
+        }
+        Some(self.phase_stack.last().unwrap().iter_solved_variants())
+    }
+
     /// The resolved ephemerals (intersected ranges of every `.foo` requirement
     /// that participated in the solve), or `None` if the solve did not
     /// succeed. Mirrors rez's `Solver.resolved_ephemerals`.
@@ -209,6 +222,18 @@ impl Solver {
             return None;
         }
         Some(self.phase_stack.last().unwrap().solved_ephemerals())
+    }
+
+    /// Borrowing iterator form of [`Self::resolved_ephemerals`]. `None` if the
+    /// solve did not succeed; otherwise an iterator that yields each resolved
+    /// ephemeral as `&Requirement`, with no intermediate `Vec` and no clones.
+    /// The largest saving of the four iterator-form accessors — `Requirement`
+    /// clones are heavier than `Rc::clone`.
+    pub fn resolved_ephemerals_iter(&self) -> Option<impl Iterator<Item = &Requirement> + '_> {
+        if self.status() != SolverStatus::Solved {
+            return None;
+        }
+        Some(self.phase_stack.last().unwrap().iter_solved_ephemerals())
     }
 
     /// A human-readable failure description, or `None` if the solve did not
@@ -413,6 +438,64 @@ mod tests {
         assert_eq!(solver.status(), SolverStatus::Solved);
         // only foo is resolved — lib was not requested, only weakly referenced
         assert_eq!(resolved_set(&solver), vec![("foo".into(), "1.0".into())]);
+    }
+
+    #[test]
+    fn test_iter_resolved_packages_matches_vec_form() {
+        let solver = solve(
+            repo(vec![
+                ("app", vec![("1.0", pkg(&["lib-2"], &[]))]),
+                ("lib", vec![("1.0", pkg(&[], &[])), ("2.0", pkg(&[], &[]))]),
+            ]),
+            &["app"],
+        );
+        let owned: Vec<(String, String)> = solver
+            .resolved_packages()
+            .unwrap()
+            .iter()
+            .map(|v| (v.name().to_string(), v.version().to_string()))
+            .collect();
+        let borrowed: Vec<(String, String)> = solver
+            .resolved_packages_iter()
+            .unwrap()
+            .map(|v| (v.name().to_string(), v.version().to_string()))
+            .collect();
+        assert_eq!(owned, borrowed);
+        // Iter form on a failed solve returns None too.
+        let failed = solve(
+            repo(vec![(
+                "foo",
+                vec![("1.0", pkg(&[], &[])), ("2.0", pkg(&[], &[]))],
+            )]),
+            &["foo-1", "foo-2"],
+        );
+        assert!(failed.resolved_packages_iter().is_none());
+    }
+
+    #[test]
+    fn test_iter_resolved_ephemerals_matches_vec_form() {
+        let solver = solve(
+            repo(vec![("foo", vec![("1.0", pkg(&[], &[]))])]),
+            &["foo", ".feature-1+<3", ".feature-2+"],
+        );
+        let owned: Vec<String> = solver
+            .resolved_ephemerals()
+            .unwrap()
+            .iter()
+            .map(|r| r.to_string())
+            .collect();
+        let borrowed: Vec<String> = solver
+            .resolved_ephemerals_iter()
+            .unwrap()
+            .map(|r| r.to_string())
+            .collect();
+        assert_eq!(owned, borrowed);
+        // The borrowing form yields `&Requirement` — confirm callers can
+        // collect without forcing an owned copy of the requirements.
+        let by_ref: Vec<&Requirement> =
+            solver.resolved_ephemerals_iter().unwrap().collect();
+        assert_eq!(by_ref.len(), 1);
+        assert_eq!(by_ref[0].to_string(), ".feature-2+<3");
     }
 
     #[test]

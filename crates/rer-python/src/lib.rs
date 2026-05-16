@@ -363,35 +363,39 @@ fn solve(
 
     Ok(match solver.status() {
         SolverStatus::Solved => {
-            let variants = solver.resolved_packages().unwrap_or_default();
-            let resolved_packages: Vec<ResolvedVariant> = variants
-                .iter()
-                .map(|v| ResolvedVariant {
-                    name: v.name().to_string(),
-                    version: v.version().to_string(),
-                    variant_index: v.index(),
-                    requires: v
-                        .requires()
-                        .requirements()
-                        .iter()
-                        .map(|r| r.to_string())
-                        .collect(),
-                    uri: match v.index() {
-                        Some(idx) => format!("{}/{}/package.py[{}]", v.name(), v.version(), idx),
-                        None => format!("{}/{}/package.py", v.name(), v.version()),
-                    },
+            // Use the borrowing iterator forms — no intermediate Vec, and
+            // ephemerals are streamed as `&Requirement` rather than cloned.
+            let resolved_packages: Vec<ResolvedVariant> = solver
+                .resolved_packages_iter()
+                .map(|it| {
+                    it.map(|v| ResolvedVariant {
+                        name: v.name().to_string(),
+                        version: v.version().to_string(),
+                        variant_index: v.index(),
+                        requires: v
+                            .requires()
+                            .requirements()
+                            .iter()
+                            .map(|r| r.to_string())
+                            .collect(),
+                        uri: match v.index() {
+                            Some(idx) => {
+                                format!("{}/{}/package.py[{}]", v.name(), v.version(), idx)
+                            }
+                            None => format!("{}/{}/package.py", v.name(), v.version()),
+                        },
+                    })
+                    .collect()
                 })
-                .collect();
+                .unwrap_or_default();
             let resolved: Vec<(String, String, Option<usize>)> = resolved_packages
                 .iter()
                 .map(|rv| (rv.name.clone(), rv.version.clone(), rv.variant_index))
                 .collect();
             let resolved_ephemerals: Vec<String> = solver
-                .resolved_ephemerals()
-                .unwrap_or_default()
-                .iter()
-                .map(|r| r.to_string())
-                .collect();
+                .resolved_ephemerals_iter()
+                .map(|it| it.map(|r| r.to_string()).collect())
+                .unwrap_or_default();
             SolveResult {
                 status: "solved".to_string(),
                 resolved_packages,
