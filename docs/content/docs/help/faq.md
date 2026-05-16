@@ -62,8 +62,19 @@ phases, and implicit backtracking all behave as rez does.
 
 From the caller. rer never reads the filesystem — there is no
 `package.py` parser in Rust. The host (rez, or a test harness) loads
-packages and passes them in as JSON in the `PackageData` schema:
+packages and passes them in as `pyrer.PackageData` instances:
 `name -> version -> {requires, variants}`.
+
+The host can pass them in two ways:
+
+- **Eager** — a `list[PackageData]` built up front. Simple; best
+  when the repo is on local disk or already cached in memory.
+- **Lazy** — a `load_family(name) -> list[PackageData]` callback
+  that the solver invokes only for families it actually touches.
+  Better when the repo lives on a slow filesystem (network mounts,
+  CIFS, NFS without a useful page cache) or when typical resolves
+  exercise a small subgraph of a large package store. See the
+  [rez integration page](../../getting-started/rez-integration/#lazy-package-discovery-on-cold-caches).
 
 ## Is there a CLI?
 

@@ -81,14 +81,164 @@ fixture).
 
 Two notes on this step:
 
-- It is **eager** — every package on every path is loaded. `rez`
-  normally loads lazily; the trade-off is one upfront cost vs many
-  small ones during the solve. On a real repo, eager loading is
-  typically a few seconds; on the rez 188-case benchmark it is the
-  dominant pre-solve cost.
-- If you're running many resolves against the same repo (CI, batch
-  validation, a long-lived daemon), build the list **once** and reuse
-  it.
+- It is **eager** — every package on every path is loaded before the
+  solve starts. `rez` normally loads lazily; the trade-off is one
+  upfront cost vs many small ones during the solve. On a real repo
+  on local disk with a warm page cache, eager loading is typically a
+  few seconds; on the rez 188-case benchmark it is the dominant
+  pre-solve cost.
+- If you're running many resolves against the same repo in one
+  process (CI, batch validation, a long-lived daemon), build the
+  list **once** and reuse it.
+
+If your repository sits on a slow filesystem (network mount, no
+useful page cache), the eager load can easily exceed the solve
+itself. The [next section](#lazy-package-discovery-on-cold-caches)
+covers a callback-driven alternative that loads families on demand.
+
+## Lazy package discovery on cold caches
+
+`pyrer.solve` accepts an optional `load_family` callback that is
+invoked the first time the solver needs a family it hasn't already
+been given:
+
+```python
+import pyrer
+
+def load_family(name):
+    """Return every PackageData for `name`, or [] if no such family."""
+    pkgs = []
+    for pkg in iter_packages(name, paths=PACKAGE_PATHS):
+        pkgs.append(pyrer.PackageData.from_rez(pkg))
+    return pkgs
+
+result = pyrer.solve(
+    ["maya-2024", "nuke-14"],
+    packages=None,                # or a small eager seed
+    load_family=load_family,
+)
+```
+
+Semantics:
+
+- The callback is called **at most once per family** in one solve
+  (results are cached internally), and **only for families the
+  solver actually exercises**.
+- Returning `[]` means "no such family" — treated the same as a
+  family that was never added.
+- The `packages` argument is still accepted; entries supplied that
+  way are pre-seeded into the cache and the callback is never asked
+  for those families. Useful for a hybrid where you pre-load
+  hot families and lazy-load the long tail.
+- If the callback raises, the solve returns
+  `result.status == "error"` with the exception message in
+  `result.failure_description`. No exception escapes `pyrer.solve`.
+- Defensive: entries whose `name` does not match the requested
+  family are dropped; a duplicate `(family, version)` from the
+  callback surfaces as `status="error"`.
+
+### When this actually helps
+
+The win is in I/O avoided, not in CPU. Specifically:
+
+| Scenario | Lazy vs eager |
+|---|---|
+| Local disk, warm page cache, wide healthy resolve | Roughly equal — reachable ≈ touched, the eager cost is small anyway |
+| Network filesystem (NFS / CIFS / SMB), studio-scale repo | **Substantial win** — every cold roundtrip avoided is a direct latency saving |
+| Early-fail conflict resolves (e.g. `maya-2024 maya-2025`) | **Substantial win** — touches a handful of families instead of the whole reachable closure |
+| Selective deep resolves in a large package universe | **Substantial win** — sparse subgraph means most reachable families are never opened |
+| Single tool / CI probe inside a 5000-package store | **Substantial win** — same reason as above |
+
+The shape of the win depends on the gap between the *reachable*
+subgraph (eager BFS) and the *exercised* subgraph (what the solver
+actually opens). When those diverge, lazy loading is essentially
+free latency back.
+
+### Worked example: Windows + CIFS
+
+A common case: the rez repository lives on a Samba / CIFS share,
+mounted on Windows clients. Windows has no equivalent of Linux's
+page cache for SMB content, so every `rez env` invocation pays the
+full network roundtrip for every `package.py` it opens — there is
+no cross-invocation caching to amortise it. On that combination, the
+eager BFS in the basic shim can easily dominate the wall-clock cost
+of `rez env`, even though the solve itself runs in tens of
+milliseconds.
+
+`load_family` is the right primitive for this case: the solver only
+asks the network for families it genuinely needs to inspect, and
+each one is fetched at most once per resolve.
+
+### Lazy variant of the shim
+
+The monkey-patch shim becomes slightly simpler with the callback
+form — no upfront BFS:
+
+```python
+import pyrer
+import rez.solver as _rez_solver
+import rez.resolver as _rez_resolver
+from rez.packages import iter_packages
+from rez.config import config as _rez_config
+
+_original_resolve = _rez_resolver.Resolver._solve
+
+
+def _pyrer_resolve(self):
+    if self.package_filter or self.package_orderers:
+        return _original_resolve(self)
+
+    # Closure over the resolver's package paths — pyrer calls this
+    # only for families the solver actually needs.
+    def load_family(name):
+        return [
+            pyrer.PackageData.from_rez(pkg)
+            for pkg in iter_packages(name, paths=self.package_paths)
+        ]
+
+    requests = [str(r) for r in self.package_requests]
+    result = pyrer.solve(
+        requests,
+        packages=None,
+        load_family=load_family,
+        variant_select_mode=_rez_config.variant_select_mode,
+    )
+
+    if result.status != "solved":
+        return _original_resolve(self)
+
+    self.resolved_packages_ = resolve_to_rez_variants(
+        result, self.package_paths,
+    )
+    self.status_ = _rez_solver.SolverStatus.solved
+    return self
+
+
+_rez_resolver.Resolver._solve = _pyrer_resolve
+```
+
+If the studio's `package_filter` configuration matters, apply it
+inside `load_family` before returning the list — the filter then
+runs only on families the solver actually exercises, instead of
+every reachable family.
+
+### What lazy loading does *not* fix
+
+- **Cross-invocation cost.** `load_family` caches inside one solve;
+  the next `rez env` invocation pays the load cost again for every
+  family it touches. Closing that gap would need a persistent cache
+  in the shim itself (keyed e.g. by `package.py` mtime). That sits
+  outside `pyrer` — but `load_family` is the prerequisite that
+  makes such a cache implementable as a wrapper around the
+  callback.
+- **GIL contention during the solve.** `pyrer.solve` currently
+  holds the GIL for the duration of the resolve. In practice this
+  rarely matters: the callback itself, when it does I/O via rez's
+  loaders, releases the GIL inside the underlying C call. Other
+  Python threads block only during the pure-Rust portions, which
+  are short.
+- **Solve-phase CPU.** The solver itself runs the same algorithm
+  either way. Lazy loading is purely about avoiding pre-solve I/O.
 
 ## Solving
 
@@ -171,8 +321,10 @@ intercept the happy path, fall back to the real rez solver on any
 non-default config (custom orderer, `late` binding requires,
 `@early` evaluation, etc.).
 
-The minimum viable shim — for studios with default-configured repos —
-looks roughly like:
+The eager-loading shim below is the simplest form; for cold-cache
+repos prefer the lazy variant shown
+[earlier](#lazy-variant-of-the-shim), which lets the solver drive
+the loading directly:
 
 ```python
 import pyrer

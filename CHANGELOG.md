@@ -12,6 +12,37 @@ page.
 
 ## [Unreleased]
 
+### Added
+
+- **`load_family` callback** on `pyrer.solve()` — opt-in lazy package
+  discovery: pass `load_family: Callable[[str], list[PackageData]]` and the
+  solver calls it on demand the first time it needs a family it hasn't seen.
+  Each family is loaded at most once per solve; returning `[]` means "no
+  such family". Aimed at cold-cache / network-filesystem integrations
+  (Windows + CIFS in particular) where the up-front BFS of every reachable
+  family dominates the wall-clock cost of `rez env`. See the
+  [lazy-discovery section of the rez integration page](https://doubleailes.github.io/rer/docs/getting-started/rez-integration/#lazy-package-discovery-on-cold-caches).
+  Closes #86.
+- **`resolved_ephemerals`** on `pyrer.SolveResult` — list of rez-style
+  ephemeral requirement strings (e.g. `[".feature-1.5", ".mode-debug"]`)
+  surfaced from the solver, matching `rez.solver.Solver.resolved_ephemerals`.
+  Closes #84.
+- **Borrowing-iterator forms** on the Rust API: `Solver::resolved_packages_iter`
+  / `resolved_ephemerals_iter` and `ResolvePhase::iter_solved_variants` /
+  `iter_solved_ephemerals`. Avoid the intermediate `Vec` (and, for
+  ephemerals, the per-element `Requirement::clone`) when callers just want
+  to iterate.
+
+### Changed
+
+- **`PackageRepo` is now a struct**, not a `HashMap` type alias. Carries a
+  cache (`RefCell<HashMap<…>>`) and an optional `FamilyLoader` closure.
+  Construct with `PackageRepo::from_map(map)` for the eager case, or
+  `PackageRepo::with_loader(loader)` for lazy. `From<HashMap<…>>` is
+  implemented for back-compat with the old type-alias shape. The eager
+  path's perf is unchanged in measurement (within run-to-run noise of the
+  README baseline).
+
 ## [1.0.0] — TBD
 
 The first stable release. Public API is now under semver — see the

@@ -68,6 +68,27 @@ It returns a `SolveResult` with:
 Failures and bad input are reported via `status`, never as Python
 exceptions (except `TypeError` if `packages` is the wrong type).
 
+### Lazy package discovery
+
+For large repositories on slow filesystems (network mounts, CIFS,
+NFS without a useful page cache), `pyrer.solve` accepts a
+`load_family` callback that is invoked on demand only for families
+the solver actually touches:
+
+```python
+def load_family(name):
+    """Return every PackageData for `name`, or [] if no such family."""
+    return [pyrer.PackageData(name, "1.0.0"), ...]
+
+result = pyrer.solve(["app"], packages=None, load_family=load_family)
+```
+
+`load_family` is called at most once per family per solve. Returning
+`[]` is treated as "no such family". Useful in particular when
+wiring `pyrer` into `rez` over a slow share — see the
+[rez integration page](../rez-integration/#lazy-package-discovery-on-cold-caches)
+for the full story.
+
 ## From Rust
 
 Add the resolver crate to your `Cargo.toml`:
