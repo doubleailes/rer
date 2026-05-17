@@ -79,6 +79,50 @@ is duck-typed — `pyrer` itself does not import rez — so you can also
 pass any object exposing the same four attributes (e.g. a test
 fixture).
 
+### Faster construction with `from_strings`
+
+`from_rez(pkg)` triggers rez's `AttributeForwardMeta` chain on every
+attribute and parses each requirement string into a `Requirement`
+object only to immediately turn it back into a string. When you
+already have the raw strings, prefer
+`PackageData.from_strings(name, version, requires, variants)` —
+it skips the wrapper round-trip entirely:
+
+```python
+def build_pyrer_packages_fast(package_paths):
+    for family in iter_package_families(paths=package_paths):
+        for pkg in family.iter_packages():
+            data = pkg.resource.data
+            # `data["requires"]` is a raw list[str] in the common
+            # (non-late-bound) case; fall back to from_rez otherwise.
+            if isinstance(data.get("requires", []), list) and \
+               isinstance(data.get("variants", []), list):
+                yield pyrer.PackageData.from_strings(
+                    data["name"],
+                    data["version"],
+                    data.get("requires"),
+                    data.get("variants"),
+                )
+            else:
+                # @early / @late bindings — let rez evaluate them.
+                yield pyrer.PackageData.from_rez(pkg)
+```
+
+The `from_strings` method:
+
+- Skips the per-attribute `AttributeForwardMeta` lookup.
+- Skips the `Requirement` parse (no `Version` / `VersionRange` AST
+  is built then discarded).
+- Skips the `str(Requirement)` round-trip per requirement.
+- Accepts `None` for `requires` / `variants` (matches
+  `dict.get(...)` ergonomics — no `or ()` boilerplate needed).
+
+Functionally equivalent to the four-arg constructor; the
+classmethod form exists so the contract has a name. **Always fall
+back to `from_rez` for packages with `@early` or `@late` binding** —
+in those cases `resource.data["requires"]` is a `SourceCode`
+instance, not a `list[str]`, and `from_strings` will raise.
+
 Two notes on this step:
 
 - It is **eager** — every package on every path is loaded before the
