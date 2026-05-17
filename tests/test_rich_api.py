@@ -266,6 +266,119 @@ def test_from_rez_missing_attribute_raises_attributeerror():
 
 
 # ---------------------------------------------------------------------------
+# PackageData.from_strings — raw-string fast path (issue #88)
+# ---------------------------------------------------------------------------
+
+
+def test_from_strings_basic():
+    """All four args supplied as raw strings — no wrapper objects involved."""
+    pd = pyrer.PackageData.from_strings(
+        "maya",
+        "2024.0",
+        ["python-3"],
+        [["python-3.10"], ["python-3.11"]],
+    )
+    assert pd.name == "maya"
+    assert pd.version == "2024.0"
+    assert pd.requires == ["python-3"]
+    assert pd.variants == [["python-3.10"], ["python-3.11"]]
+
+
+def test_from_strings_defaults_to_empty():
+    """requires=None and variants=None default to empty lists."""
+    pd = pyrer.PackageData.from_strings("foo", "1.0")
+    assert pd.requires == []
+    assert pd.variants == []
+
+
+def test_from_strings_accepts_none_for_collections():
+    """`dict.get("requires")` returns None for a missing key — must accept it."""
+    pd = pyrer.PackageData.from_strings("foo", "1.0", None, None)
+    assert pd.requires == []
+    assert pd.variants == []
+
+
+def test_from_strings_accepts_tuples_and_iterables():
+    """PyO3 extracts Vec<String> from any iterable, not just list."""
+    pd = pyrer.PackageData.from_strings(
+        "tool",
+        "1.0",
+        ("python-3", "qt-5"),
+        (("linux", "python-3.10"),),
+    )
+    assert pd.requires == ["python-3", "qt-5"]
+    assert pd.variants == [["linux", "python-3.10"]]
+
+
+def test_from_strings_matches_constructor():
+    """`from_strings` must produce the same PackageData as the four-arg
+    constructor — same fast PyO3 extraction path, classmethod is just a
+    named alias for callers wiring rez's resource.data through pyrer."""
+    args = ("maya", "2024.0", ["python-3"], [["python-3.10"], ["python-3.11"]])
+    via_classmethod = pyrer.PackageData.from_strings(*args)
+    via_constructor = pyrer.PackageData(*args)
+    assert via_classmethod.name == via_constructor.name
+    assert via_classmethod.version == via_constructor.version
+    assert via_classmethod.requires == via_constructor.requires
+    assert via_classmethod.variants == via_constructor.variants
+
+
+def test_from_strings_drives_solve_like_from_rez():
+    """End-to-end: a solve fed via from_strings produces the same result as
+    one fed via from_rez against an equivalent fake-rez Package."""
+
+    class FakeReq:
+        def __init__(self, s):
+            self._s = s
+
+        def __str__(self):
+            return self._s
+
+    class FakePkg:
+        def __init__(self, name, version, requires=None, variants=None):
+            self.name = name
+            self.version = version
+            self.requires = (
+                [FakeReq(r) for r in requires] if requires else None
+            )
+            self.variants = (
+                [[FakeReq(r) for r in v] for v in variants] if variants else None
+            )
+
+    fakes = [
+        FakePkg("app", "1.0.0", requires=["lib-2"]),
+        FakePkg("lib", "1.0.0"),
+        FakePkg("lib", "2.0.0"),
+    ]
+    via_from_rez = [pyrer.PackageData.from_rez(p) for p in fakes]
+
+    via_from_strings = [
+        pyrer.PackageData.from_strings("app", "1.0.0", ["lib-2"]),
+        pyrer.PackageData.from_strings("lib", "1.0.0"),
+        pyrer.PackageData.from_strings("lib", "2.0.0"),
+    ]
+
+    result_a = pyrer.solve(["app"], via_from_rez)
+    result_b = pyrer.solve(["app"], via_from_strings)
+    assert result_a.resolved == result_b.resolved
+    assert result_a.status == result_b.status == "solved"
+
+
+def test_from_strings_rejects_non_string_requires():
+    """from_strings is the contract-strict fast path — pass it a non-string
+    in `requires` and it raises rather than silently stringifying. Use
+    `from_rez` (or pre-stringify) for object inputs."""
+    import pytest
+
+    class NotAString:
+        def __str__(self):
+            return "python-3"
+
+    with pytest.raises(TypeError):
+        pyrer.PackageData.from_strings("foo", "1.0", [NotAString()])
+
+
+# ---------------------------------------------------------------------------
 # variant_select_mode — rez's intersection_priority vs version_priority
 # ---------------------------------------------------------------------------
 

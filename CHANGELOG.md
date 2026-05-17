@@ -14,6 +14,17 @@ page.
 
 ### Added
 
+- **`PackageData.from_strings(name, version, requires=None, variants=None)`** —
+  classmethod constructor for raw-string callers, symmetric with
+  `from_rez(pkg)`. Skips rez's `AttributeForwardMeta` chain, the
+  `Requirement` parse, and the `str(Requirement)` round-trip — the
+  latter being a measurable fraction of integration overhead on
+  rez-shim hot paths (per-package, every package, every resolve).
+  Functionally equivalent to the four-arg constructor; the
+  classmethod form exists so callers wiring `pkg.resource.data`
+  through pyrer have a named, documented contract to reach for.
+  Falls back to `from_rez` for `@early` / `@late`-bound attributes.
+  Closes #88.
 - **`load_family` callback** on `pyrer.solve()` — opt-in lazy package
   discovery: pass `load_family: Callable[[str], list[PackageData]]` and the
   solver calls it on demand the first time it needs a family it hasn't seen.

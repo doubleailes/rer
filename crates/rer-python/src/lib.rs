@@ -85,6 +85,16 @@ impl PackageData {
     /// `pyrer` so every integration site doesn't have to write the same
     /// extraction loop. `pyrer` itself does not import rez; this method is
     /// duck-typed and works against any object with the four attributes.
+    ///
+    /// **Faster alternative for raw-data callers:** if you already have the
+    /// raw strings (typically from `pkg.resource.data` on a rez `Package`,
+    /// which stores `requires` / `variants` as raw `list[str]` /
+    /// `list[list[str]]` in the common non-late-bound case), prefer
+    /// [`Self::from_strings`]. It skips the per-attribute
+    /// `AttributeForwardMeta` lookup, the late-bound wrapping, the
+    /// `Requirement` parse, and the `str(Requirement)` round-trip — none
+    /// of which produce a different `PackageData` for the common case,
+    /// but all of which take real time per package.
     #[classmethod]
     fn from_rez(_cls: &Bound<'_, PyType>, pkg: &Bound<'_, PyAny>) -> PyResult<Self> {
         let name: String = pkg.getattr("name")?.extract()?;
@@ -97,6 +107,58 @@ impl PackageData {
             requires,
             variants,
         })
+    }
+
+    /// Build a [`PackageData`] from raw strings, skipping any rez
+    /// wrapper-object resolution. Use this when you already have raw
+    /// `(name, version, requires, variants)` data — typically pulled from
+    /// `pkg.resource.data` on a rez `Package`:
+    ///
+    /// ```python
+    /// data = pkg.resource.data
+    /// pd = pyrer.PackageData.from_strings(
+    ///     data["name"],
+    ///     data["version"],
+    ///     data.get("requires"),     # may be None / list[str]
+    ///     data.get("variants"),     # may be None / list[list[str]]
+    /// )
+    /// ```
+    ///
+    /// Faster than [`Self::from_rez`] on rez-integration hot paths because
+    /// it does not trigger rez's `AttributeForwardMeta` per attribute, does
+    /// not parse each requirement string into a `Requirement` object, and
+    /// does not round-trip each `Requirement` back through `__str__`.
+    ///
+    /// `requires` and `variants` accept `None` (interpreted as empty),
+    /// matching `dict.get(...)` ergonomics.
+    ///
+    /// Functionally equivalent to the four-arg constructor
+    /// `PackageData(name, version, requires, variants)` — both take the
+    /// same fast PyO3 extraction path. The classmethod form exists to make
+    /// the fast path discoverable alongside [`Self::from_rez`] and to give
+    /// the contract a name in callers' code. Closes #88.
+    ///
+    /// **Caveat — late-bound requirements:** for packages where rez stores
+    /// `requires` or `variants` as a `SourceCode` instance (`@early` /
+    /// `@late` binding), `pkg.resource.data["requires"]` is *not* a
+    /// `list[str]` and this method will raise. Fall back to
+    /// [`Self::from_rez`] for those packages — it walks rez's lazy
+    /// attribute path which evaluates the source code.
+    #[classmethod]
+    #[pyo3(signature = (name, version, requires=None, variants=None))]
+    fn from_strings(
+        _cls: &Bound<'_, PyType>,
+        name: String,
+        version: String,
+        requires: Option<Vec<String>>,
+        variants: Option<Vec<Vec<String>>>,
+    ) -> Self {
+        PackageData {
+            name,
+            version,
+            requires: requires.unwrap_or_default(),
+            variants: variants.unwrap_or_default(),
+        }
     }
 }
 
