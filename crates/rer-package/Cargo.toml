@@ -1,0 +1,16 @@
+[package]
+name = "rer-package"
+version = { workspace = true }
+description = "Fast static parser for the solver-relevant fields of a rez package.py."
+edition = { workspace = true }
+repository = { workspace = true }
+readme = { workspace = true }
+authors = { workspace = true }
+license-file = { workspace = true }
+
+[lib]
+name = "rer_package"
+
+
+[dependencies]
+rustpython-parser = { workspace = true }
