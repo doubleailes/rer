@@ -7,7 +7,7 @@ title = "rer — Rez En Rust"
 lead = "A faithful Rust port of <a href=\"https://github.com/AcademySoftwareFoundation/rez\">rez</a>'s package solver — callable from Python via PyO3, resolves match rez 1:1."
 url = "/docs/getting-started/introduction/"
 url_button = "Get started"
-repo_version = "GitHub v0.1.0-rc.9"
+repo_version = "GitHub v1.0.0-rc.1"
 repo_license = "MIT-licensed."
 repo_url = "https://github.com/doubleailes/rer"
 
