@@ -12,10 +12,17 @@ toc = true
 top = false
 +++
 
-> **Status: Stage 1 complete, Stage 2 scaffolded.** Survey tool at
+> **Status: Stages 1–4 shipped.** Survey tool at
 > `scripts/survey_package_py.py`; Rust parser crate at
-> `crates/rer-package/`. Stage 1 numbers (Fortiche, May 2026) inline
-> below.
+> `crates/rer-package/`; PyO3 bindings (`pyrer.parse_static_package_py`
+> and the batched `parse_static_packages_py`) at
+> `crates/rer-python/src/lib.rs`; differential safety net at
+> `scripts/diff_against_rez.py`; perf benches at
+> `scripts/bench_package_py_parser.py` and
+> `scripts/bench_batched_parser.py`. Stage 1 numbers, Stage 3
+> per-file timing, Stage 2 differential (0 mismatches on 5,979
+> files), and Stage 4 batched speedup (2.81× on 2,000 files) are
+> all inline below.
 
 ## Stage 1 result — Fortiche, May 2026
 
@@ -408,6 +415,90 @@ correctness signal. In production they'd match.
 If the differential test ever needs to be tightened, the path is to
 also configure `package_definition_python_path` in the dev venv —
 but that's CI infrastructure, not a parser change.
+
+## Stage 4 — Batched parallel parse (issue #94)
+
+After Stages 1–3 landed, `cProfile` of a real Fortiche resolve
+showed the static parser itself was no longer in the top of the
+flamegraph. The cost had moved one layer up: the shim's serial
+Python loop of `open()` calls feeding the parser. On a 132-package
+resolve that was 3.20 s of pure I/O (35% of total wall time), one
+file at a time while seven cores idled.
+
+`parse_static_packages_py(paths)` is the response: open + parse
+every path in one Rust call across a Rayon thread pool, with the
+GIL released for the whole batch. Same per-file semantics as
+`parse_static_package_py` — accept rate, output shape, differential
+correctness all carry over.
+
+### Result on Fortiche
+
+`scripts/bench_batched_parser.py` against `/thierry/rez/pkg` over
+CIFS, best-of-3:
+
+| Sample | Serial `open` + parse | Batched | Speedup |
+|---:|---:|---:|---:|
+| 500 files (warm cache) | 56.71 ms | 40.76 ms | **1.39×** |
+| 2,000 files | 4,234 ms | 1,508 ms | **2.81×** |
+
+Per-file saving on the 2,000-file run: **~1.36 ms**. Extrapolated
+to the issue's target workload (132-package resolve, ~2,600
+`package.py` files): **~3.5 s saved per resolve**.
+
+Both paths produce identical accepts (1,864/2,000 → static-parseable
+fraction matches the per-file parser) — zero correctness drift.
+
+The 500-file bench is bottlenecked on warm-page-cache parsing CPU;
+the Rayon dispatch overhead amortises less on small batches. On
+cold-cache or larger batches the parallel-I/O overlap shows
+through. The 2.81× is a lower bound on warm hardware; on cold CIFS
+(Windows production) it should grow.
+
+### Design choices
+
+- **Output is positionally aligned with input.** Missing files,
+  unreadable bytes, and parser bails all become `None` at the
+  matching index. The shim's `zip(pkgs, result)` is then trivially
+  correct.
+- **No exception escapes.** Per-file failures map to `None`. The
+  function only raises if the input type is wrong.
+- **Pool size = Rayon default** (`RAYON_NUM_THREADS` env var or
+  logical core count). No per-call knob initially; capacity
+  control is environmental.
+- **Pure addition.** The single-file API stays. Shims feature-detect
+  with `hasattr(pyrer, "parse_static_packages_py")` and fall back
+  to the per-file loop on older pyrer.
+
+### Safety net
+
+Reused from Stage 2. The same `from_rez(pkg)` comparison can be
+shadow-checked at production runtime, gated on
+`REZ_PYRER_VALIDATE_BATCHED`. The integration page in the
+[rez integration docs](../../getting-started/rez-integration/#shadow-validation-mode-1)
+has the recipe.
+
+The offline Stage 2 differential — 5,813 / 5,813 matched on the
+Fortiche corpus — covers the per-file semantics. Stage 4's batched
+call uses the exact same `parse_static_package_py` per file, so the
+existing safety net carries over byte-for-byte; the only Stage 4
+specific risk is around ordering / completion which the
+positional-alignment contract handles explicitly.
+
+### What's next after this
+
+Stage 4 takes us to:
+
+- ~93 % of `package.py` files served by the Rust fast path
+- ~75 µs per file via the static parser (Stage 3)
+- ~1/3 the wall-time on the open+parse phase via the batched call (Stage 4)
+
+The remaining cost on `_load_family` is now real I/O (CIFS round-
+trips for files Rayon's pool can't overlap further) plus the
+dynamic-7 % rez evaluator path. Both are architectural —
+addressing them needs a layer outside this RFC (memcache caching
+of parsed `PackageData` across invocations is the obvious next
+move, as called out in the "Considered alternatives" section
+below).
 
 ## Considered alternatives
 
