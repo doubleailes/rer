@@ -54,6 +54,40 @@ pub fn parse_static_package_py(source: &str) -> Option<PackageInfo> {
     p.parse_module()
 }
 
+/// Batched, parallel variant of [`parse_static_package_py`]: open and
+/// parse every path on a Rayon thread pool, returning a `Vec` aligned
+/// with `paths`.
+///
+/// Each entry in the returned `Vec` is independent — a file that
+/// doesn't exist, can't be read, or contains dynamic content all
+/// produce `None` at the same index as the input path. No error
+/// path: the function never panics on per-file failures.
+///
+/// Issue #94: the rez integration shim's bottleneck after the static
+/// parser landed was the serial Python loop of `open()` calls
+/// (~3 s on a typical 132-package Fortiche resolve, 91% of the
+/// `_load_family` budget). This call replaces that loop with one
+/// `Python::allow_threads`-released batch, so the I/O overlaps
+/// across cores.
+///
+/// Pool size follows Rayon's default (`RAYON_NUM_THREADS` env var or
+/// logical core count). Order is preserved regardless of completion
+/// order — callers can `zip(paths, results)` after.
+pub fn parse_static_packages_py<P>(paths: &[P]) -> Vec<Option<PackageInfo>>
+where
+    P: AsRef<std::path::Path> + Sync,
+{
+    use rayon::prelude::*;
+
+    paths
+        .par_iter()
+        .map(|p| {
+            let source = std::fs::read_to_string(p.as_ref()).ok()?;
+            parse_static_package_py(&source)
+        })
+        .collect()
+}
+
 // ===========================================================================
 // Parser
 // ===========================================================================
@@ -925,6 +959,104 @@ fn line_assigns_to_solver_field(line: &[u8]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Write;
+    use std::path::PathBuf;
+
+    /// Write `content` to a fresh tempfile and return its path. The
+    /// `tempfile` crate isn't a dep — keep tests dep-free with a
+    /// hand-rolled scratch path under `std::env::temp_dir()`.
+    fn write_temp(name: &str, content: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "rer-package-test-{}-{}",
+            std::process::id(),
+            name
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("package.py");
+        let mut f = std::fs::File::create(&path).unwrap();
+        f.write_all(content.as_bytes()).unwrap();
+        path
+    }
+
+    #[test]
+    fn batch_empty_returns_empty() {
+        let result: Vec<Option<PackageInfo>> =
+            parse_static_packages_py::<&std::path::Path>(&[]);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn batch_parses_each_file_independently() {
+        let static_path = write_temp(
+            "static-1",
+            "name = \"app\"\nversion = \"1.0.0\"\nrequires = [\"lib-2\"]\n",
+        );
+        let dynamic_path = write_temp(
+            "dynamic-1",
+            "import os\nname = \"foo\"\nversion = \"1.0\"\n",
+        );
+        let static_path_2 = write_temp(
+            "static-2",
+            "name = \"lib\"\nversion = \"2.0.0\"\n",
+        );
+
+        let paths = vec![&static_path, &dynamic_path, &static_path_2];
+        let results = parse_static_packages_py(&paths);
+
+        assert_eq!(results.len(), 3);
+        // [0] static → Some
+        let r0 = results[0].as_ref().expect("static-1 should parse");
+        assert_eq!(r0.name, "app");
+        assert_eq!(r0.version, "1.0.0");
+        // [1] dynamic (top-level import) → None
+        assert!(results[1].is_none(), "dynamic file should bail to None");
+        // [2] static → Some
+        let r2 = results[2].as_ref().expect("static-2 should parse");
+        assert_eq!(r2.name, "lib");
+    }
+
+    #[test]
+    fn batch_missing_file_becomes_none() {
+        // Build a path that doesn't exist; the batched call should map
+        // it to None at the matching index, never raise.
+        let phantom = std::env::temp_dir().join("rer-package-test-this-does-not-exist/package.py");
+        let real = write_temp(
+            "real-static",
+            "name = \"x\"\nversion = \"1.0\"\n",
+        );
+        let paths = vec![&phantom, &real];
+        let results = parse_static_packages_py(&paths);
+        assert_eq!(results.len(), 2);
+        assert!(results[0].is_none(), "phantom path must be None");
+        assert!(results[1].is_some(), "real path should parse");
+    }
+
+    #[test]
+    fn batch_preserves_input_order() {
+        // Write 16 files alternating valid/dynamic content. The batched
+        // call uses par_iter which can complete out of order; the
+        // returned Vec must still match the input positions exactly.
+        let mut paths: Vec<PathBuf> = Vec::with_capacity(16);
+        for i in 0..16 {
+            let content = if i % 2 == 0 {
+                format!("name = \"pkg{i}\"\nversion = \"1.0\"\n")
+            } else {
+                // dynamic — top-level if always bails
+                format!("name = \"pkg{i}\"\nversion = \"1.0\"\nif True:\n    pass\n")
+            };
+            paths.push(write_temp(&format!("order-{i}"), &content));
+        }
+        let results = parse_static_packages_py(&paths);
+        assert_eq!(results.len(), 16);
+        for (i, r) in results.iter().enumerate() {
+            if i % 2 == 0 {
+                let r = r.as_ref().expect("even index should be Some");
+                assert_eq!(r.name, format!("pkg{i}"));
+            } else {
+                assert!(r.is_none(), "odd index should be None (dynamic)");
+            }
+        }
+    }
 
     #[test]
     fn parses_minimal_static() {

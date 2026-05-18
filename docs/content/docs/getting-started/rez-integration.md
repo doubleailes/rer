@@ -416,6 +416,65 @@ That's the minimal integration. ~30 lines added; the existing
 `_pyrer_resolve` method is unchanged except for using the
 two-tier `load_family` above.
 
+### Faster: batched parallel parse (issue #94)
+
+The shape above is already a big win versus rez's `from_rez`, but
+the inner Python loop is still serial — one `open()` per file,
+per package, while the other cores idle. On a 2,600-file resolve
+that's ~3 s of pure I/O even with the static parser doing its job.
+
+`pyrer.parse_static_packages_py(paths)` replaces that loop with a
+single Rust call. It reads and parses every path on a Rayon thread
+pool, returns a list aligned with the input, and releases the GIL
+for the duration:
+
+```python
+def load_family(name, package_paths):
+    pkgs, paths = [], []
+    for pkg in iter_packages(name, paths=package_paths):
+        filepath = getattr(pkg, "filepath", None)
+        if not filepath or not filepath.endswith(".py"):
+            # Non-.py (yaml / memory repo / @early-bound) — slow path
+            # only, no batched read.
+            pkgs.append((pkg, None))
+            continue
+        pkgs.append((pkg, filepath))
+        paths.append(filepath)
+
+    # One Rust call. GIL released across the I/O + parse.
+    pds = pyrer.parse_static_packages_py(paths)
+    pds_iter = iter(pds)
+
+    out = []
+    for pkg, filepath in pkgs:
+        if filepath is None:
+            out.append(pyrer.PackageData.from_rez(pkg))
+            continue
+        pd = next(pds_iter)
+        out.append(pd if pd is not None else pyrer.PackageData.from_rez(pkg))
+    return out
+```
+
+Semantics:
+
+- **Output is positionally aligned** with `paths`. A missing file,
+  unreadable bytes, or a parser bail all become `None` at the same
+  index. No exception escapes the call.
+- **Pool size** follows Rayon's default (`RAYON_NUM_THREADS` or the
+  logical core count). Cap it via the env var on shared CI hosts.
+- **Capability-detect** for backwards compatibility:
+  ```python
+  if hasattr(pyrer, "parse_static_packages_py"):
+      # use batched path
+  else:
+      # fall back to serial loop
+  ```
+
+Per the issue's profile: serial `open()` was 3.20 s of a 9.12 s
+resolve (35% of wall time). Parallelising across 8 cores on the
+same warm-page-cache machine should reduce that to ~0.4 s on
+warm cache, more on cold CIFS where syscall overlap matters.
+
 ### Shadow-validation mode for the first weeks in production
 
 The differential harness already ran clean on the Fortiche corpus

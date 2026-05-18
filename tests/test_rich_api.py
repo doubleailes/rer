@@ -753,6 +753,140 @@ def test_parse_static_package_py_bails_on_syntax_error():
     assert pyrer.parse_static_package_py(src) is None
 
 
+# ---------------------------------------------------------------------------
+# parse_static_packages_py — batched / Rayon-parallel (issue #94)
+# ---------------------------------------------------------------------------
+
+
+def test_parse_static_packages_py_empty_input():
+    """An empty list returns an empty list — never raises."""
+    result = pyrer.parse_static_packages_py([])
+    assert result == []
+
+
+def _write_pkg(tmp_path, name, source):
+    """Helper: write `source` to `tmp_path/<name>/package.py` and
+    return the file path as a string."""
+    d = tmp_path / name
+    d.mkdir(parents=True, exist_ok=True)
+    pkg = d / "package.py"
+    pkg.write_text(source, encoding="utf-8")
+    return str(pkg)
+
+
+def test_parse_static_packages_py_each_file_independent(tmp_path):
+    """Static, dynamic, missing — each maps to the right slot in the
+    aligned output."""
+    static_path = _write_pkg(
+        tmp_path,
+        "app",
+        'name = "app"\nversion = "1.0.0"\nrequires = ["lib-2"]\n',
+    )
+    dynamic_path = _write_pkg(
+        tmp_path,
+        "dynamic",
+        'import os\nname = "foo"\nversion = "1.0"\n',
+    )
+    missing_path = str(tmp_path / "phantom" / "package.py")
+    static_path_2 = _write_pkg(
+        tmp_path,
+        "lib",
+        'name = "lib"\nversion = "2.0.0"\n',
+    )
+
+    result = pyrer.parse_static_packages_py(
+        [static_path, dynamic_path, missing_path, static_path_2]
+    )
+    assert len(result) == 4
+
+    assert result[0] is not None
+    assert result[0].name == "app"
+    assert result[0].version == "1.0.0"
+    assert result[0].requires == ["lib-2"]
+
+    assert result[1] is None    # dynamic — top-level import
+    assert result[2] is None    # missing file
+
+    assert result[3] is not None
+    assert result[3].name == "lib"
+
+
+def test_parse_static_packages_py_preserves_order(tmp_path):
+    """Rayon's par_iter can complete out of order; the returned list
+    must match the input positions exactly."""
+    paths = []
+    for i in range(20):
+        if i % 2 == 0:
+            src = f'name = "pkg{i}"\nversion = "1.0"\n'
+        else:
+            # `if` at module scope → parser bails
+            src = f'name = "pkg{i}"\nversion = "1.0"\nif True:\n    pass\n'
+        paths.append(_write_pkg(tmp_path, f"pkg{i}", src))
+
+    result = pyrer.parse_static_packages_py(paths)
+    assert len(result) == 20
+    for i, pd in enumerate(result):
+        if i % 2 == 0:
+            assert pd is not None, f"index {i}: should be Some"
+            assert pd.name == f"pkg{i}"
+        else:
+            assert pd is None, f"index {i}: should be None (dynamic)"
+
+
+def test_parse_static_packages_py_accepts_pathlib_paths(tmp_path):
+    """The PyO3 binding extracts `PathBuf` — `pathlib.Path` instances
+    should work alongside `str`."""
+    from pathlib import Path
+
+    p = _write_pkg(tmp_path, "p", 'name = "p"\nversion = "1.0"\n')
+    result = pyrer.parse_static_packages_py([Path(p)])
+    assert len(result) == 1
+    assert result[0] is not None
+    assert result[0].name == "p"
+
+
+def test_parse_static_packages_py_drives_solve(tmp_path):
+    """End-to-end: batch-parse a small repo, feed straight into
+    `pyrer.solve`."""
+    app_path = _write_pkg(
+        tmp_path, "app/1.0.0",
+        'name = "app"\nversion = "1.0.0"\nrequires = ["lib-2"]\n',
+    )
+    lib1_path = _write_pkg(
+        tmp_path, "lib/1.0.0", 'name = "lib"\nversion = "1.0.0"\n',
+    )
+    lib2_path = _write_pkg(
+        tmp_path, "lib/2.0.0", 'name = "lib"\nversion = "2.0.0"\n',
+    )
+
+    result = pyrer.parse_static_packages_py([app_path, lib1_path, lib2_path])
+    packages = [pd for pd in result if pd is not None]
+    assert len(packages) == 3
+
+    solve = pyrer.solve(["app"], packages)
+    assert solve.status == "solved"
+    names = {v.name: v.version for v in solve.resolved_packages}
+    assert names == {"app": "1.0.0", "lib": "2.0.0"}
+
+
+def test_parse_static_packages_py_matches_single_file(tmp_path):
+    """Sanity: batched and single produce equivalent `PackageData` for
+    the same source."""
+    src = 'name = "foo"\nversion = "1.0.0"\nrequires = ["bar"]\n'
+    single = pyrer.parse_static_package_py(src)
+
+    path = _write_pkg(tmp_path, "foo", src)
+    batch = pyrer.parse_static_packages_py([path])
+
+    assert single is not None
+    assert len(batch) == 1
+    assert batch[0] is not None
+    assert single.name == batch[0].name
+    assert single.version == batch[0].version
+    assert single.requires == batch[0].requires
+    assert single.variants == batch[0].variants
+
+
 def test_parse_static_package_py_roundtrips_through_solve():
     """End-to-end: parse a static package.py → use the PackageData in a
     solve. Should resolve identically to a hand-constructed PackageData."""
