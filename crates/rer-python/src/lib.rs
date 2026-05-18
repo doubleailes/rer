@@ -572,10 +572,43 @@ fn solve(
     })
 }
 
+// ---------------------------------------------------------------------------
+// parse_static_package_py — fast static parser for the rez `package.py` shape
+// ---------------------------------------------------------------------------
+
+/// Try to parse `source` as a statically-resolvable rez `package.py`,
+/// returning the four solver-relevant fields as a [`PackageData`] —
+/// or `None` if the file needs Python evaluation (e.g. `@early` /
+/// `@late`-bound `requires`, top-level `if` / `import`, …).
+///
+/// `None` is *not* an error. It means "the caller should fall back to
+/// `pyrer.PackageData.from_rez(pkg)` for this file" — rez's own
+/// evaluator will handle the dynamic case.
+///
+/// Recognises rez's standard patterns: literal `name`, `version`,
+/// `requires`, `variants`; ignorable `def commands(...)` /
+/// `def pre_commands(...)` function bodies; ignorable
+/// `with scope("config") as config: ...` declarative DSL.
+///
+/// Intended for the rez-integration `load_family` fast path — try
+/// this first, fall back to `from_rez(pkg)` on `None`. See the
+/// engineering note at
+/// `docs/content/docs/engineering/fast-package-py-parser.md`.
+#[pyfunction]
+fn parse_static_package_py(source: &str) -> Option<PackageData> {
+    rer_package::parse_static_package_py(source).map(|info| PackageData {
+        name: info.name,
+        version: info.version,
+        requires: info.requires,
+        variants: info.variants,
+    })
+}
+
 /// The `pyrer` Python module — Rez-compatible package resolver.
 #[pymodule]
 fn pyrer(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(solve, m)?)?;
+    m.add_function(wrap_pyfunction!(parse_static_package_py, m)?)?;
     m.add_class::<PackageData>()?;
     m.add_class::<ResolvedVariant>()?;
     m.add_class::<SolveResult>()?;
