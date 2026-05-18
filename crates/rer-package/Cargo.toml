@@ -13,4 +13,6 @@ name = "rer_package"
 
 
 [dependencies]
-rustpython-parser = { workspace = true }
+# Hand-rolled lexer — no AST library dependency. Stage 3 measurement
+# showed `rustpython-parser` was ~2 ms/file because it built the
+# whole module AST when we only needed four top-level fields.

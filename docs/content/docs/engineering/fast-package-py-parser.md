@@ -260,79 +260,93 @@ naming clearly.
 
 ## Stage 3 result — Fortiche, May 2026
 
-Run with `scripts/bench_package_py_parser.py --corpus /thierry/rez/pkg
---samples 100 --iters 30 --with-rez`, against the live Fortiche-on-CIFS
-repo, against rez 3.3.0.
+Two iterations, both run with `scripts/bench_package_py_parser.py
+--corpus /thierry/rez/pkg --samples 100 --iters 30 --with-rez`
+against the live Fortiche-on-CIFS repo and rez 3.3.0.
 
-**Apples-to-apples full-load comparison** (what the rez-integration
-shim actually pays per file):
+### V1: AST-based parser (`rustpython-parser`)
 
-| Path | μs / file | Ratio |
+| Path | μs / file | Speedup |
 |---|---:|---:|
-| `open + read + parse_static_package_py` | **1,533** | — |
-| `DeveloperPackage.from_path + from_rez` (rez) | **2,632** | — |
-| **Speedup** | | **1.7×** |
+| `open + read + parse_static_package_py` | 1,533 | — |
+| `DeveloperPackage.from_path + from_rez` (rez) | 2,632 | — |
+| **Result** | | **1.7×** |
 
-For context, the in-memory (no I/O) breakdown:
+The parse step alone was 1,990 μs — `rustpython-parser` builds the
+full module AST when we only need four top-level fields. It also
+adds ~30 MB of crate deps to the build. Diagnosis: wrong tool.
+
+### V2: hand-rolled lexer
+
+A 700-line module-level scanner that walks the four patterns
+(`name = "..."`, `version = "..."`, `requires = [...]`,
+`variants = [[...]]`) directly, with bracket / string / comment /
+indent tracking but no AST allocation. Same public API as V1.
+
+| Path | μs / file | Speedup |
+|---|---:|---:|
+| `open + read + parse_static_package_py` | **75.24** | — |
+| `DeveloperPackage.from_path + from_rez` (rez) | **2,615.54** | — |
+| **Result** | | **34.8×** |
+
+In-memory breakdown:
 
 | Path | μs / file |
 |---|---:|
-| `parse_static_package_py(source)` (Rust AST parse) | 1,990 |
-| `from_rez(fake_pkg)` (attribute walk, lower bound) | 12.7 |
-| `from_rez(real rez Package)` (post-load, just walk) | 15.0 |
-| file read alone (open + read) | 18.7 |
+| `parse_static_package_py(source)` (hand-rolled scan) | 59.23 |
+| `from_rez(fake_pkg)` (attribute walk, lower bound) | 11.17 |
+| `from_rez(real rez Package)` (post-load, just walk) | 13.50 |
+| file read alone (open + read, warm cache) | 14.81 |
 
-**What this says** — honestly:
+The parse step alone dropped from 1,990 μs (V1) to **59 μs (V2)** —
+~33× on that layer, lifting the full-load comparison vs rez from
+1.7× to **34.8×**. Per-file savings: ~2.54 ms. Over a 50-family
+resolve, that's **~127 ms saved per resolve** — real, artist-
+perceptible latency.
 
-- The Rust parser is the bottleneck of its own path. `rustpython-parser`
-  builds the full AST of every file even though we only read four
-  fields; that's the ~2 ms.
-- rez 3.3.0's `DeveloperPackage.from_path` is already doing something
-  reasonably fast (~2.6 ms full load). The Rust parser isn't competing
-  against `compile + exec` of arbitrary Python (which the RFC
-  assumed); it's competing against rez's own AST-based loader.
-- The 1.7× speedup translates to roughly **1.1 ms saved per file
-  loaded**. Over a resolve that loads 50 families (typical with the
-  `load_family` hook from #86), that's ~55 ms saved. Real but
-  modest — same order of magnitude as the per-resolve wins from
-  `from_strings` (#88) and `load_family` (#86), not transformative
-  on its own.
+The V2 rewrite held 92.9% acceptance on the Fortiche corpus
+(5,979 / 6,439 vs V1's 5,985; 6 files of drift, well within
+rounding). Two non-obvious bug categories surfaced during the
+rewrite, both Windows-specific:
 
-## Where the next 10× lives
+- CRLF line endings — Samba-served `package.py` files end lines with
+  `\r\n`. The scanner needed `\r` treated transparently in inline
+  whitespace.
+- `\<CRLF>` line continuations on non-solver assignments (e.g.
+  `changelog = \` followed by a CRLF then a multi-line triple-
+  quoted string). The continuation handler only recognised `\<LF>`.
 
-If the 1.7× speedup is the headline, then `rustpython-parser` is
-the obvious optimisation target. A hand-rolled lexer that scans
-just for `^name = "..."`, `^version = "..."`, `^requires = [...]`,
-`^variants = [[...]]` at module scope — no AST, no full parse —
-should land in the 50–200 μs/file range. That would lift the
-full-load comparison to ~5–15× over rez and would change the
-project economics meaningfully.
+Both have dedicated unit tests in the V2 implementation.
 
-Two reasonable next experiments, in order of effort:
+### What the bench numbers say about the next ceiling
 
-1. **Switch to `ruff_python_parser` if a usable crates.io publish
-   exists.** Ruff's parser is much faster than `rustpython-parser`
-   but not officially published as a standalone crate (only
-   vendored forks like `littrs-ruff-python-parser`). Worth a
-   spike.
-2. **Hand-rolled lexer.** Treat the parser as a glorified four-rule
-   regex/scanner. Bias hardest toward bailing. Much smaller crate;
-   the 20 unit tests we have for the AST-based version mostly
-   transfer.
+V2's 75 μs/file full-load splits as:
 
-Both unlock further savings on top of the 1.7× we already have.
+- ~15 μs file I/O (warm-cache CIFS)
+- ~60 μs parsing CPU
 
-## When this version is worth shipping anyway
+CPU is no longer dominant; I/O is. Further parser optimisations have
+diminishing returns. The next 10× lives in either avoiding more I/O
+(`load_family` from #86 already does most of this — files the solver
+never asks for never get loaded) or a parsed-package cache layered
+on top of Fortiche's existing shared memcache.
 
-- If the rez shim is going to call `load_family` 50+ times per
-  resolve, the 55 ms / resolve saving is real artist-perceptible
-  latency.
-- If Fortiche's shared memcache stores raw `package.py` bytes (not
-  parsed `PackageData`), this parser displaces work that would
-  otherwise be repeated on every `rez env` invocation. The memcache
-  alternative subsumes this.
-- If `rustpython-parser` is already a transitive dep of something
-  else in the dev environment, the build cost is shared.
+### Caveats on the 34.8× headline
+
+- **Cold-cache CIFS** — the 14.81 μs file-read is a warm-cache
+  number. On a truly cold network read, file I/O can be 1–100 ms,
+  swamping the 60 μs parse cost. The Rust parser's relative
+  advantage over rez stays the same proportionally (rez pays the
+  same I/O), but the absolute saving per file shifts from 2.5 ms
+  toward whatever the network roundtrip costs.
+- **Sample bias** — 100 files sampled deterministically from the
+  corpus. The full 6,439-file corpus could behave differently in
+  pathological cases (very large files, unusual structure). The
+  unit tests + the 6-file drift between V1 and V2 acceptance count
+  is the existing safety net.
+- **No production A/B yet** — the 127 ms / resolve number is from
+  micro-bench arithmetic, not a real `rez env` measurement.
+  Production wall time may show less if other phases dominate.
 
 ## Risks and mitigations
 
