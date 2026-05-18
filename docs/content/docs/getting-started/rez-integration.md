@@ -931,26 +931,49 @@ solver for those resolves:
 
 ## Sanity-checking against rez
 
-To make sure `pyrer` agrees with `rez`'s solver on your own repo,
-generate a small set of representative requests and diff the
-resolutions:
+The repository ships `scripts/compare_resolves.py` — the canonical
+bisect tool for "my shim's resolves diverge from rez" reports. It
+uses the recommended shim shape from this page (static parser +
+`load_family` + `version_range` hint + `from_rez` fallback) to
+call `pyrer.solve` directly, then compares to `rez.ResolvedContext`
+on the same request:
 
-```python
-from rez.resolved_context import ResolvedContext
+```bash
+. .venv/bin/activate
 
-packages = list(build_pyrer_packages(["/sw/pkg"]))
+# Spot-check 30 random families from your repo
+python scripts/compare_resolves.py /path/to/rez/pkg --n 30
 
-for request in your_real_requests:
-    rer_result = pyrer.solve(request, packages)
-    rez_ctx = ResolvedContext(request, package_paths=["/sw/pkg"])
-    rer_set = {(v.name, v.version) for v in rer_result.resolved_packages}
-    rez_set = {(v.name, str(v.version)) for v in rez_ctx.resolved_packages}
-    assert rer_set == rez_set, f"diverge on {request}"
+# Or a specific request
+python scripts/compare_resolves.py /path/to/rez/pkg --request maya-2024 nuke-15
 ```
 
-If any case diverges, open an issue with the request and a minimal
-package set that reproduces — the project's correctness bar is "match
-rez 1:1" and divergence is a release blocker.
+The script reports per-request: `✓` identical, `≠` divergent,
+`x` rer-only failure, `X` rez-only failure, `·` both fail. Exit
+code is `0` if every resolve matched (no `≠`, no `x`), `1`
+otherwise. Divergent and rer-only-failure cases get a per-package
+diff printed for the first few examples.
+
+### Interpreting the output
+
+- **0 divergences over a meaningful sample** (say, 30+ random
+  families from your own corpus) means pyrer + the recommended
+  shim shape works correctly on your repo. If a downstream rez
+  integration shim then *does* show divergence, the bug is in the
+  shim's translation — not in pyrer. Bisect from there: turn the
+  shim's features (filters, orderers, custom `from_rez` wiring,
+  cache layers) on one at a time and re-run.
+
+- **Any divergence reproduced by this script** is a pyrer
+  correctness bug — please open an issue with the failing request,
+  the rez version, the package paths, and (ideally) a minimal
+  package subset that reproduces. The project's correctness bar
+  is "match rez 1:1" and a script-reproducible divergence is a
+  release blocker.
+
+The 188-case `test_rez_benchmark` integration test catches the
+common shapes; this script is for the long-tail-of-real-studio-
+corpora that the benchmark dataset doesn't cover.
 
 ## See also
 
