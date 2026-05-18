@@ -421,59 +421,245 @@ two-tier `load_family` above.
 The shape above is already a big win versus rez's `from_rez`, but
 the inner Python loop is still serial — one `open()` per file,
 per package, while the other cores idle. On a 2,600-file resolve
-that's ~3 s of pure I/O even with the static parser doing its job.
+that's roughly 3 s of pure I/O even with the static parser doing its
+job; `cProfile` shows it as the top of the flamegraph (35% of total
+wall time) after every other pyrer win was wired up.
 
 `pyrer.parse_static_packages_py(paths)` replaces that loop with a
 single Rust call. It reads and parses every path on a Rayon thread
 pool, returns a list aligned with the input, and releases the GIL
-for the duration:
+for the duration.
+
+#### What it does
 
 ```python
-def load_family(name, package_paths):
-    pkgs, paths = [], []
-    for pkg in iter_packages(name, paths=package_paths):
-        filepath = getattr(pkg, "filepath", None)
-        if not filepath or not filepath.endswith(".py"):
-            # Non-.py (yaml / memory repo / @early-bound) — slow path
-            # only, no batched read.
-            pkgs.append((pkg, None))
-            continue
-        pkgs.append((pkg, filepath))
-        paths.append(filepath)
+pyrer.parse_static_packages_py(paths: list[str | os.PathLike])
+    -> list[PackageData | None]
+```
 
-    # One Rust call. GIL released across the I/O + parse.
-    pds = pyrer.parse_static_packages_py(paths)
+Per-path semantics are identical to `parse_static_package_py(source)`
+— so the static-vs-dynamic decision, the corpus accept rate, and the
+output `PackageData` shape are all unchanged. What's different is
+that you pay one round-trip into Rust for the whole batch instead
+of one per file, and the file reads + parses run in parallel.
+
+- **Positionally aligned output.** `len(result) == len(paths)`. A
+  missing file (`ENOENT`), unreadable bytes (permissions, invalid
+  UTF-8), a parser bail on dynamic content, and a `package.yaml` /
+  non-`.py` file all become `None` at the matching index. Callers
+  can `zip(paths, result)` after.
+- **No exception escapes.** Per-file failures map to `None`. The
+  function as a whole only raises if the input type is wrong (e.g.
+  passing a non-iterable for `paths`).
+- **GIL released.** `Python::allow_threads` is used internally, so
+  other Python threads run during the batch. The result list is
+  built back on the GIL after the parallel section completes.
+- **Pool size = `RAYON_NUM_THREADS`** (default: logical core count).
+  No per-call knob. Cap with the env var on shared CI hosts.
+- **Order doesn't depend on completion order.** Rayon's `par_iter`
+  may finish files out of order; the returned list is rebuilt by
+  index, so the shim's `zip(pkgs, result)` is always correct.
+
+#### Measured impact on Fortiche
+
+`scripts/bench_batched_parser.py` samples files from a real rez
+repo, runs both paths best-of-3, and reports the speedup. On
+`/thierry/rez/pkg` over CIFS:
+
+| Sample | Serial `open` + parse | Batched | Speedup |
+|---:|---:|---:|---:|
+| 500 files (warm cache) | 56.71 ms | 40.76 ms | **1.39×** |
+| 2,000 files | 4,234 ms | 1,508 ms | **2.81×** |
+
+Per-file saving on the 2,000-file run: **~1.36 ms**. The issue's
+target workload (132-package resolve, ~2,600 `package.py` files
+touched) extrapolates to ~3.5 s saved per resolve.
+
+The smaller-sample bench is bottlenecked on warm-page-cache parsing
+CPU and the Rayon dispatch overhead amortises less. Real production
+loads (cold or partially-cold CIFS, many uncached versions) see more
+of the parallel-I/O overlap — the 2.81× is a lower bound on warm
+hardware.
+
+#### Integration: two-tier `load_family` with batched read
+
+```python
+import logging
+import os
+import pyrer
+from rez.packages import iter_packages
+
+_logger = logging.getLogger("pyrer.batched_parser")
+
+
+def _gather_paths(pkgs):
+    """Split rez Packages into (pkg, filepath_or_None). `None` means
+    the package isn't filesystem-`.py`-based — yaml, memory repo,
+    @early-bound — and goes straight to the slow rez path."""
+    out = []
+    for pkg in pkgs:
+        filepath = getattr(pkg, "filepath", None)
+        if filepath and filepath.endswith(".py"):
+            out.append((pkg, filepath))
+        else:
+            out.append((pkg, None))
+    return out
+
+
+def load_family(name, package_paths, version_range=None):
+    """The shim's load_family callback — batched fast-path + rez
+    fallback per file. Wires together everything pyrer offers:
+    #86 (load_family), #92 (version_range hint), the static parser,
+    and #94 (batched parallel parse)."""
+    # Apply the #92 hint at the iter level so rez skips on-disk
+    # version dirs outside the range.
+    pkgs = list(iter_packages(name, range_=version_range, paths=package_paths))
+    pairs = _gather_paths(pkgs)
+    paths = [fp for _, fp in pairs if fp is not None]
+
+    # One Rust call across all .py files. GIL released; cores in use.
+    pds = pyrer.parse_static_packages_py(paths) if paths else []
     pds_iter = iter(pds)
 
     out = []
-    for pkg, filepath in pkgs:
+    for pkg, filepath in pairs:
         if filepath is None:
+            # Non-.py — straight to rez evaluator.
             out.append(pyrer.PackageData.from_rez(pkg))
             continue
         pd = next(pds_iter)
-        out.append(pd if pd is not None else pyrer.PackageData.from_rez(pkg))
+        if pd is None:
+            # Parser bailed (dynamic content) or I/O error.
+            out.append(pyrer.PackageData.from_rez(pkg))
+        else:
+            out.append(pd)
     return out
 ```
 
-Semantics:
+#### Backward compatibility / feature detection
 
-- **Output is positionally aligned** with `paths`. A missing file,
-  unreadable bytes, or a parser bail all become `None` at the same
-  index. No exception escapes the call.
-- **Pool size** follows Rayon's default (`RAYON_NUM_THREADS` or the
-  logical core count). Cap it via the env var on shared CI hosts.
-- **Capability-detect** for backwards compatibility:
-  ```python
-  if hasattr(pyrer, "parse_static_packages_py"):
-      # use batched path
-  else:
-      # fall back to serial loop
-  ```
+The function is a pure addition. Shims that haven't been updated keep
+working with the per-file `parse_static_package_py`. Feature-detect
+once at shim init:
 
-Per the issue's profile: serial `open()` was 3.20 s of a 9.12 s
-resolve (35% of wall time). Parallelising across 8 cores on the
-same warm-page-cache machine should reduce that to ~0.4 s on
-warm cache, more on cold CIFS where syscall overlap matters.
+```python
+_BATCHED_PARSE = hasattr(pyrer, "parse_static_packages_py")
+
+
+def load_family(name, package_paths, version_range=None):
+    if _BATCHED_PARSE:
+        return _batched_load_family(name, package_paths, version_range)
+    else:
+        return _serial_load_family(name, package_paths, version_range)
+```
+
+This is the same pattern the shim uses for `load_family` (#86),
+`version_range` (#92), and `parse_static_package_py` itself. No
+flag day; pyrer < 1.0.0-rc.3 falls back automatically.
+
+#### Shadow-validation mode
+
+Same shape as the single-file parser: gate on an env var, run a
+release with it on, log any divergence, then flip off.
+
+```python
+_VALIDATE = os.environ.get("REZ_PYRER_VALIDATE_BATCHED") == "1"
+
+
+def _validate(pkg, batched_pd):
+    """Compare `batched_pd` (from parse_static_packages_py) against
+    what `from_rez(pkg)` would have produced. Used in production
+    spot-checks during the rollout."""
+    if not _VALIDATE or batched_pd is None:
+        return
+    rez_pd = pyrer.PackageData.from_rez(pkg)
+    fast = (
+        batched_pd.name, batched_pd.version,
+        list(batched_pd.requires),
+        [list(v) for v in batched_pd.variants],
+    )
+    slow = (
+        rez_pd.name, rez_pd.version,
+        list(rez_pd.requires),
+        [list(v) for v in rez_pd.variants],
+    )
+    if fast != slow:
+        _logger.warning(
+            "pyrer batched parser DIVERGED for %s\n"
+            "  fast: %r\n  slow: %r",
+            getattr(pkg, "filepath", "?"), fast, slow,
+        )
+```
+
+Spot-check the first hits each `load_family` call rather than
+every package (the offline differential covered the full corpus —
+this is a runtime sanity net). Drop the flag after a clean release.
+
+#### Metrics — confirm what's actually happening
+
+```python
+class _PyrerStats:
+    batched_calls = 0          # number of parse_static_packages_py invocations
+    batched_files = 0          # sum of len(paths) across those calls
+    batched_hits = 0           # files the batched call accepted
+    batched_misses_io = 0      # missing / unreadable files
+    batched_misses_dynamic = 0 # parser bailed
+    non_py_packages = 0        # filesystem package isn't .py (yaml, memory repo)
+
+    @classmethod
+    def log_summary(cls):
+        if not cls.batched_calls:
+            return
+        _logger.info(
+            "pyrer batched parser: %d calls, %d files; "
+            "hits=%d misses_io=%d misses_dynamic=%d non_py=%d",
+            cls.batched_calls, cls.batched_files,
+            cls.batched_hits, cls.batched_misses_io,
+            cls.batched_misses_dynamic, cls.non_py_packages,
+        )
+```
+
+Expected at Fortiche from the corpus survey: ~93% hit rate on
+filesystem `.py` packages, with the misses split between
+`@early`/`@late` dynamic packages and the occasional unreadable file.
+
+#### Rollout plan
+
+Three layered flags on top of the existing `use_rer_solver`:
+
+```python
+USE_RER_SOLVER = _rez_config.use_rer_solver
+USE_BATCHED_PARSER = USE_RER_SOLVER and \
+    hasattr(pyrer, "parse_static_packages_py") and \
+    os.environ.get("REZ_PYRER_BATCHED_PARSER", "1") == "1"
+VALIDATE_BATCHED_PARSER = USE_BATCHED_PARSER and \
+    os.environ.get("REZ_PYRER_VALIDATE_BATCHED") == "1"
+```
+
+| Week | Flags | What to verify |
+|---|---|---|
+| 1 | `USE_BATCHED_PARSER=1`, `VALIDATE=1`, ~5% of users | 0 divergences in logs? Hit rate ≥ 90%? `_load_family` wall-time drops vs baseline? |
+| 2 | Same flags, ~50% of users | Same, at scale. Confirm `RAYON_NUM_THREADS` not oversubscribing on shared hosts (check CPU%). |
+| 3 | `USE_BATCHED_PARSER=1`, `VALIDATE=0`, 100% | Production wall-time + telemetry |
+| 4 | Permanent in `use_rer_solver` config | Drop the env var |
+
+Each step is one env var flip away from the previous behaviour.
+
+#### Where this WON'T help
+
+- **Resolves with very few packages touched.** The Rayon dispatch
+  overhead is small (~µs per batch) but on a 5-package resolve
+  there's almost nothing to parallelise. The win scales with batch
+  size; tiny batches see negligible speedup.
+- **The dynamic 7%.** `@early` / `@late`-bound packages still need
+  rez's evaluator — those bypass the batched path entirely (see
+  `non_py` / parser-bail accounting in the metrics).
+- **`load_family` cache hits within a single `solve()`.** When a
+  family is already cached on the pyrer side (#86), the loader
+  isn't called — batched or otherwise.
+- **Cross-invocation cost.** Each `rez env` is a fresh process and
+  pays a fresh batched-parse cost. A persistent memcache of parsed
+  `PackageData` is the next layer; this work is the prerequisite.
 
 ### Shadow-validation mode for the first weeks in production
 
