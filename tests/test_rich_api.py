@@ -564,6 +564,84 @@ def test_load_family_duplicate_versions_reports_error():
     assert "duplicate" in (result.failure_description or "").lower()
 
 
+# ---------------------------------------------------------------------------
+# load_family version_range hint (issue #92)
+# ---------------------------------------------------------------------------
+
+
+def test_load_family_range_hint_passed_for_pinned_request():
+    """A `lib-2+<3` request should pass `version_range="2+<3"` to the
+    callback so the shim can pre-filter via `iter_packages(range_=...)`."""
+    seen = []
+
+    def loader(name, version_range=None):
+        seen.append((name, version_range))
+        if name == "lib":
+            return [_pkg("lib", "2.0.0"), _pkg("lib", "2.5.0")]
+        return []
+
+    result = pyrer.solve(["lib-2+<3"], None, load_family=loader)
+    assert result.status == "solved"
+    assert len(seen) == 1
+    name, hint = seen[0]
+    assert name == "lib"
+    # The exact stringification is rez-syntax-ish; just verify the
+    # constraint is communicated.
+    assert hint is not None
+    assert "2" in hint and "<3" in hint
+
+
+def test_load_family_legacy_one_arg_callback_still_works():
+    """A pre-#92 callback that only accepts `name` must keep working —
+    pyrer falls back to the old call shape."""
+    seen = []
+
+    def loader(name):  # 1-arg, no version_range
+        seen.append(name)
+        if name == "lib":
+            return [_pkg("lib", "2.0.0")]
+        return []
+
+    result = pyrer.solve(["lib"], None, load_family=loader)
+    assert result.status == "solved"
+    assert seen == ["lib"]
+
+
+def test_load_family_range_hint_string_format():
+    """The hint should be a rez-style range string the shim can pass
+    directly to `iter_packages(range_=...)`."""
+    captured_hint = []
+
+    def loader(name, version_range=None):
+        captured_hint.append((name, version_range))
+        return [_pkg(name, "1.5.0"), _pkg(name, "2.0.0")]
+
+    pyrer.solve(["foo-1+<2"], None, load_family=loader)
+    assert len(captured_hint) == 1
+    name, hint = captured_hint[0]
+    assert name == "foo"
+    # rez accepts the hint as a string — make sure that's what we pass.
+    assert isinstance(hint, str)
+
+
+def test_load_family_kwargs_callback():
+    """A callback using `**kwargs` to accept future args should also work."""
+    seen = []
+
+    def loader(name, **kwargs):
+        seen.append((name, kwargs.get("version_range")))
+        if name == "lib":
+            return [_pkg("lib", "1.0.0")]
+        return []
+
+    result = pyrer.solve(["lib"], None, load_family=loader)
+    assert result.status == "solved"
+    assert len(seen) == 1
+    # **kwargs accepts the hint argument
+    name, hint = seen[0]
+    assert name == "lib"
+
+
 def test_from_rez_used_in_solve():
     """End-to-end: from_rez → solve produces the same result as constructor."""
 
