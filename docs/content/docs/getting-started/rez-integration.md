@@ -233,10 +233,10 @@ The hint is **advisory**:
 | 2,637 packages loaded for 132 used (95% wasted) | ~400 packages loaded for 132 used (6.6× cut) |
 | ~9 s `load_family` total | projected ~2 s |
 
-The hint compounds with the static-`package.py` parser
-([above](#plugging-in-the-static-package-py-fast-parser)) — the
-parser makes each load cheap; the hint makes most loads
-unnecessary.
+The hint compounds with the static-`package.py` parser (the
+`pyrer.parse_static_package_py` fast path, when wired into the
+shim): the parser makes each load cheap; the hint makes most
+loads unnecessary.
 
 ### When this actually helps
 
