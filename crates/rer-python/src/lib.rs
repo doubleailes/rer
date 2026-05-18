@@ -718,11 +718,64 @@ fn parse_static_package_py(source: &str) -> Option<PackageData> {
     })
 }
 
+/// Batched variant of [`parse_static_package_py`]: open and parse
+/// every path on a Rayon thread pool, returning a list aligned with
+/// `paths`. Closes issue #94.
+///
+/// ```python
+/// import pyrer
+///
+/// paths = [pkg.filepath for pkg in iter_packages(...)]
+/// pds = pyrer.parse_static_packages_py(paths)
+/// for pd, pkg in zip(pds, pkgs):
+///     if pd is None:
+///         pd = pyrer.PackageData.from_rez(pkg)  # dynamic / unreadable
+///     ...
+/// ```
+///
+/// - **Output is positionally aligned** with the input. A missing
+///   file, a parser bail on dynamic content, and an unreadable file
+///   all become `None` at the same index.
+/// - **No exceptions escape.** Per-file failures map to `None`.
+/// - **GIL is released for the batch** via `Python::allow_threads` so
+///   other Python threads run during the I/O.
+/// - **Pool size** follows Rayon's default (`RAYON_NUM_THREADS` or
+///   logical core count). No per-call knob — set the env var to
+///   constrain on shared CI hosts.
+///
+/// Replaces the rez shim's serial Python loop of `open()` calls —
+/// ~3 s on a typical 132-package Fortiche resolve, 91% of the
+/// `_load_family` budget when all other pyrer wins are stacked.
+#[pyfunction]
+fn parse_static_packages_py(
+    py: Python<'_>,
+    paths: Vec<std::path::PathBuf>,
+) -> Vec<Option<PackageData>> {
+    // Release the GIL while reading + parsing. The closure produces a
+    // `Vec<Option<rer_package::PackageInfo>>`; the conversion to the
+    // PyO3-managed `PackageData` happens after the GIL is reacquired.
+    let infos: Vec<Option<rer_package::PackageInfo>> =
+        py.allow_threads(|| rer_package::parse_static_packages_py(&paths));
+
+    infos
+        .into_iter()
+        .map(|maybe| {
+            maybe.map(|info| PackageData {
+                name: info.name,
+                version: info.version,
+                requires: info.requires,
+                variants: info.variants,
+            })
+        })
+        .collect()
+}
+
 /// The `pyrer` Python module — Rez-compatible package resolver.
 #[pymodule]
 fn pyrer(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(solve, m)?)?;
     m.add_function(wrap_pyfunction!(parse_static_package_py, m)?)?;
+    m.add_function(wrap_pyfunction!(parse_static_packages_py, m)?)?;
     m.add_class::<PackageData>()?;
     m.add_class::<ResolvedVariant>()?;
     m.add_class::<SolveResult>()?;

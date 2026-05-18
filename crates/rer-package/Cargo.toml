@@ -16,3 +16,9 @@ name = "rer_package"
 # Hand-rolled lexer — no AST library dependency. Stage 3 measurement
 # showed `rustpython-parser` was ~2 ms/file because it built the
 # whole module AST when we only needed four top-level fields.
+#
+# Rayon powers the batched `parse_static_packages_py` API (issue #94)
+# that reads + parses many `package.py` files in parallel, replacing
+# the rez shim's serial Python file-open loop (~3 s on a typical
+# 132-package Fortiche resolve).
+rayon = { workspace = true }
