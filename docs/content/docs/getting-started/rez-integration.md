@@ -298,6 +298,193 @@ every reachable family.
 - **Solve-phase CPU.** The solver itself runs the same algorithm
   either way. Lazy loading is purely about avoiding pre-solve I/O.
 
+## Plugging in the static `package.py` fast-parser
+
+Once `load_family` is wired, the inner per-package load is the next
+hot path. `pyrer.parse_static_package_py(source)` reads the four
+solver-relevant fields directly from a `package.py` source string —
+no Python interpreter, no `Requirement` parse, no `__str__`
+round-trip. About **34.8× faster than `DeveloperPackage.from_path +
+from_rez`** on the Fortiche-on-CIFS corpus
+(75 μs/file vs 2.6 ms/file). Saves roughly 2.5 ms per file loaded —
+~127 ms / resolve on a typical 50-family resolve.
+
+The parser accepts the static subset of `package.py`: literal
+assignments for `name`, `version`, `requires`, `variants`, plus
+ignorable `def commands()` and `with scope("config")` blocks.
+Anything dynamic (`@early` / `@late`, top-level `if`, `import`,
+…) returns `None` so the caller falls back to rez. **Bias hard
+toward bailing** — a false positive would diverge from rez and
+produce a silent correctness regression in any resolve. See the
+[engineering note](../../engineering/fast-package-py-parser/) for
+the design, the corpus survey, the V2 hand-rolled-lexer rewrite,
+and the differential test result (0 mismatches on 5,979
+V2-accepted files at Fortiche).
+
+### Two-tier `load_family`
+
+The integration replaces one function in the shim:
+
+```python
+import os
+import pyrer
+from rez.packages import iter_packages
+
+
+def _try_fast_parse(pkg):
+    """Try the Rust static parser. Returns a PackageData on success,
+    or None for any reason — non-.py package, unreadable file, or
+    dynamic content the parser bails on. The caller falls back to
+    `from_rez(pkg)`."""
+    filepath = getattr(pkg, "filepath", None)
+    if not filepath or not filepath.endswith(".py"):
+        return None
+    try:
+        with open(filepath, "r", encoding="utf-8") as f:
+            source = f.read()
+    except OSError:
+        return None
+    return pyrer.parse_static_package_py(source)
+
+
+def load_family(name, package_paths):
+    out = []
+    for pkg in iter_packages(name, paths=package_paths):
+        pd = _try_fast_parse(pkg) or pyrer.PackageData.from_rez(pkg)
+        out.append(pd)
+    return out
+```
+
+That's the minimal integration. ~30 lines added; the existing
+`_pyrer_resolve` method is unchanged except for using the
+two-tier `load_family` above.
+
+### Shadow-validation mode for the first weeks in production
+
+The differential harness already ran clean on the Fortiche corpus
+(5,813/5,813 matched). But a shadow check in production catches
+runtime patterns the offline survey didn't exercise. Gate it on an
+env var so it can be turned on for a release and off afterwards:
+
+```python
+import logging
+import os
+
+_VALIDATE = os.environ.get("REZ_PYRER_VALIDATE_PARSER") == "1"
+_logger = logging.getLogger("pyrer.fast_parser")
+
+
+def _try_fast_parse(pkg):
+    filepath = getattr(pkg, "filepath", None)
+    if not filepath or not filepath.endswith(".py"):
+        return None
+    try:
+        with open(filepath, "r", encoding="utf-8") as f:
+            source = f.read()
+    except OSError:
+        return None
+
+    pd_fast = pyrer.parse_static_package_py(source)
+    if pd_fast is None:
+        return None
+
+    if _VALIDATE:
+        pd_slow = pyrer.PackageData.from_rez(pkg)
+        fast_t = (
+            pd_fast.name, pd_fast.version,
+            list(pd_fast.requires),
+            [list(v) for v in pd_fast.variants],
+        )
+        slow_t = (
+            pd_slow.name, pd_slow.version,
+            list(pd_slow.requires),
+            [list(v) for v in pd_slow.variants],
+        )
+        if fast_t != slow_t:
+            _logger.warning(
+                "pyrer fast parser DIVERGED for %s\n"
+                "  fast: %r\n  slow: %r\n"
+                "  Using slow path; please report this upstream.",
+                filepath, fast_t, slow_t,
+            )
+            return None  # divergence — fall back to rez
+    return pd_fast
+```
+
+Run a release with `REZ_PYRER_VALIDATE_PARSER=1` set in the shim's
+environment. Grep your studio logs for the warning; the count is
+your real-world divergence rate. If it stays zero (which the
+offline differential predicts), drop the flag.
+
+### Metrics — confirm the hit rate
+
+Class-level counters tell you what fraction of packages are
+actually taking the fast path in production:
+
+```python
+class _PyrerStats:
+    fast_hits = 0
+    fast_misses_non_py = 0   # yaml package, memory repo, etc.
+    fast_misses_dynamic = 0  # parser bailed (real dynamic content)
+    fast_misses_io = 0       # couldn't read the file
+
+    @classmethod
+    def log_summary(cls):
+        total = (cls.fast_hits + cls.fast_misses_non_py
+                 + cls.fast_misses_dynamic + cls.fast_misses_io)
+        if not total:
+            return
+        _logger.info(
+            "pyrer fast parser: %d/%d hit (%.1f%%); "
+            "non-py=%d dynamic=%d io=%d",
+            cls.fast_hits, total, cls.fast_hits / total * 100,
+            cls.fast_misses_non_py, cls.fast_misses_dynamic,
+            cls.fast_misses_io,
+        )
+```
+
+Increment from inside `_try_fast_parse`; call `log_summary` from
+the shim's existing telemetry hook. Expected hit rate at Fortiche:
+~93% based on the corpus survey.
+
+### Rollout plan
+
+Three flags stacked on top of the existing `use_rer_solver`:
+
+```python
+USE_RER_SOLVER = _rez_config.use_rer_solver
+USE_FAST_PARSER = USE_RER_SOLVER and \
+    os.environ.get("REZ_PYRER_FAST_PARSER", "1") == "1"
+VALIDATE_FAST_PARSER = USE_FAST_PARSER and \
+    os.environ.get("REZ_PYRER_VALIDATE_PARSER") == "1"
+```
+
+A reasonable rollout sequence:
+
+| Week | Flags | What you're checking |
+|---|---|---|
+| 1 | `USE_FAST_PARSER=1`, `VALIDATE=1`, ~5% of users | Production divergence count = 0? Hit rate ≥ 90%? Wall-time A/B looks right? |
+| 2 | Same flags, ~50% of users | Same checks at scale + memcache impact |
+| 3 | `USE_FAST_PARSER=1`, `VALIDATE=0`, 100% | Production wall-time + telemetry |
+| 4 | Flag stays on by default in `use_rer_solver` config | Make permanent |
+
+Each step is a kill-switch flip away from the previous behaviour.
+
+### Where this WON'T help (so nobody's surprised)
+
+- **Cold `rez env` startup time.** The dominant ~200-300 ms of
+  Python interpreter init is unchanged. The parser saves on the
+  per-package-load step that happens *after* startup.
+- **`@early` / `@late` packages.** These fall back to rez
+  (the dynamic 7% at Fortiche). Studios with heavier late-bound use
+  see proportionally less of the win.
+- **`package.yaml`.** The parser is `.py` only; YAML goes through
+  rez.
+- **Resolves served from a cached `rxt` context.** rxt loading
+  is its own path — the parser isn't invoked.
+- **First invocation on a cold CIFS cache.** I/O dominates the
+  file read; the parser saves CPU, not network roundtrips.
+
 ## Solving
 
 ```python
