@@ -95,7 +95,7 @@ Add the resolver crate to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-rer-resolver = "0.1.0-rc.9"
+rer-resolver = "1.0.0-rc.2"
 ```
 
 Then call the solver against an in-memory repository:
