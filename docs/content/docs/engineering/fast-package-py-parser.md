@@ -12,9 +12,42 @@ toc = true
 top = false
 +++
 
-> **Status: RFC / not implemented.** This document captures the plan
-> agreed on the `experimental` branch. The corpus survey in Stage 1
-> is a prerequisite to committing to Stages 2–3.
+> **Status: Stage 1 complete, Stage 2 scaffolded.** Survey tool at
+> `scripts/survey_package_py.py`; Rust parser crate at
+> `crates/rer-package/`. Stage 1 numbers (Fortiche, May 2026) inline
+> below.
+
+## Stage 1 result — Fortiche, May 2026
+
+Run on `/thierry/rez/pkg` (the Fortiche-on-CIFS rez repo):
+
+| | Count | % |
+|---|---:|---:|
+| `package.py` files surveyed | 6,439 | 100% |
+| **Fast-parseable** | **5,982** | **92.9%** |
+| Not fast-parseable | 457 | 7.1% |
+
+Non-fast-parseable breakdown (files can match multiple buckets):
+
+| Pattern | Count | % of total |
+|---|---:|---:|
+| `dynamic-requires` (`@early` / `@late` on `requires`) | 352 | 5.5% |
+| `imports` (load-bearing `import` statements) | 96 | 1.5% |
+| `missing-version` (mostly rez's own test fixtures) | 85 | 1.3% |
+| `missing-name` (mostly rez's own test fixtures) | 75 | 1.2% |
+| `top-level-classdef` | 54 | 0.8% |
+| `unrecognised-raise` | 2 | 0.0% |
+
+**Decisive finding**: the dominant *seeming* failure pattern from a
+naive survey, `top-level-with` (2,245 files, 34.9% of the corpus), is
+**100% rez's declarative `with scope("config")` DSL** — every one of
+the 2,245 files matched. That body only writes attributes of the
+`as`-name (config object) and never touches solver fields, so it is
+solver-irrelevant — the parser treats it the same way it treats
+`def commands(...)`. Including this single extension lifts the
+accept rate from a marginal 58.6% to a green-light 92.9%.
+
+Well past the 70% **PROCEED** threshold from the original RFC.
 
 ## Motivation
 
