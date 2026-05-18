@@ -14,14 +14,81 @@ use std::rc::Rc;
 pub type FamilyMap = HashMap<String, PackageData>;
 
 /// Callback invoked on the first lookup for a family that is not already in
-/// the repo. Returns `(version_string, PackageData)` pairs — every version of
-/// the family. An empty result means "no such family"; the repo caches that
-/// answer and never calls the loader for the same name again.
+/// the repo, with an optional version-range hint indicating the *current*
+/// solver constraint on that family. Returns `(version_string, PackageData)`
+/// pairs.
 ///
-/// Mirrors the lazy-load behaviour rez gets from its `Package` resource
-/// wrapper (each `package.py` is AST-evaluated on first attribute access).
-/// `pyrer` builds one of these from a Python callable for issue #86.
-pub type FamilyLoader = Box<dyn Fn(&str) -> Vec<(String, PackageData)>>;
+/// **Hint semantics (issue #92):**
+///
+/// - `None` — the solver needs *every* version of the family (e.g. an
+///   unbounded request, or a backtrack-widen has invalidated a narrower
+///   prior load). The shim must return all versions.
+/// - `Some(range)` — the solver only needs versions inside `range`. The
+///   shim **may** filter to versions intersecting it (rez's
+///   `iter_packages(range_=...)` does exactly that). The shim is **allowed
+///   to return a superset** — pyrer re-validates against current
+///   constraints, so extra versions are merely wasted parse time.
+/// - The shim must **not** silently drop versions outside the hint without
+///   pyrer asking — pyrer caches the loaded range and re-calls the loader
+///   with a widened range if the solver backtracks and needs more.
+///
+/// An empty result means "no such family" *under the supplied hint*. The
+/// repo memoises this answer paired with the hint that produced it; a
+/// later wider hint will retry the loader.
+///
+/// `pyrer` builds one of these from a Python callable. See the load_family
+/// callback in `pyrer.solve()` for the Python-side contract.
+pub type FamilyLoader =
+    Box<dyn Fn(&str, Option<&VersionRange>) -> Vec<(String, PackageData)>>;
+
+/// Records which version-range was passed to the loader when a family was
+/// last loaded. Used by [`PackageRepo`] to decide whether a cached family
+/// map can serve a fresh request without re-calling the loader.
+#[derive(Clone, Debug)]
+enum LoadedRange {
+    /// Loaded with `None` hint — every version is in the cached map.
+    /// Always sufficient for any subsequent request.
+    Unconstrained,
+    /// Loaded with `Some(range)` — only versions inside this range are
+    /// guaranteed to be in the cached map.
+    Bounded(VersionRange),
+}
+
+impl LoadedRange {
+    /// True if `hint` is fully covered by the cached load — i.e. every
+    /// version the caller could care about is already in our map.
+    fn covers(&self, hint: Option<&VersionRange>) -> bool {
+        match (self, hint) {
+            (LoadedRange::Unconstrained, _) => true,
+            (LoadedRange::Bounded(_), None) => false,
+            (LoadedRange::Bounded(loaded), Some(want)) => {
+                // want ⊆ loaded  ⟺  loaded ∩ want == want
+                loaded.intersection(want).as_ref() == Some(want)
+            }
+        }
+    }
+
+    /// The union of two load ranges, used when widening to satisfy a
+    /// hint that wasn't covered by the previous load.
+    fn widened_with(&self, hint: Option<&VersionRange>) -> LoadedRange {
+        match (self, hint) {
+            (LoadedRange::Unconstrained, _) | (_, None) => LoadedRange::Unconstrained,
+            (LoadedRange::Bounded(loaded), Some(want)) => {
+                LoadedRange::Bounded(loaded.union(want))
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+struct FamilyEntry {
+    loaded_range: LoadedRange,
+    /// `Some(map)` if the family is known to exist; `None` if the loader
+    /// returned empty under `loaded_range` (i.e. "no such family within
+    /// this range, possibly absent entirely if `loaded_range` is
+    /// `Unconstrained`").
+    map: Option<Rc<FamilyMap>>,
+}
 
 /// The package repository — `family -> version -> PackageData`.
 ///
@@ -31,19 +98,19 @@ pub type FamilyLoader = Box<dyn Fn(&str) -> Vec<(String, PackageData)>>;
 /// own solver does.
 ///
 /// Lookups are routed through [`Self::get_family`], which:
-/// 1. Returns the cached `Rc<FamilyMap>` if the family has been seen.
-/// 2. Otherwise calls the loader (if any), memoising both the hit and the
-///    "no such family" answer.
-/// 3. Otherwise returns `None`.
+/// 1. Returns the cached `Rc<FamilyMap>` if the family has been loaded with
+///    a range that covers the request.
+/// 2. Otherwise calls the loader (if any) with the widened range, replaces
+///    the cache entry, and returns the new map.
+/// 3. Returns `None` if there's no loader and the family isn't cached, or
+///    if the loader returns empty under the widened range.
 ///
 /// Construction:
 /// - [`Self::from_map`] / `impl From<HashMap<…>>` — eager, no loader.
 /// - [`Self::with_loader`] — lazy; the loader is consulted on miss.
 #[derive(Default)]
 pub struct PackageRepo {
-    /// `Some(map)` for present families, `None` for families the loader
-    /// confirmed as absent (so we don't re-call it on miss).
-    families: RefCell<HashMap<String, Option<Rc<FamilyMap>>>>,
+    families: RefCell<HashMap<String, FamilyEntry>>,
     loader: Option<FamilyLoader>,
 }
 
@@ -65,10 +132,19 @@ impl PackageRepo {
 
     /// Eager repo from a `family -> version -> PackageData` map. The loader
     /// is `None`, so any family not in `map` is reported as absent on lookup.
+    /// Eager-seeded families count as fully loaded (any range hint covered).
     pub fn from_map(map: HashMap<String, FamilyMap>) -> Self {
         let families = map
             .into_iter()
-            .map(|(name, fam)| (name, Some(Rc::new(fam))))
+            .map(|(name, fam)| {
+                (
+                    name,
+                    FamilyEntry {
+                        loaded_range: LoadedRange::Unconstrained,
+                        map: Some(Rc::new(fam)),
+                    },
+                )
+            })
             .collect();
         PackageRepo {
             families: RefCell::new(families),
@@ -78,8 +154,10 @@ impl PackageRepo {
 
     /// Repo backed by a loader. The loader is called the first time the
     /// solver asks for a family that isn't already cached — both hits and
-    /// "no such family" answers are memoised, so the loader fires at most
-    /// once per family per repo.
+    /// "no such family" answers are memoised. With the issue #92
+    /// version-range hint, the loader may be re-called for the same family
+    /// if a later request needs a wider range than the cached load
+    /// covered; otherwise the cache hit is one-and-done.
     ///
     /// Use [`Self::insert_family`] to pre-seed families that are already
     /// in memory (e.g. ones produced by the caller's BFS seed pass).
@@ -90,42 +168,85 @@ impl PackageRepo {
         }
     }
 
-    /// Pre-populate a family. Useful with [`Self::with_loader`] to skip
-    /// the loader for families already in memory.
+    /// Pre-populate a family. Counts as a full load (any range hint
+    /// covered). Useful with [`Self::with_loader`] to skip the loader for
+    /// families already in memory.
     pub fn insert_family(&self, name: String, fam: FamilyMap) {
-        self.families.borrow_mut().insert(name, Some(Rc::new(fam)));
+        self.families.borrow_mut().insert(
+            name,
+            FamilyEntry {
+                loaded_range: LoadedRange::Unconstrained,
+                map: Some(Rc::new(fam)),
+            },
+        );
     }
 
-    /// Number of families currently cached in the repo. With a loader
-    /// attached this grows as the solve progresses — it only reflects the
-    /// eager-seeded set + whatever the loader has been asked for so far.
+    /// Number of present families currently cached in the repo. With a
+    /// loader attached this grows as the solve progresses — it only
+    /// reflects the eager-seeded set + whatever the loader has been
+    /// asked for so far.
     pub fn family_count(&self) -> usize {
         self.families
             .borrow()
             .values()
-            .filter(|v| v.is_some())
+            .filter(|entry| entry.map.is_some())
             .count()
     }
 
     /// `Some(family map)` if the family exists (cached or lazily loaded);
     /// `None` if there's no loader and it isn't cached, or if the loader
     /// returned no entries for it.
-    pub fn get_family(&self, name: &str) -> Option<Rc<FamilyMap>> {
-        if let Some(slot) = self.families.borrow().get(name) {
-            return slot.clone();
+    ///
+    /// The `hint` is the range the solver currently needs — passed through
+    /// to the loader, which may use it to pre-filter (e.g. via rez's
+    /// `iter_packages(range_=...)`). The repo tracks which range each
+    /// family was loaded under and reloads (with a widened range) when a
+    /// later request can't be served from the cache.
+    pub fn get_family(
+        &self,
+        name: &str,
+        hint: Option<&VersionRange>,
+    ) -> Option<Rc<FamilyMap>> {
+        // Cache hit + range covered → return directly.
+        if let Some(entry) = self.families.borrow().get(name) {
+            if entry.loaded_range.covers(hint) {
+                return entry.map.clone();
+            }
         }
-        let loaded = self.loader.as_ref().and_then(|load| {
-            let entries = load(name);
+        // Either uncached, or cached with a range that doesn't cover the
+        // request. Reload with the widened range.
+        let new_range = {
+            let families = self.families.borrow();
+            match families.get(name) {
+                Some(entry) => entry.loaded_range.widened_with(hint),
+                None => match hint {
+                    None => LoadedRange::Unconstrained,
+                    Some(r) => LoadedRange::Bounded(r.clone()),
+                },
+            }
+        };
+
+        let new_map = self.loader.as_ref().and_then(|load| {
+            let widened_hint = match &new_range {
+                LoadedRange::Unconstrained => None,
+                LoadedRange::Bounded(r) => Some(r),
+            };
+            let entries = load(name, widened_hint);
             if entries.is_empty() {
                 None
             } else {
                 Some(Rc::new(entries.into_iter().collect::<HashMap<_, _>>()))
             }
         });
-        self.families
-            .borrow_mut()
-            .insert(name.to_string(), loaded.clone());
-        loaded
+
+        self.families.borrow_mut().insert(
+            name.to_string(),
+            FamilyEntry {
+                loaded_range: new_range,
+                map: new_map.clone(),
+            },
+        );
+        new_map
     }
 }
 

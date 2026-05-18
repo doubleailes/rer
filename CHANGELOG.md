@@ -14,6 +14,19 @@ page.
 
 ### Added
 
+- **`version_range` hint on the `load_family` callback** (issue #92) —
+  `pyrer.solve(..., load_family=cb)` now invokes `cb` as
+  `cb(name, version_range="2+<3")` when the callback's signature can
+  accept a second `version_range` argument (named param or `**kwargs`).
+  The hint is a rez-syntax range string the shim can pass directly to
+  `rez.packages.iter_packages(range_=...)` to skip on-disk version
+  directories outside the request. Backward-compatible: 1-arg
+  callbacks (`def cb(name):`) keep working unchanged — pyrer detects
+  the signature via `inspect.signature` once per `solve()` call.
+  Targets the 95% load-fan-out waste documented in #92 (2,637
+  packages loaded for 132 used on a typical Fortiche resolve);
+  projected 6-20× cut to `_load_family` wall time. The 188-case rez
+  differential still passes 188/188.
 - **`PackageData.from_strings(name, version, requires=None, variants=None)`** —
   classmethod constructor for raw-string callers, symmetric with
   `from_rez(pkg)`. Skips rez's `AttributeForwardMeta` chain, the

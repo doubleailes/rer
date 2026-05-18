@@ -306,7 +306,7 @@ mod tests {
         let calls: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(Vec::new()));
         let calls_inner = Rc::clone(&calls);
 
-        let repo = crate::rez_solver::PackageRepo::with_loader(Box::new(move |name: &str| {
+        let repo = crate::rez_solver::PackageRepo::with_loader(Box::new(move |name: &str, _hint: Option<&rer_version::VersionRange>| {
             calls_inner.borrow_mut().push(name.to_string());
             match name {
                 "app" => vec![("1.0".to_string(), pkg(&["lib-2"], &[]))],
@@ -344,7 +344,7 @@ mod tests {
 
         // A diamond: app -> lib & util; util -> lib. lib is reached twice
         // but the loader must only be invoked once.
-        let repo = crate::rez_solver::PackageRepo::with_loader(Box::new(move |name: &str| {
+        let repo = crate::rez_solver::PackageRepo::with_loader(Box::new(move |name: &str, _hint: Option<&rer_version::VersionRange>| {
             calls_inner.borrow_mut().push(name.to_string());
             match name {
                 "app" => vec![("1.0".into(), pkg(&["lib", "util"], &[]))],
@@ -368,10 +368,83 @@ mod tests {
     }
 
     #[test]
+    fn test_loader_receives_version_range_hint() {
+        // Issue #92: the loader should be invoked with the solver's current
+        // range constraint as a hint.
+        use rer_version::VersionRange;
+        use std::cell::RefCell;
+
+        let calls: Rc<RefCell<Vec<(String, Option<VersionRange>)>>> =
+            Rc::new(RefCell::new(Vec::new()));
+        let calls_inner = Rc::clone(&calls);
+
+        let repo = crate::rez_solver::PackageRepo::with_loader(Box::new(
+            move |name: &str, hint: Option<&VersionRange>| {
+                calls_inner
+                    .borrow_mut()
+                    .push((name.to_string(), hint.cloned()));
+                match name {
+                    "lib" => vec![
+                        ("1.0".to_string(), pkg(&[], &[])),
+                        ("2.0".to_string(), pkg(&[], &[])),
+                        ("3.0".to_string(), pkg(&[], &[])),
+                    ],
+                    _ => Vec::new(),
+                }
+            },
+        ));
+
+        let reqs = vec![Requirement::parse("lib-2+<3")];
+        let mut solver = Solver::new(reqs, Rc::new(repo)).expect("solver construction");
+        solver.solve();
+        assert_eq!(solver.status(), SolverStatus::Solved);
+
+        let calls = calls.borrow();
+        assert_eq!(calls.len(), 1, "loader called more times than expected");
+        let (name, hint) = &calls[0];
+        assert_eq!(name, "lib");
+        let hint = hint.as_ref().expect("loader should have seen a hint");
+        assert_eq!(hint.to_string(), "2+<3");
+    }
+
+    #[test]
+    fn test_loader_eager_seed_no_loader_call() {
+        // A pre-seeded family must not trigger the loader, even when
+        // a range-hint request is made for it. The seed counts as a
+        // full load.
+        use std::cell::RefCell;
+        use std::collections::HashMap;
+
+        let calls: Rc<RefCell<usize>> = Rc::new(RefCell::new(0));
+        let calls_inner = Rc::clone(&calls);
+
+        let repo = crate::rez_solver::PackageRepo::with_loader(Box::new(
+            move |_name: &str, _hint: Option<&rer_version::VersionRange>| {
+                *calls_inner.borrow_mut() += 1;
+                Vec::new()
+            },
+        ));
+        let mut fam: HashMap<String, _> = HashMap::new();
+        fam.insert("1.0".into(), pkg(&[], &[]));
+        fam.insert("2.0".into(), pkg(&[], &[]));
+        repo.insert_family("lib".into(), fam);
+
+        let reqs = vec![Requirement::parse("lib-2")];
+        let mut solver = Solver::new(reqs, Rc::new(repo)).expect("solver construction");
+        solver.solve();
+        assert_eq!(solver.status(), SolverStatus::Solved);
+        assert_eq!(
+            *calls.borrow(),
+            0,
+            "loader must not be called for pre-seeded families"
+        );
+    }
+
+    #[test]
     fn test_loader_empty_means_missing_family() {
         // The loader returns no entries for an unknown name; the solver
         // treats that as a missing family (failed resolve), not a panic.
-        let repo = crate::rez_solver::PackageRepo::with_loader(Box::new(|_| Vec::new()));
+        let repo = crate::rez_solver::PackageRepo::with_loader(Box::new(|_: &str, _: Option<&rer_version::VersionRange>| Vec::new()));
         let reqs = vec![Requirement::parse("doesnotexist")];
         let solver = Solver::new(reqs, Rc::new(repo));
         // Either Solver::new returns a ScopeError or the solve fails;

@@ -149,10 +149,18 @@ been given:
 ```python
 import pyrer
 
-def load_family(name):
-    """Return every PackageData for `name`, or [] if no such family."""
+def load_family(name, version_range=None):
+    """Return every PackageData for `name` (optionally filtered to
+    `version_range`), or [] if no such family.
+
+    The `version_range` hint (issue #92) is a rez-syntax string —
+    `"2+<3"`, `"==2.0"`, etc. — that the shim can pass directly to
+    `iter_packages(range_=...)` so on-disk version dirs outside the
+    range are skipped before any `package.py` is opened. `None`
+    means "every version".
+    """
     pkgs = []
-    for pkg in iter_packages(name, paths=PACKAGE_PATHS):
+    for pkg in iter_packages(name, range_=version_range, paths=PACKAGE_PATHS):
         pkgs.append(pyrer.PackageData.from_rez(pkg))
     return pkgs
 
@@ -165,21 +173,70 @@ result = pyrer.solve(
 
 Semantics:
 
-- The callback is called **at most once per family** in one solve
-  (results are cached internally), and **only for families the
+- The callback is called **at most once per (family, range)** in one
+  solve (results are cached internally), and **only for families the
   solver actually exercises**.
-- Returning `[]` means "no such family" — treated the same as a
-  family that was never added.
+- Returning `[]` means "no such family in the requested range" —
+  treated the same as a family that was never added.
 - The `packages` argument is still accepted; entries supplied that
   way are pre-seeded into the cache and the callback is never asked
   for those families. Useful for a hybrid where you pre-load
   hot families and lazy-load the long tail.
+- **Backward-compatible signature** (issue #92): a callback defined
+  as `def load_family(name):` keeps working — pyrer detects the
+  signature and only passes `version_range` when the callback can
+  accept it.
 - If the callback raises, the solve returns
   `result.status == "error"` with the exception message in
   `result.failure_description`. No exception escapes `pyrer.solve`.
 - Defensive: entries whose `name` does not match the requested
   family are dropped; a duplicate `(family, version)` from the
   callback surfaces as `status="error"`.
+
+### The `version_range` hint (issue #92) — pre-filter at the shim
+
+When a request pins a version (`maya-2024+`, `python<3.12`,
+`==1.5.0`), pyrer propagates that constraint immediately. It then
+passes the resulting range to the `load_family` callback as the
+`version_range` keyword argument.
+
+The shim can use it directly with rez's `iter_packages`:
+
+```python
+def load_family(name, version_range=None):
+    return [
+        pyrer.PackageData.from_rez(pkg)
+        for pkg in iter_packages(name, range_=version_range, paths=PACKAGE_PATHS)
+    ]
+```
+
+`rez.packages.iter_packages` already accepts a `range_` argument and
+**skips entire version directories** that fall outside it, before
+any `package.py` is opened. That cuts I/O proportionally to how
+narrow the request is.
+
+The hint is **advisory**:
+
+- The shim **may** filter; pyrer re-validates anyway, so returning
+  the full set is correct but wasteful.
+- The shim **must not** drop versions outside the hint without
+  reason — pyrer caches the loaded range and re-calls the loader
+  with a widened range if a backtrack later needs more.
+- `version_range=None` means "the solver needs every version" —
+  always return the full family.
+
+**Impact** on a 132-package resolve at a 5,500-package studio
+(per the issue):
+
+| Without hint | With hint |
+|---:|---:|
+| 2,637 packages loaded for 132 used (95% wasted) | ~400 packages loaded for 132 used (6.6× cut) |
+| ~9 s `load_family` total | projected ~2 s |
+
+The hint compounds with the static-`package.py` parser
+([above](#plugging-in-the-static-package-py-fast-parser)) — the
+parser makes each load cheap; the hint makes most loads
+unnecessary.
 
 ### When this actually helps
 

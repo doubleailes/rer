@@ -372,8 +372,16 @@ impl PackageVariantList {
     /// Build the (lazy) variant list for a family, or `None` if the family is
     /// absent from the repository. Only version strings are parsed here — the
     /// requirement strings are parsed on demand by [`Self::get_intersection`].
-    pub fn new(ctx: &SolverContext, package_name: &str) -> Option<Self> {
-        let versions = ctx.repo.get_family(package_name)?;
+    ///
+    /// `hint` is the current solver range constraint, forwarded to the repo's
+    /// loader so the shim can pre-filter versions (issue #92). `None` means
+    /// "unconstrained — every version".
+    pub fn new(
+        ctx: &SolverContext,
+        package_name: &str,
+        hint: Option<&VersionRange>,
+    ) -> Option<Self> {
+        let versions = ctx.repo.get_family(package_name, hint)?;
         let mut entries: Vec<LazyEntry> = versions
             .keys()
             .map(|version_str| {
@@ -877,14 +885,21 @@ impl PackageVariantCache {
     /// Get a slice of `package_name`'s variants intersected with `range`.
     ///
     /// `None` means either the family is absent from the repository or no
-    /// version falls within `range` — Phase 4/5 distinguishes the two.
+    /// version falls within `range` — Phase 4/5 distinguishes the two via
+    /// [`Self::family_missing`].
+    ///
+    /// `range` is also forwarded to the repo's loader as the hint, so a
+    /// `load_family` callback can pre-filter to versions intersecting it
+    /// (issue #92). If a later request asks for a wider range than the
+    /// cached load covered, both the repo and this cache transparently
+    /// reload.
     pub fn get_variant_slice(
         &mut self,
         ctx: &Rc<SolverContext>,
         package_name: &str,
         range: &VersionRange,
     ) -> Option<PackageVariantSlice> {
-        let list = self.get_or_build(ctx, package_name)?;
+        let list = self.get_or_build(ctx, package_name, Some(range))?;
         let entries = list.get_intersection(range)?;
         Some(PackageVariantSlice::new(
             Rc::clone(ctx),
@@ -894,22 +909,69 @@ impl PackageVariantCache {
     }
 
     /// True if the family is known to be absent from the repository.
+    /// Asks with `None` hint to force a full load — definitive absence
+    /// can't be answered from a range-bounded cached result.
     pub fn family_missing(&mut self, ctx: &Rc<SolverContext>, package_name: &str) -> bool {
-        self.get_or_build(ctx, package_name).is_none()
+        self.get_or_build(ctx, package_name, None).is_none()
     }
 
     /// Look up the cached `PackageVariantList` for `package_name`, building it
     /// on first access. Lookup is by `&str` (`Borrow<str>` on `Rc<str>`), so a
     /// cache hit avoids allocating a fresh `Name` key.
+    ///
+    /// The cached list is invalidated and rebuilt if the underlying family
+    /// map in [`PackageRepo`] has been reloaded (detected via `Rc::ptr_eq`
+    /// on the family map). That happens when a later request needs a
+    /// wider range than the previous load covered — see the issue #92
+    /// backtrack-widen path in [`PackageRepo::get_family`].
     fn get_or_build(
         &mut self,
         ctx: &Rc<SolverContext>,
         package_name: &str,
+        hint: Option<&VersionRange>,
     ) -> Option<Rc<PackageVariantList>> {
+        // Fast path: cached list whose underlying family map is still
+        // the one the repo would return. Compare Rcs.
         if let Some(slot) = self.variant_lists.get(package_name) {
-            return slot.clone();
+            match slot.as_ref() {
+                Some(cached_list) => {
+                    // Repo's get_family is cheap on a covered hint (no
+                    // reload). If it returns the same Rc<FamilyMap> we
+                    // already built the list against, the list is still
+                    // valid.
+                    let fresh_map = ctx.repo.get_family(package_name, hint);
+                    if let Some(fresh_map) = fresh_map.as_ref() {
+                        if Rc::ptr_eq(fresh_map, &cached_list.versions) {
+                            return Some(Rc::clone(cached_list));
+                        }
+                        // The map changed under us (widen-reload). Fall
+                        // through to rebuild against the fresh map.
+                    } else {
+                        // Repo lost the family between calls — treat as
+                        // absent.
+                        self.variant_lists.insert(Name::from(package_name), None);
+                        return None;
+                    }
+                }
+                None => {
+                    // Previously absent. If the hint is wider than what
+                    // produced the absence answer (or absence answer was
+                    // produced with None hint), we'd see the change via
+                    // the repo. But the repo encodes the previous hint
+                    // and only retries when widening, so a fresh call
+                    // here is the right gate.
+                    let fresh = ctx.repo.get_family(package_name, hint);
+                    if fresh.is_none() {
+                        return None;
+                    }
+                    // Repo reloaded and now has the family — fall through
+                    // to build a list from it.
+                }
+            }
         }
-        let built = PackageVariantList::new(ctx, package_name).map(Rc::new);
+        // Slow path: build a fresh PackageVariantList from whatever the
+        // repo currently has.
+        let built = PackageVariantList::new(ctx, package_name, hint).map(Rc::new);
         self.variant_lists
             .insert(Name::from(package_name), built.clone());
         built
@@ -958,7 +1020,7 @@ mod tests {
     fn test_build_variants_no_variants() {
         let r = repo(vec![("foo", vec![("1.0", pkg(&["bar-2"], &[]))])]);
         let ctx = ctx_with(r, &["foo"]);
-        let list = PackageVariantList::new(&ctx, "foo").unwrap();
+        let list = PackageVariantList::new(&ctx, "foo", None).unwrap();
         let entries = list.get_intersection(&VersionRange::any()).unwrap();
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].len(), 1);
@@ -974,7 +1036,7 @@ mod tests {
             vec![("1.0", pkg(&["base-1"], &[&["maya-2024"], &["maya-2025"]]))],
         )]);
         let ctx = ctx_with(r, &["foo"]);
-        let list = PackageVariantList::new(&ctx, "foo").unwrap();
+        let list = PackageVariantList::new(&ctx, "foo", None).unwrap();
         let entries = list.get_intersection(&VersionRange::any()).unwrap();
         assert_eq!(entries[0].len(), 2);
         let v0 = &entries[0].variants()[0];
@@ -995,7 +1057,7 @@ mod tests {
             ],
         )]);
         let ctx = ctx_with(r, &["foo"]);
-        let list = PackageVariantList::new(&ctx, "foo").unwrap();
+        let list = PackageVariantList::new(&ctx, "foo", None).unwrap();
         let entries = list.get_intersection(&VersionRange::parse("2+")).unwrap();
         let versions: Vec<String> = entries.iter().map(|e| e.version().to_string()).collect();
         assert_eq!(versions, vec!["2.0", "3.0"]);

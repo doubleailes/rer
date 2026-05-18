@@ -331,20 +331,48 @@ fn packages_to_map(packages: Vec<PackageData>) -> Result<HashMap<String, FamilyM
 /// `RefCell` after the solver finishes and surfaces the captured error as
 /// a `"error"`-status `SolveResult`.
 ///
+/// `takes_range` flags whether the callback's signature accepts a second
+/// `version_range` parameter (issue #92). When true, the loader passes the
+/// current solver range as a rez-style string (or `None` for
+/// "unconstrained"); when false, the loader calls with just the name.
+/// Detected once via `inspect.signature` in [`solve`].
+///
 /// Entries whose `name` doesn't match the requested family are dropped
 /// defensively — a misbehaving loader can't poison the repo for unrelated
 /// families.
-fn make_loader(callback: Py<PyAny>, load_err: Rc<RefCell<Option<String>>>) -> FamilyLoader {
+fn make_loader(
+    callback: Py<PyAny>,
+    load_err: Rc<RefCell<Option<String>>>,
+    takes_range: bool,
+) -> FamilyLoader {
     Box::new(
-        move |name: &str| -> Vec<(String, rer_resolver::PackageData)> {
+        move |name: &str,
+              hint: Option<&rer_version::VersionRange>|
+              -> Vec<(String, rer_resolver::PackageData)> {
             // Already errored on a previous call — short-circuit so we don't
             // pile up errors and don't keep calling a broken callback.
             if load_err.borrow().is_some() {
                 return Vec::new();
             }
+            let hint_str: Option<String> = hint.map(|r| r.to_string());
             let result: PyResult<Vec<(String, rer_resolver::PackageData)>> =
                 Python::with_gil(|py| -> PyResult<_> {
-                    let ret = callback.bind(py).call1((name,))?;
+                    let ret = if takes_range {
+                        // Pass hint as a rez-style range string via the
+                        // `version_range` keyword — works with both
+                        // `def f(name, version_range=None)` and
+                        // `def f(name, **kwargs)`. `None` → Python
+                        // `None`, signalling "unconstrained".
+                        let py_hint = match hint_str.as_deref() {
+                            Some(s) => s.into_pyobject(py)?.into_any(),
+                            None => py.None().into_bound(py),
+                        };
+                        let kwargs = pyo3::types::PyDict::new(py);
+                        kwargs.set_item("version_range", py_hint)?;
+                        callback.bind(py).call((name,), Some(&kwargs))?
+                    } else {
+                        callback.bind(py).call1((name,))?
+                    };
                     let pkgs: Vec<PackageData> = ret.extract()?;
                     let mut out: Vec<(String, rer_resolver::PackageData)> =
                         Vec::with_capacity(pkgs.len());
@@ -380,6 +408,82 @@ fn make_loader(callback: Py<PyAny>, load_err: Rc<RefCell<Option<String>>>) -> Fa
             }
         },
     )
+}
+
+/// Inspect the Python callable's signature and return `true` if it can
+/// accept a second `version_range` argument — either as a named parameter
+/// or via `**kwargs` / `*args`. False means the legacy 1-arg shape.
+///
+/// Errs on the side of `false` (legacy) if introspection fails for any
+/// reason; the loader then keeps calling with just `name` and existing
+/// shims keep working.
+fn callback_takes_range(py: Python<'_>, callback: &Py<PyAny>) -> bool {
+    let inspect = match py.import("inspect") {
+        Ok(m) => m,
+        Err(_) => return false,
+    };
+    let sig = match inspect.getattr("signature").and_then(|f| f.call1((callback,))) {
+        Ok(s) => s,
+        Err(_) => return false,
+    };
+    let params = match sig.getattr("parameters") {
+        Ok(p) => p,
+        Err(_) => return false,
+    };
+    let len: usize = params.len().unwrap_or(0);
+    if len == 0 {
+        return false;
+    }
+    // Walk the parameters' kinds. A second positional parameter, a
+    // `version_range` keyword parameter, or any `*args`/`**kwargs`
+    // signals support.
+    let Ok(items) = params.call_method0("items") else {
+        return false;
+    };
+    let Ok(iter) = items.try_iter() else {
+        return false;
+    };
+    let mut positional_count = 0usize;
+    let Ok(inspect_mod) = py.import("inspect") else {
+        return false;
+    };
+    let Ok(parameter_cls) = inspect_mod.getattr("Parameter") else {
+        return false;
+    };
+    let pkw = parameter_cls.getattr("VAR_KEYWORD").ok();
+    let pvar = parameter_cls.getattr("VAR_POSITIONAL").ok();
+    for item in iter {
+        let Ok(item) = item else { continue };
+        let Ok(name_val) = item.get_item(0) else {
+            continue;
+        };
+        let Ok(param) = item.get_item(1) else { continue };
+        let Ok(name_s) = name_val.extract::<String>() else {
+            continue;
+        };
+        if name_s == "version_range" {
+            return true;
+        }
+        let Ok(kind) = param.getattr("kind") else {
+            continue;
+        };
+        if let Some(p) = &pkw {
+            if kind.eq(p).unwrap_or(false) {
+                return true;
+            }
+        }
+        if let Some(p) = &pvar {
+            if kind.eq(p).unwrap_or(false) {
+                return true;
+            }
+        }
+        // Plain positional / positional-or-keyword: counts toward arity.
+        positional_count += 1;
+        if positional_count >= 2 {
+            return true;
+        }
+    }
+    false
 }
 
 // ---------------------------------------------------------------------------
@@ -458,7 +562,17 @@ fn solve(
     let load_err: Rc<RefCell<Option<String>>> = Rc::new(RefCell::new(None));
 
     let repo = if let Some(callback) = load_family {
-        let lazy = PackageRepo::with_loader(make_loader(callback, Rc::clone(&load_err)));
+        // One-time signature inspection (issue #92): if the callback can
+        // take a `version_range` argument, we pass the current solver
+        // range as a rez-style string so the shim can pre-filter.
+        // Backward-compatible: callbacks with the 1-arg shape keep
+        // working unchanged.
+        let takes_range = Python::with_gil(|py| callback_takes_range(py, &callback));
+        let lazy = PackageRepo::with_loader(make_loader(
+            callback,
+            Rc::clone(&load_err),
+            takes_range,
+        ));
         // Seed the eager set so the loader is never called for families
         // the caller already supplied.
         for (name, fam) in initial_map {
