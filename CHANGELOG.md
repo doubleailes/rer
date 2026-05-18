@@ -14,6 +14,18 @@ page.
 
 ### Added
 
+- **`pyrer.parse_static_packages_py(paths) -> list[PackageData | None]`** —
+  batched, Rayon-parallel variant of `parse_static_package_py`
+  that opens and parses every path in one Rust call across a
+  thread pool. Output is positionally aligned with the input;
+  missing files, unreadable bytes, and parser-bails all map to
+  `None`. The GIL is released for the whole batch via
+  `Python::allow_threads`. Pool size follows
+  `RAYON_NUM_THREADS` (default: logical core count). Targets
+  issue #94's profile finding that serial Python `open()` was
+  the top of the resolve flamegraph (3.20 s of 9.12 s, 35% of
+  wall time) after the per-file static parser landed.
+  Closes #94.
 - **`version_range` hint on the `load_family` callback** (issue #92) —
   `pyrer.solve(..., load_family=cb)` now invokes `cb` as
   `cb(name, version_range="2+<3")` when the callback's signature can

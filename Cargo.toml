@@ -26,6 +26,9 @@ serde_json = "1.0"
 rer-version = { path = "crates/rer-version", version = "1.0.0-rc.2" }
 rer-resolver = { path = "crates/rer-resolver", version = "1.0.0-rc.2" }
 rer-package = { path = "crates/rer-package", version = "1.0.0-rc.2" }
+# Rayon powers the batched `parse_static_packages_py` API (#94). Honours
+# `RAYON_NUM_THREADS` for environments that need to cap the pool size.
+rayon = "1"
 pyo3 = { version = "0.23.5", features = ["extension-module"] }
 # `mimalloc` is wired into the bench binary as a `#[global_allocator]`.
 # Callgrind shows ~33 % of cycles in libc malloc/free; mimalloc has measurably
