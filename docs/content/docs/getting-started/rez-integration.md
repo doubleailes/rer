@@ -233,12 +233,26 @@ def _pyrer_resolve(self):
         return _original_resolve(self)
 
     # Closure over the resolver's package paths — pyrer calls this
-    # only for families the solver actually needs.
+    # only for families the solver actually needs. The two-tier load:
+    # try the Rust AST fast-parser first (skips Python evaluation for
+    # the ~93% of `package.py` files at Fortiche that are static),
+    # fall back to rez's `Package` evaluator for the dynamic ones
+    # (`@early` / `@late` requires, top-level `if`, imports, …).
     def load_family(name):
-        return [
-            pyrer.PackageData.from_rez(pkg)
-            for pkg in iter_packages(name, paths=self.package_paths)
-        ]
+        out = []
+        for pkg in iter_packages(name, paths=self.package_paths):
+            pd = None
+            try:
+                with open(pkg.filepath, "r", encoding="utf-8") as f:
+                    source = f.read()
+                pd = pyrer.parse_static_package_py(source)
+            except OSError:
+                pass
+            if pd is None:
+                # Dynamic file — `@early` / `@late` / imports / etc.
+                pd = pyrer.PackageData.from_rez(pkg)
+            out.append(pd)
+        return out
 
     requests = [str(r) for r in self.package_requests]
     result = pyrer.solve(

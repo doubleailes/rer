@@ -584,3 +584,112 @@ def test_from_rez_used_in_solve():
     assert result.status == "solved"
     names = {v.name for v in result.resolved_packages}
     assert names == {"app", "lib"}
+
+
+# ---------------------------------------------------------------------------
+# parse_static_package_py — Rust AST fast-path (RFC: fast-package-py-parser)
+# ---------------------------------------------------------------------------
+
+
+def test_parse_static_package_py_minimal():
+    """Smallest static package.py — just name + version."""
+    src = 'name = "foo"\nversion = "1.0.0"\n'
+    pd = pyrer.parse_static_package_py(src)
+    assert pd is not None
+    assert pd.name == "foo"
+    assert pd.version == "1.0.0"
+    assert pd.requires == []
+    assert pd.variants == []
+
+
+def test_parse_static_package_py_full_static():
+    """All four solver fields with literal values plus an irrelevant
+    `def commands()` block."""
+    src = '''
+name = "maya"
+version = "2024.0"
+description = "irrelevant"
+requires = ["python-3", "qt-5"]
+variants = [["linux", "python-3.10"], ["linux", "python-3.11"]]
+
+def commands():
+    env.PYTHONPATH.append("{root}/python")
+'''
+    pd = pyrer.parse_static_package_py(src)
+    assert pd is not None
+    assert pd.name == "maya"
+    assert pd.version == "2024.0"
+    assert pd.requires == ["python-3", "qt-5"]
+    assert pd.variants == [["linux", "python-3.10"], ["linux", "python-3.11"]]
+
+
+def test_parse_static_package_py_with_scope():
+    """The dominant Fortiche pattern: solver fields at top level plus a
+    `with scope("config")` declarative-DSL block. 35% of Fortiche's
+    corpus is this shape."""
+    src = '''
+# -*- coding: utf-8 -*-
+name = "fortichebox"
+version = "0.2.0"
+requires = ["python-2.7+<3"]
+
+def commands():
+    env["FPATH"].append("$SPACE/generic")
+
+with scope("config") as config:
+    config.release_packages_path = "/some/path"
+'''
+    pd = pyrer.parse_static_package_py(src)
+    assert pd is not None
+    assert pd.name == "fortichebox"
+    assert pd.requires == ["python-2.7+<3"]
+
+
+def test_parse_static_package_py_bails_on_early_requires():
+    """@early-bound requires is dynamic — must return None so the caller
+    falls back to rez."""
+    src = '''
+name = "foo"
+version = "1.0"
+
+@early()
+def requires():
+    return ["python-3"]
+'''
+    assert pyrer.parse_static_package_py(src) is None
+
+
+def test_parse_static_package_py_bails_on_import():
+    src = '''
+import os
+
+name = "foo"
+version = "1.0"
+'''
+    assert pyrer.parse_static_package_py(src) is None
+
+
+def test_parse_static_package_py_bails_on_syntax_error():
+    """Unparseable source — return None, not raise."""
+    src = 'name = "foo\nversion = "1.0"\n'
+    assert pyrer.parse_static_package_py(src) is None
+
+
+def test_parse_static_package_py_roundtrips_through_solve():
+    """End-to-end: parse a static package.py → use the PackageData in a
+    solve. Should resolve identically to a hand-constructed PackageData."""
+    src = '''
+name = "app"
+version = "1.0.0"
+requires = ["lib-2"]
+'''
+    parsed = pyrer.parse_static_package_py(src)
+    constructed = pyrer.PackageData("app", "1.0.0", ["lib-2"])
+    libs = [pyrer.PackageData("lib", "1.0.0"), pyrer.PackageData("lib", "2.0.0")]
+
+    result_parsed = pyrer.solve(["app"], [parsed] + libs)
+    result_constructed = pyrer.solve(["app"], [constructed] + libs)
+
+    assert result_parsed.status == "solved"
+    assert result_constructed.status == "solved"
+    assert result_parsed.resolved == result_constructed.resolved
