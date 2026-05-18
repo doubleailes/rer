@@ -27,3 +27,4 @@ crate-type = ["cdylib", "lib"]
 pyo3 = { workspace = true, features = ["abi3-py39"] }
 rer-resolver = { workspace = true }
 rer-package = { workspace = true }
+rer-version = { workspace = true }
