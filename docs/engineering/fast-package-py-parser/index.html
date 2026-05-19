@@ -1,0 +1,1011 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="x-ua-compatible" content="ie=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+  <link rel="preload" as="font" href="https://doubleailes.github.io/rer/fonts/vendor/jost/jost-v4-latin-regular.woff2" type="font/woff2" crossorigin>
+  <link rel="preload" as="font" href="https://doubleailes.github.io/rer/fonts/vendor/jost/jost-v4-latin-700.woff2"  type="font/woff2" crossorigin>
+
+
+<link rel="stylesheet" href="https://doubleailes.github.io/rer/main.css">
+
+
+
+  
+  
+    
+  
+
+  
+  
+    
+    
+  
+  
+  
+    
+  
+  
+  
+  
+    
+  
+  
+  
+
+
+  <meta name="robots" content="index, follow">
+  <meta name="googlebot" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1">
+  <meta name="bingbot" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1">
+
+
+	
+
+
+	
+
+<title>RFC — A blazing-fast Rust `package.py` parser | rer</title>
+<meta name="description" content="Forward-looking design for a Rust parser that extracts the four solver-relevant fields from a rez package.py without invoking Python. Built to compose with the load_family lazy-discovery hook on cold-cache integrations.">
+<link rel="canonical" href="https://doubleailes.github.io/rer/docs/engineering/fast-package-py-parser/">
+
+
+  <meta name="twitter:card" content="summary_large_image">
+  
+    <meta name="twitter:image" content="https://doubleailes.github.io/rer//doks.png">
+  
+  <meta name="twitter:title" content="RFC — A blazing-fast Rust `package.py` parser">
+  <meta name="twitter:description" content="Forward-looking design for a Rust parser that extracts the four solver-relevant fields from a rez package.py without invoking Python. Built to compose with the load_family lazy-discovery hook on cold-cache integrations.">
+  <meta name="twitter:site" content="@Philippe Llerena">
+  <meta name="twitter:creator" content="@Philippe Llerena">
+  
+  <meta property="og:title" content="RFC — A blazing-fast Rust `package.py` parser">
+  <meta property="og:description" content="Forward-looking design for a Rust parser that extracts the four solver-relevant fields from a rez package.py without invoking Python. Built to compose with the load_family lazy-discovery hook on cold-cache integrations.">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://doubleailes.github.io/rer/docs/engineering/fast-package-py-parser/">
+
+  
+    <meta property="og:image" content="https://doubleailes.github.io/rer//doks.png">
+  
+
+  <meta property="og:updated_time" content="">
+  <meta property="og:site_name" content="RFC — A blazing-fast Rust `package.py` parser">
+
+  
+
+  
+
+  
+  <meta property="article:publisher" content="https://www.facebook.com/Philippe Llerena">
+  <meta property="article:author" content="https://www.facebook.com/Philippe Llerena">
+  <meta property="og:locale" content="en_US">
+
+
+
+
+
+  
+
+
+
+
+
+<script type="application/ld+json">
+  {
+    "@context": "http://schema.org",
+    "@type": "BreadcrumbList",
+    
+      
+      
+        
+        
+        
+        
+        
+        
+        
+        
+          {
+            "@type": "ListItem",
+            "position":  1 ,
+            "name": "Home",
+            "item": "https://doubleailes.github.io/rer/"
+          },
+          
+          
+          {
+            "@type": "ListItem",
+            "position":  2 ,
+            "name": "Docs",
+            "item": "https://doubleailes.github.io/rer/docs/"
+          },
+        
+      
+        
+        
+        
+        
+        
+        
+        
+        
+          
+          
+          {
+            "@type": "ListItem",
+            "position":  3 ,
+            "name": "Engineering",
+            "item": "https://doubleailes.github.io/rer/docs/engineering/"
+          },
+        
+      
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+          
+          
+          {
+            "@type": "ListItem",
+            "position":  4 ,
+            "name": "Fast Package Py Parser",
+            "item": "https://doubleailes.github.io/rer/docs/engineering/fast-package-py-parser/"
+          },
+        
+      
+    
+  }
+</script>
+
+
+
+
+
+
+  <meta name="theme-color" content="#fff">
+  <link rel="apple-touch-icon" sizes="180x180" href="https://doubleailes.github.io/rer/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="https://doubleailes.github.io/rer/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="https://doubleailes.github.io/rer/favicon-16x16.png">
+  
+
+
+  
+
+</head>
+
+  
+
+<body class="docs single">
+  
+  
+  
+  
+<div class="header-bar fixed-top"></div>
+<header class="navbar fixed-top navbar-expand-md navbar-light">
+	<div class="container">
+		<input class="menu-btn order-0" type="checkbox" id="menu-btn">
+		<label class="menu-icon d-md-none" for="menu-btn"><span class="navicon"></span></label>
+		<a class="navbar-brand order-1 order-md-0 me-auto" href="https://doubleailes.github.io/rer/">rer</a>
+		<button id="mode" class="btn btn-link order-2 order-md-4" type="button" aria-label="Toggle mode">
+			<span class="toggle-dark"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-moon"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg></span>
+			<span class="toggle-light"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-sun"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg></span>
+		</button>
+		<ul class="navbar-nav fork-me order-3 order-md-5">
+			
+				
+					<li class="nav-item">
+						<a class="nav-link" href="twitter.com/doubleailes"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-twitter"><path d="M23 3a10.9 10.9 0 0 1-3.14 1.53 4.48 4.48 0 0 0-7.86 3v1A10.66 10.66 0 0 1 3 4s-4 9 5 13a11.64 11.64 0 0 1-7 2c9 5 20 0 20-11.5a4.5 4.5 0 0 0-.08-.83A7.72 7.72 0 0 0 23 3z"></path></svg><span class="ms-2 visually-hidden">Twitter</span></a>
+					</li>
+				
+					<li class="nav-item">
+						<a class="nav-link" href="https://github.com/doubleailes/rer"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-github"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path></svg><span class="ms-2 visually-hidden">GitHub</span></a>
+					</li>
+				
+			
+		</ul>
+		<div class="collapse navbar-collapse order-4 order-md-1">
+			<ul class="navbar-nav main-nav me-auto order-5 order-md-2">
+				
+					
+				
+				
+				
+					
+						<li class="nav-item docs active">
+							<a class="nav-link" href="https://doubleailes.github.io/rer/docs/getting-started/introduction/">Docs</a>
+						</li>
+					
+				
+			</ul>
+			<div class="break order-6 d-md-none"></div>
+			
+				<form class="navbar-form flex-grow-1 order-7 order-md-3">
+					<input id="userinput" class="form-control is-search" type="search" placeholder="Search docs..."
+						aria-label="Search docs..." autocomplete="off">
+					<div id="suggestions" class="shadow bg-white rounded"></div>
+				</form>
+			
+		</div>
+	</div>
+</header>
+
+
+
+  
+<div class="wrap container" role="document">
+  <div class="content">
+    <div class="row flex-xl-nowrap">
+	  
+<div class="col-lg-5 col-xl-4 docs-sidebar">
+	<nav class="docs-links" aria-label="Main navigation">
+			
+			
+			
+			
+					
+					
+					
+							<h3>Getting Started</h3>
+							<ul class="list-unstyled">
+							                           
+									<li><a class="docs-link" href="https://doubleailes.github.io/rer/docs/getting-started/introduction/">Introduction</a></li>
+							                           
+									<li><a class="docs-link" href="https://doubleailes.github.io/rer/docs/getting-started/quick-start/">Quick Start</a></li>
+							                           
+									<li><a class="docs-link" href="https://doubleailes.github.io/rer/docs/getting-started/rez-integration/">Wiring `pyrer` into `rez`</a></li>
+							
+					</ul>
+					
+					
+					
+					
+							<h3>Contributing</h3>
+							<ul class="list-unstyled">
+							                           
+									<li><a class="docs-link" href="https://doubleailes.github.io/rer/docs/contributing/how-to-contribute/">How to Contribute</a></li>
+							                           
+									<li><a class="docs-link" href="https://doubleailes.github.io/rer/docs/contributing/code-of-conduct/">Code of Conduct</a></li>
+							
+					</ul>
+					
+					
+					
+					
+							<h3>Help</h3>
+							<ul class="list-unstyled">
+							                           
+									<li><a class="docs-link" href="https://doubleailes.github.io/rer/docs/help/faq/">FAQ</a></li>
+							
+					</ul>
+					
+					
+					
+					
+							<h3>Engineering notes</h3>
+							<ul class="list-unstyled">
+							                           
+									<li><a class="docs-link" href="https://doubleailes.github.io/rer/docs/engineering/dedup-caches/">Why rer doesn&#x27;t cache intersect &#x2F; reduce_by results</a></li>
+							                           
+									<li><a class="docs-link" href="https://doubleailes.github.io/rer/docs/engineering/stability/">Stability commitments (1.0 onwards)</a></li>
+							                           
+									<li><a class="docs-link active" href="https://doubleailes.github.io/rer/docs/engineering/fast-package-py-parser/">RFC — A blazing-fast Rust `package.py` parser</a></li>
+							
+					</ul>
+					
+					
+			
+	</nav>
+</div>
+
+	  
+  
+  <nav class="docs-toc d-none d-xl-block col-xl-3" aria-label="Secondary navigation">
+  	<div class="page-links">
+  			<h3>On this page</h3>
+  			<nav id="TableOfContents">
+  					<ul>
+  							
+  							<li><a href="https://doubleailes.github.io/rer/docs/engineering/fast-package-py-parser/#stage-1-result-fortiche-may-2026">Stage 1 result — Fortiche, May 2026</a></li>
+  							
+  							
+  							<li><a href="https://doubleailes.github.io/rer/docs/engineering/fast-package-py-parser/#motivation">Motivation</a></li>
+  							
+  							
+  							<li><a href="https://doubleailes.github.io/rer/docs/engineering/fast-package-py-parser/#what-package-py-actually-is">What package.py actually is</a></li>
+  							
+  							
+  							<li><a href="https://doubleailes.github.io/rer/docs/engineering/fast-package-py-parser/#scope">Scope</a></li>
+  							
+  									<ul>
+  											
+  											<li><a href="https://doubleailes.github.io/rer/docs/engineering/fast-package-py-parser/#in-scope-fast-path">In scope (fast path)</a></li>
+  											
+  											<li><a href="https://doubleailes.github.io/rer/docs/engineering/fast-package-py-parser/#out-of-scope-bail-to-rez">Out of scope (bail to rez)</a></li>
+  											
+  									</ul>
+  							
+  							
+  							<li><a href="https://doubleailes.github.io/rer/docs/engineering/fast-package-py-parser/#architecture">Architecture</a></li>
+  							
+  									<ul>
+  											
+  											<li><a href="https://doubleailes.github.io/rer/docs/engineering/fast-package-py-parser/#new-crate-rer-package">New crate: rer-package</a></li>
+  											
+  											<li><a href="https://doubleailes.github.io/rer/docs/engineering/fast-package-py-parser/#pyo3-binding">PyO3 binding</a></li>
+  											
+  									</ul>
+  							
+  							
+  							<li><a href="https://doubleailes.github.io/rer/docs/engineering/fast-package-py-parser/#build-order">Build order</a></li>
+  							
+  									<ul>
+  											
+  											<li><a href="https://doubleailes.github.io/rer/docs/engineering/fast-package-py-parser/#stage-1-corpus-survey-2-days">Stage 1 — Corpus survey (~2 days)</a></li>
+  											
+  											<li><a href="https://doubleailes.github.io/rer/docs/engineering/fast-package-py-parser/#stage-2-parser-binding-differential-test-1-2-weeks">Stage 2 — Parser + binding + differential test (~1–2 weeks)</a></li>
+  											
+  											<li><a href="https://doubleailes.github.io/rer/docs/engineering/fast-package-py-parser/#stage-3-shim-wiring-end-to-end-benchmark-3-5-days">Stage 3 — Shim wiring + end-to-end benchmark (~3–5 days)</a></li>
+  											
+  									</ul>
+  							
+  							
+  							<li><a href="https://doubleailes.github.io/rer/docs/engineering/fast-package-py-parser/#honest-forecast-superseded-by-stage-3-measurement">Honest forecast — superseded by Stage 3 measurement</a></li>
+  							
+  							
+  							<li><a href="https://doubleailes.github.io/rer/docs/engineering/fast-package-py-parser/#stage-3-result-fortiche-may-2026">Stage 3 result — Fortiche, May 2026</a></li>
+  							
+  									<ul>
+  											
+  											<li><a href="https://doubleailes.github.io/rer/docs/engineering/fast-package-py-parser/#v1-ast-based-parser-rustpython-parser">V1: AST-based parser (rustpython-parser)</a></li>
+  											
+  											<li><a href="https://doubleailes.github.io/rer/docs/engineering/fast-package-py-parser/#v2-hand-rolled-lexer">V2: hand-rolled lexer</a></li>
+  											
+  											<li><a href="https://doubleailes.github.io/rer/docs/engineering/fast-package-py-parser/#what-the-bench-numbers-say-about-the-next-ceiling">What the bench numbers say about the next ceiling</a></li>
+  											
+  											<li><a href="https://doubleailes.github.io/rer/docs/engineering/fast-package-py-parser/#caveats-on-the-34-8x-headline">Caveats on the 34.8× headline</a></li>
+  											
+  									</ul>
+  							
+  							
+  							<li><a href="https://doubleailes.github.io/rer/docs/engineering/fast-package-py-parser/#risks-and-mitigations">Risks and mitigations</a></li>
+  							
+  							
+  							<li><a href="https://doubleailes.github.io/rer/docs/engineering/fast-package-py-parser/#stage-2-safety-net-differential-against-rez">Stage 2 safety net — differential against rez</a></li>
+  							
+  									<ul>
+  											
+  											<li><a href="https://doubleailes.github.io/rer/docs/engineering/fast-package-py-parser/#result-on-thierry-rez-pkg-rez-3-3-0">Result on &#x2F;thierry&#x2F;rez&#x2F;pkg + rez 3.3.0</a></li>
+  											
+  											<li><a href="https://doubleailes.github.io/rer/docs/engineering/fast-package-py-parser/#what-about-the-166-rez-eval-error-files">What about the 166 rez-eval-error files?</a></li>
+  											
+  									</ul>
+  							
+  							
+  							<li><a href="https://doubleailes.github.io/rer/docs/engineering/fast-package-py-parser/#stage-4-batched-parallel-parse-issue-94">Stage 4 — Batched parallel parse (issue #94)</a></li>
+  							
+  									<ul>
+  											
+  											<li><a href="https://doubleailes.github.io/rer/docs/engineering/fast-package-py-parser/#result-on-fortiche">Result on Fortiche</a></li>
+  											
+  											<li><a href="https://doubleailes.github.io/rer/docs/engineering/fast-package-py-parser/#design-choices">Design choices</a></li>
+  											
+  											<li><a href="https://doubleailes.github.io/rer/docs/engineering/fast-package-py-parser/#safety-net">Safety net</a></li>
+  											
+  											<li><a href="https://doubleailes.github.io/rer/docs/engineering/fast-package-py-parser/#what-s-next-after-this">What&#x27;s next after this</a></li>
+  											
+  									</ul>
+  							
+  							
+  							<li><a href="https://doubleailes.github.io/rer/docs/engineering/fast-package-py-parser/#considered-alternatives">Considered alternatives</a></li>
+  							
+  									<ul>
+  											
+  											<li><a href="https://doubleailes.github.io/rer/docs/engineering/fast-package-py-parser/#parsed-package-cache-on-top-of-the-shared-memcache">Parsed-package cache on top of the shared memcache</a></li>
+  											
+  									</ul>
+  							
+  							
+  							<li><a href="https://doubleailes.github.io/rer/docs/engineering/fast-package-py-parser/#concrete-next-step">Concrete next step</a></li>
+  							
+  							
+  							<li><a href="https://doubleailes.github.io/rer/docs/engineering/fast-package-py-parser/#see-also">See also</a></li>
+  							
+  							
+  					</ul>
+  			</nav>
+  	</div>
+  </nav>
+  
+
+      <main class="docs-content col-lg-11 col-xl-9">
+        <h1>RFC — A blazing-fast Rust `package.py` parser</h1>
+        <p class="lead">Forward-looking design for a Rust parser that extracts the four solver-relevant fields from a rez package.py without invoking Python. Built to compose with the load_family lazy-discovery hook on cold-cache integrations.</p>
+        <blockquote>
+<p><strong>Status: Stages 1–4 shipped.</strong> Survey tool at
+<code>scripts/survey_package_py.py</code>; Rust parser crate at
+<code>crates/rer-package/</code>; PyO3 bindings (<code>pyrer.parse_static_package_py</code>
+and the batched <code>parse_static_packages_py</code>) at
+<code>crates/rer-python/src/lib.rs</code>; differential safety net at
+<code>scripts/diff_against_rez.py</code>; perf benches at
+<code>scripts/bench_package_py_parser.py</code> and
+<code>scripts/bench_batched_parser.py</code>. Stage 1 numbers, Stage 3
+per-file timing, Stage 2 differential (0 mismatches on 5,979
+files), and Stage 4 batched speedup (2.81× on 2,000 files) are
+all inline below.</p>
+</blockquote>
+<h2 id="stage-1-result-fortiche-may-2026">Stage 1 result — Fortiche, May 2026</h2>
+<p>Run on <code>/thierry/rez/pkg</code> (the Fortiche-on-CIFS rez repo):</p>
+<table><thead><tr><th></th><th style="text-align: right">Count</th><th style="text-align: right">%</th></tr></thead><tbody>
+<tr><td><code>package.py</code> files surveyed</td><td style="text-align: right">6,439</td><td style="text-align: right">100%</td></tr>
+<tr><td><strong>Fast-parseable</strong></td><td style="text-align: right"><strong>5,982</strong></td><td style="text-align: right"><strong>92.9%</strong></td></tr>
+<tr><td>Not fast-parseable</td><td style="text-align: right">457</td><td style="text-align: right">7.1%</td></tr>
+</tbody></table>
+<p>Non-fast-parseable breakdown (files can match multiple buckets):</p>
+<table><thead><tr><th>Pattern</th><th style="text-align: right">Count</th><th style="text-align: right">% of total</th></tr></thead><tbody>
+<tr><td><code>dynamic-requires</code> (<code>@early</code> / <code>@late</code> on <code>requires</code>)</td><td style="text-align: right">352</td><td style="text-align: right">5.5%</td></tr>
+<tr><td><code>imports</code> (load-bearing <code>import</code> statements)</td><td style="text-align: right">96</td><td style="text-align: right">1.5%</td></tr>
+<tr><td><code>missing-version</code> (mostly rez's own test fixtures)</td><td style="text-align: right">85</td><td style="text-align: right">1.3%</td></tr>
+<tr><td><code>missing-name</code> (mostly rez's own test fixtures)</td><td style="text-align: right">75</td><td style="text-align: right">1.2%</td></tr>
+<tr><td><code>top-level-classdef</code></td><td style="text-align: right">54</td><td style="text-align: right">0.8%</td></tr>
+<tr><td><code>unrecognised-raise</code></td><td style="text-align: right">2</td><td style="text-align: right">0.0%</td></tr>
+</tbody></table>
+<p><strong>Decisive finding</strong>: the dominant <em>seeming</em> failure pattern from a
+naive survey, <code>top-level-with</code> (2,245 files, 34.9% of the corpus), is
+<strong>100% rez's declarative <code>with scope("config")</code> DSL</strong> — every one of
+the 2,245 files matched. That body only writes attributes of the
+<code>as</code>-name (config object) and never touches solver fields, so it is
+solver-irrelevant — the parser treats it the same way it treats
+<code>def commands(...)</code>. Including this single extension lifts the
+accept rate from a marginal 58.6% to a green-light 92.9%.</p>
+<p>Well past the 70% <strong>PROCEED</strong> threshold from the original RFC.</p>
+<h2 id="motivation">Motivation</h2>
+<p><code>pyrer</code>'s solver is already roughly 34× faster than <code>rez</code>'s on the
+188-case differential benchmark. Real <code>rez env</code> invocations are no
+longer bottlenecked on the solve — they are bottlenecked on what
+surrounds it:</p>
+<ol>
+<li>Python interpreter startup (~200–300 ms per process).</li>
+<li><strong>Package discovery — opening, reading, and AST-evaluating each
+<code>package.py</code> rez decides to inspect.</strong> This is the big remaining
+cost on cold-cache invocations.</li>
+<li>The solve itself (~tens of ms on <code>pyrer</code>).</li>
+<li>Environment construction (Rex evaluation, PATH munging, shell
+hooks).</li>
+</ol>
+<p>Issue #86 added the <code>load_family</code> callback so the solver only asks
+the host to load families it actually needs — that addresses the
+"how many" axis. This RFC addresses the "how fast each one" axis:
+loading a <code>package.py</code> currently means a full Python compile + exec,
+which can run into the milliseconds per file on a warm cache and
+adds up fast across a wide BFS or a CI batch.</p>
+<p>A Rust parser that extracts the four solver-relevant fields without
+invoking the Python interpreter has the potential to drop per-file
+parse cost from milliseconds to tens of microseconds for the static
+majority of <code>package.py</code> files. Combined with <code>load_family</code>, it
+attacks both the count and the cost of the discovery phase.</p>
+<h2 id="what-package-py-actually-is">What <code>package.py</code> actually is</h2>
+<p>A <code>rez</code> <code>package.py</code> is <strong>arbitrary Python</strong>. The solver only reads
+four fields:</p>
+<ul>
+<li><code>name</code> — string</li>
+<li><code>version</code> — string</li>
+<li><code>requires</code> — list of rez-requirement strings</li>
+<li><code>variants</code> — list of lists of rez-requirement strings</li>
+</ul>
+<p>But a real-world <code>package.py</code> can also carry, with varying
+frequency:</p>
+<ul>
+<li><code>description</code>, <code>authors</code>, <code>tools</code>, <code>tests</code>, <code>help</code> — irrelevant to
+the solve.</li>
+<li><code>commands()</code>, <code>pre_commands()</code>, <code>post_commands()</code> — function bodies
+that affect <em>runtime</em> environment, not the solve.</li>
+<li><code>build_command</code>, <code>build_system</code> — irrelevant to the solve.</li>
+<li><strong><code>@early()</code> / <code>@late()</code> decorated functions on <code>requires</code> /
+<code>variants</code></strong> — <em>these are dynamic and do affect the solve.</em></li>
+<li>Top-level <code>if/else</code> chains on env vars (<code>if config.studio_mode: requires = […]</code>) — also dynamic relative to the solve.</li>
+<li>Top-level <code>import</code> statements with load-bearing side effects.</li>
+</ul>
+<p>The fast parser only needs to handle the case where the four solver
+fields are <strong>literal assignments</strong>. Everything else falls back to
+<code>rez</code>'s evaluator, which already exists and is correct.</p>
+<h2 id="scope">Scope</h2>
+<h3 id="in-scope-fast-path">In scope (fast path)</h3>
+<table><thead><tr><th>Statement</th><th>Action</th></tr></thead><tbody>
+<tr><td><code>name = "..."</code> (string literal)</td><td>Extract</td></tr>
+<tr><td><code>version = "..."</code> (string literal)</td><td>Extract</td></tr>
+<tr><td><code>requires = ["str", "str", …]</code> (list of string literals)</td><td>Extract</td></tr>
+<tr><td><code>variants = [["str", …], …]</code> (list of lists of string literals)</td><td>Extract</td></tr>
+<tr><td><code>def commands(...)</code>, <code>def pre_commands(...)</code>, <code>def post_commands(...)</code>, <code>def tools(...)</code> (function body)</td><td>Ignore — not solver-relevant</td></tr>
+<tr><td>Top-level assignments to non-solver fields (<code>description</code>, <code>authors</code>, <code>tools</code>, <code>tests</code>, <code>help</code>, <code>build_command</code>, <code>build_system</code>, etc.)</td><td>Ignore</td></tr>
+<tr><td>Top-level docstring</td><td>Ignore</td></tr>
+</tbody></table>
+<h3 id="out-of-scope-bail-to-rez">Out of scope (bail to <code>rez</code>)</h3>
+<table><thead><tr><th>Pattern</th><th>Why we bail</th></tr></thead><tbody>
+<tr><td><code>def requires(...)</code> / <code>def variants(...)</code> with <code>@early</code> / <code>@late</code></td><td>Solver-relevant value is dynamic</td></tr>
+<tr><td>Top-level <code>if/else</code>, <code>try/except</code>, <code>for</code></td><td>Can't statically know which branch wins</td></tr>
+<tr><td><code>import</code> / <code>from ... import</code></td><td>May have load-bearing side effects</td></tr>
+<tr><td>Function calls assigning to a solver field (<code>requires = make_requires(...)</code>)</td><td>Not statically resolvable</td></tr>
+<tr><td>Any other expression we don't recognise</td><td>Conservative bail</td></tr>
+</tbody></table>
+<p><strong>The bias is hard toward bailing.</strong> A false positive (parsing a file
+the fast path shouldn't have handled) produces a different <code>requires</code>
+than rez, which means different resolves, which is a silent
+correctness regression. The slow path through rez always exists; the
+fast path is opt-in coverage. We accept low coverage with zero
+divergence over high coverage with any divergence.</p>
+<h2 id="architecture">Architecture</h2>
+<h3 id="new-crate-rer-package">New crate: <code>rer-package</code></h3>
+<pre class="giallo" style="color: #CDD6F4; background-color: #1E1E2E;"><code data-lang="plain"><span class="giallo-l"><span>crates/rer-package/</span></span>
+<span class="giallo-l"><span>├── Cargo.toml</span></span>
+<span class="giallo-l"><span>├── src/</span></span>
+<span class="giallo-l"><span>│   ├── lib.rs</span></span>
+<span class="giallo-l"><span>│   ├── parser.rs      # AST walk + literal extraction</span></span>
+<span class="giallo-l"><span>│   └── classify.rs    # bail-or-extract decisions</span></span>
+<span class="giallo-l"><span>└── tests/</span></span>
+<span class="giallo-l"><span>    ├── static_fixtures/    # known-fast-parseable .py files</span></span>
+<span class="giallo-l"><span>    ├── dynamic_fixtures/   # known-bail .py files</span></span>
+<span class="giallo-l"><span>    └── corpus/             # large real-world sample, diff against rez</span></span></code></pre>
+<p>Depends on <code>rustpython-parser</code> (well-maintained, parses to AST, no
+runtime dependency on a Python install). Returns:</p>
+<pre class="giallo" style="color: #CDD6F4; background-color: #1E1E2E;"><code data-lang="rust"><span class="giallo-l"><span style="color: #CBA6F7;">pub fn</span><span style="color: #89B4FA;font-style: italic;"> parse_static_package_py</span><span style="color: #9399B2;">(</span><span style="color: #EBA0AC;">source</span><span style="color: #94E2D5;">: &amp;</span><span style="color: #F9E2AF;font-style: italic;">str</span><span style="color: #9399B2;">)</span><span style="color: #94E2D5;"> -&gt;</span><span style="color: #F9E2AF;font-style: italic;"> Option</span><span style="color: #89DCEB;">&lt;</span><span style="color: #F9E2AF;font-style: italic;">PackageData</span><span style="color: #89DCEB;">&gt;</span></span></code></pre>
+<p><code>None</code> means the file is not statically parseable; the caller falls
+back to rez. <code>Some(data)</code> means the four fields were all extracted
+as literals; the caller can skip <code>rez.Package</code> evaluation entirely.</p>
+<h3 id="pyo3-binding">PyO3 binding</h3>
+<p>Single function on <code>pyrer</code>:</p>
+<pre class="giallo" style="color: #CDD6F4; background-color: #1E1E2E;"><code data-lang="python"><span class="giallo-l"><span>pyrer</span><span style="color: #9399B2;">.</span><span style="color: #89B4FA;">parse_static_package_py</span><span style="color: #9399B2;">(</span><span>source</span><span style="color: #9399B2;">:</span><span style="color: #CBA6F7;font-style: italic;"> str</span><span style="color: #94E2D5;"> |</span><span style="color: #CBA6F7;font-style: italic;"> bytes</span><span style="color: #9399B2;">)</span><span> -&gt;</span><span style="color: #EBA0AC;font-style: italic;"> Optional</span><span style="color: #9399B2;">[</span><span style="color: #EBA0AC;font-style: italic;">pyrer</span><span style="color: #9399B2;">.</span><span style="color: #EBA0AC;font-style: italic;">PackageData</span><span style="color: #9399B2;">]</span></span></code></pre>
+<p>About twenty lines of glue. The integration site is the
+<code>load_family</code> callback in the rez shim:</p>
+<pre class="giallo" style="color: #CDD6F4; background-color: #1E1E2E;"><code data-lang="python"><span class="giallo-l"><span style="color: #CBA6F7;">def</span><span style="color: #89B4FA;font-style: italic;"> load_family</span><span style="color: #9399B2;">(</span><span style="color: #EBA0AC;font-style: italic;">name</span><span style="color: #9399B2;">):</span></span>
+<span class="giallo-l"><span>    out</span><span style="color: #94E2D5;"> =</span><span style="color: #9399B2;"> []</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">    for</span><span> pkg_path</span><span style="color: #CBA6F7;"> in</span><span style="color: #89B4FA;"> _find_package_files</span><span style="color: #9399B2;">(</span><span>name</span><span style="color: #9399B2;">,</span><span style="color: #EBA0AC;font-style: italic;"> paths</span><span style="color: #94E2D5;">=</span><span>PACKAGE_PATHS</span><span style="color: #9399B2;">):</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">        with</span><span style="color: #FAB387;font-style: italic;"> open</span><span style="color: #9399B2;">(</span><span>pkg_path</span><span style="color: #9399B2;">)</span><span style="color: #CBA6F7;"> as</span><span> f</span><span style="color: #9399B2;">:</span></span>
+<span class="giallo-l"><span>            source</span><span style="color: #94E2D5;"> =</span><span> f</span><span style="color: #9399B2;">.</span><span style="color: #89B4FA;">read</span><span style="color: #9399B2;">()</span></span>
+<span class="giallo-l"><span style="color: #9399B2;font-style: italic;">        # Fast path: try the Rust parser first.</span></span>
+<span class="giallo-l"><span>        pd</span><span style="color: #94E2D5;"> =</span><span> pyrer</span><span style="color: #9399B2;">.</span><span style="color: #89B4FA;">parse_static_package_py</span><span style="color: #9399B2;">(</span><span>source</span><span style="color: #9399B2;">)</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">        if</span><span> pd</span><span style="color: #CBA6F7;"> is</span><span style="color: #FAB387;"> None</span><span style="color: #9399B2;">:</span></span>
+<span class="giallo-l"><span style="color: #9399B2;font-style: italic;">            # Bail to rez&#39;s evaluator for the dynamic case.</span></span>
+<span class="giallo-l"><span>            pkg</span><span style="color: #94E2D5;"> =</span><span style="color: #89B4FA;"> _rez_package_from_file</span><span style="color: #9399B2;">(</span><span>pkg_path</span><span style="color: #9399B2;">)</span></span>
+<span class="giallo-l"><span>            pd</span><span style="color: #94E2D5;"> =</span><span> pyrer</span><span style="color: #9399B2;">.</span><span>PackageData</span><span style="color: #9399B2;">.</span><span style="color: #89B4FA;">from_rez</span><span style="color: #9399B2;">(</span><span>pkg</span><span style="color: #9399B2;">)</span></span>
+<span class="giallo-l"><span>        out</span><span style="color: #9399B2;">.</span><span style="color: #89B4FA;">append</span><span style="color: #9399B2;">(</span><span>pd</span><span style="color: #9399B2;">)</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">    return</span><span> out</span></span></code></pre>
+<p>The shim composes the two — <code>load_family</code> decides <em>which</em> files to
+read; <code>parse_static_package_py</code> decides <em>how fast</em> to read each one.</p>
+<h2 id="build-order">Build order</h2>
+<h3 id="stage-1-corpus-survey-2-days">Stage 1 — Corpus survey (~2 days)</h3>
+<p>Build <code>rer-stat-package-py</code>: a tool that walks a directory tree of
+<code>package.py</code> files and classifies each one into:</p>
+<table><thead><tr><th>Category</th><th>Meaning</th></tr></thead><tbody>
+<tr><td><code>fast-parseable</code></td><td>All four solver fields are literal assignments; no disqualifying top-level statements.</td></tr>
+<tr><td><code>dynamic-requires</code></td><td><code>requires</code> is <code>@early</code>/<code>@late</code> or assigned conditionally.</td></tr>
+<tr><td><code>dynamic-variants</code></td><td>Same, for <code>variants</code>.</td></tr>
+<tr><td><code>top-level-if</code></td><td>A top-level <code>if/else</code> we'd have to bail on.</td></tr>
+<tr><td><code>imports</code></td><td>Has <code>import</code> statements.</td></tr>
+<tr><td><code>other</code></td><td>Anything else that disqualifies the fast path.</td></tr>
+</tbody></table>
+<p>Reports counts, percentages, and example file paths per bucket.</p>
+<p><strong>Run this against Fortiche's actual studio repo.</strong> The output is
+the go/no-go signal for Stage 2:</p>
+<ul>
+<li>≥ 70% fast-parseable: proceed. The fast path covers the typical
+case; the engineering ROI is real.</li>
+<li>40–70%: marginal. Worth a discussion about which patterns to
+expand coverage to and whether the complexity is worth it.</li>
+<li>&lt; 40%: don't build it. The slow-path fallback would dominate;
+the fast path saves work in the minority case. The memcache
+alternative below is the smarter bet.</li>
+</ul>
+<p>Stage 1 is the cheapest experiment that produces the number this
+project needs.</p>
+<h3 id="stage-2-parser-binding-differential-test-1-2-weeks">Stage 2 — Parser + binding + differential test (~1–2 weeks)</h3>
+<ol>
+<li>Implement <code>rer_package::parse_static_package_py</code> against
+<code>rustpython-parser</code>.</li>
+<li>Hand-curate ~30 fixture files (≥ 15 static, ≥ 15 dynamic across
+every disqualifying pattern). Unit-test both arms.</li>
+<li>PyO3 binding on <code>pyrer.parse_static_package_py</code>.</li>
+<li><strong>Differential test harness</strong>: for every file in the corpus where
+the fast parser returns <code>Some(data)</code>, also load the file through
+rez's <code>Package</code> and compare the four fields. <strong>Any mismatch is a
+release blocker</strong>, exactly like the 188-case rez solver
+differential. This is the safety net for the "bias toward bail"
+policy.</li>
+</ol>
+<h3 id="stage-3-shim-wiring-end-to-end-benchmark-3-5-days">Stage 3 — Shim wiring + end-to-end benchmark (~3–5 days)</h3>
+<ol>
+<li>
+<p>Document the <code>load_family</code> integration pattern (above).</p>
+</li>
+<li>
+<p>End-to-end benchmark: a real <code>rez env</code> invocation against a
+representative repo, three configurations:</p>
+<ul>
+<li>Eager BFS (today's shim baseline)</li>
+<li><code>load_family</code> only (issue #86 today)</li>
+<li><code>load_family</code> + <code>parse_static_package_py</code> (this RFC)</li>
+</ul>
+<p>Report wall-clock for cold and warm cache.</p>
+</li>
+</ol>
+<h2 id="honest-forecast-superseded-by-stage-3-measurement">Honest forecast — superseded by Stage 3 measurement</h2>
+<p>The original RFC predicted 2–50× wins by replacing rez's
+"compile + exec" with Rust AST parsing. Stage 3's measurement
+against real Fortiche files showed something smaller and worth
+naming clearly.</p>
+<h2 id="stage-3-result-fortiche-may-2026">Stage 3 result — Fortiche, May 2026</h2>
+<p>Two iterations, both run with <code>scripts/bench_package_py_parser.py --corpus /thierry/rez/pkg --samples 100 --iters 30 --with-rez</code>
+against the live Fortiche-on-CIFS repo and rez 3.3.0.</p>
+<h3 id="v1-ast-based-parser-rustpython-parser">V1: AST-based parser (<code>rustpython-parser</code>)</h3>
+<table><thead><tr><th>Path</th><th style="text-align: right">μs / file</th><th style="text-align: right">Speedup</th></tr></thead><tbody>
+<tr><td><code>open + read + parse_static_package_py</code></td><td style="text-align: right">1,533</td><td style="text-align: right">—</td></tr>
+<tr><td><code>DeveloperPackage.from_path + from_rez</code> (rez)</td><td style="text-align: right">2,632</td><td style="text-align: right">—</td></tr>
+<tr><td><strong>Result</strong></td><td style="text-align: right"></td><td style="text-align: right"><strong>1.7×</strong></td></tr>
+</tbody></table>
+<p>The parse step alone was 1,990 μs — <code>rustpython-parser</code> builds the
+full module AST when we only need four top-level fields. It also
+adds ~30 MB of crate deps to the build. Diagnosis: wrong tool.</p>
+<h3 id="v2-hand-rolled-lexer">V2: hand-rolled lexer</h3>
+<p>A 700-line module-level scanner that walks the four patterns
+(<code>name = "..."</code>, <code>version = "..."</code>, <code>requires = [...]</code>,
+<code>variants = [[...]]</code>) directly, with bracket / string / comment /
+indent tracking but no AST allocation. Same public API as V1.</p>
+<table><thead><tr><th>Path</th><th style="text-align: right">μs / file</th><th style="text-align: right">Speedup</th></tr></thead><tbody>
+<tr><td><code>open + read + parse_static_package_py</code></td><td style="text-align: right"><strong>75.24</strong></td><td style="text-align: right">—</td></tr>
+<tr><td><code>DeveloperPackage.from_path + from_rez</code> (rez)</td><td style="text-align: right"><strong>2,615.54</strong></td><td style="text-align: right">—</td></tr>
+<tr><td><strong>Result</strong></td><td style="text-align: right"></td><td style="text-align: right"><strong>34.8×</strong></td></tr>
+</tbody></table>
+<p>In-memory breakdown:</p>
+<table><thead><tr><th>Path</th><th style="text-align: right">μs / file</th></tr></thead><tbody>
+<tr><td><code>parse_static_package_py(source)</code> (hand-rolled scan)</td><td style="text-align: right">59.23</td></tr>
+<tr><td><code>from_rez(fake_pkg)</code> (attribute walk, lower bound)</td><td style="text-align: right">11.17</td></tr>
+<tr><td><code>from_rez(real rez Package)</code> (post-load, just walk)</td><td style="text-align: right">13.50</td></tr>
+<tr><td>file read alone (open + read, warm cache)</td><td style="text-align: right">14.81</td></tr>
+</tbody></table>
+<p>The parse step alone dropped from 1,990 μs (V1) to <strong>59 μs (V2)</strong> —
+~33× on that layer, lifting the full-load comparison vs rez from
+1.7× to <strong>34.8×</strong>. Per-file savings: ~2.54 ms. Over a 50-family
+resolve, that's <strong>~127 ms saved per resolve</strong> — real, artist-
+perceptible latency.</p>
+<p>The V2 rewrite held 92.9% acceptance on the Fortiche corpus
+(5,979 / 6,439 vs V1's 5,985; 6 files of drift, well within
+rounding). Two non-obvious bug categories surfaced during the
+rewrite, both Windows-specific:</p>
+<ul>
+<li>CRLF line endings — Samba-served <code>package.py</code> files end lines with
+<code>\r\n</code>. The scanner needed <code>\r</code> treated transparently in inline
+whitespace.</li>
+<li><code>\&lt;CRLF&gt;</code> line continuations on non-solver assignments (e.g.
+<code>changelog = \</code> followed by a CRLF then a multi-line triple-
+quoted string). The continuation handler only recognised <code>\&lt;LF&gt;</code>.</li>
+</ul>
+<p>Both have dedicated unit tests in the V2 implementation.</p>
+<h3 id="what-the-bench-numbers-say-about-the-next-ceiling">What the bench numbers say about the next ceiling</h3>
+<p>V2's 75 μs/file full-load splits as:</p>
+<ul>
+<li>~15 μs file I/O (warm-cache CIFS)</li>
+<li>~60 μs parsing CPU</li>
+</ul>
+<p>CPU is no longer dominant; I/O is. Further parser optimisations have
+diminishing returns. The next 10× lives in either avoiding more I/O
+(<code>load_family</code> from #86 already does most of this — files the solver
+never asks for never get loaded) or a parsed-package cache layered
+on top of Fortiche's existing shared memcache.</p>
+<h3 id="caveats-on-the-34-8x-headline">Caveats on the 34.8× headline</h3>
+<ul>
+<li><strong>Cold-cache CIFS</strong> — the 14.81 μs file-read is a warm-cache
+number. On a truly cold network read, file I/O can be 1–100 ms,
+swamping the 60 μs parse cost. The Rust parser's relative
+advantage over rez stays the same proportionally (rez pays the
+same I/O), but the absolute saving per file shifts from 2.5 ms
+toward whatever the network roundtrip costs.</li>
+<li><strong>Sample bias</strong> — 100 files sampled deterministically from the
+corpus. The full 6,439-file corpus could behave differently in
+pathological cases (very large files, unusual structure). The
+unit tests + the 6-file drift between V1 and V2 acceptance count
+is the existing safety net.</li>
+<li><strong>No production A/B yet</strong> — the 127 ms / resolve number is from
+micro-bench arithmetic, not a real <code>rez env</code> measurement.
+Production wall time may show less if other phases dominate.</li>
+</ul>
+<h2 id="risks-and-mitigations">Risks and mitigations</h2>
+<table><thead><tr><th>Risk</th><th>Mitigation</th></tr></thead><tbody>
+<tr><td><strong>Silent correctness regression</strong> — the fast parser accepts a file it shouldn't</td><td>Bias hard toward bailing in <code>classify.rs</code>. Run the differential test on every file the fast parser claims. Treat any mismatch as a release blocker.</td></tr>
+<tr><td><strong>Maintenance burden</strong> — <code>rustpython-parser</code> is a Python AST library; track upstream Python syntax changes</td><td>Pin to a known-good version. Studio <code>package.py</code> files don't typically use bleeding-edge syntax.</td></tr>
+<tr><td><strong>Coverage drift</strong> — over time studios add patterns the parser doesn't handle</td><td>The fast path is opt-in. Coverage drift means the slow path runs more often, not that correctness breaks. We can extend coverage when patterns become common.</td></tr>
+<tr><td><strong>Stage 1 says "don't build it"</strong></td><td>We've spent two days on a survey and now know the workload. Pivot to the memcache route below or accept the status quo. Cheap pivot point.</td></tr>
+</tbody></table>
+<h2 id="stage-2-safety-net-differential-against-rez">Stage 2 safety net — differential against rez</h2>
+<p>The bias-toward-bailing policy is only safe if "V2 accepts a file"
+also means "V2 produces the same <code>(name, version, requires, variants)</code>
+that rez does". A divergence here is a silent correctness regression
+in any rez integration shim that uses the fast path.</p>
+<p><code>scripts/diff_against_rez.py</code> is the test harness: for every file V2
+accepts, it also loads via rez's <code>DeveloperPackage.from_path</code> and
+stringifies the four fields with <code>str(req)</code>, then compares
+byte-for-byte. Any divergence is a release blocker, exactly like
+the 188-case rez solver differential.</p>
+<h3 id="result-on-thierry-rez-pkg-rez-3-3-0">Result on /thierry/rez/pkg + rez 3.3.0</h3>
+<table><thead><tr><th></th><th style="text-align: right">Count</th><th style="text-align: right">% of V2-accepted</th></tr></thead><tbody>
+<tr><td>Total files surveyed</td><td style="text-align: right">6,439</td><td style="text-align: right">—</td></tr>
+<tr><td>V2 accepted</td><td style="text-align: right">5,979</td><td style="text-align: right">—</td></tr>
+<tr><td>V2 bailed (slow path)</td><td style="text-align: right">460</td><td style="text-align: right">—</td></tr>
+<tr><td><strong>Match (all four fields agree with rez)</strong></td><td style="text-align: right"><strong>5,813</strong></td><td style="text-align: right"><strong>97.22%</strong></td></tr>
+<tr><td><strong>Mismatch (correctness regression)</strong></td><td style="text-align: right"><strong>0</strong></td><td style="text-align: right"><strong>0.00%</strong></td></tr>
+<tr><td>rez evaluation error</td><td style="text-align: right">166</td><td style="text-align: right">2.78%</td></tr>
+</tbody></table>
+<p>Wall-clock for the full run: 74 seconds (CIFS warm). Zero
+mismatches over the entire Fortiche corpus — the safety net is
+green.</p>
+<h3 id="what-about-the-166-rez-eval-error-files">What about the 166 rez-eval-error files?</h3>
+<p>These are files V2 accepts but rez 3.3.0 in this dev venv can't
+load. Sampled five of them — all five are the same error:</p>
+<p>InvalidPackageError: Package … uses @include decorator, but no
+include path has been configured with the 'package_definition_python_path'
+setting.</p>
+<p>That's a <strong>rez environment-config issue, not a content issue.</strong>
+Production rez at Fortiche has <code>package_definition_python_path</code>
+set; rez would load these files fine. V2 correctly accepts them
+because <code>@include def some_func():</code> is a non-solver decorator (the
+function being decorated isn't <code>requires</code> / <code>variants</code>), and the
+four solver fields are static.</p>
+<p>So the "166 rez-eval-error" bucket is really "files this dev venv
+can't evaluate because of a missing config knob" — not a
+correctness signal. In production they'd match.</p>
+<p>If the differential test ever needs to be tightened, the path is to
+also configure <code>package_definition_python_path</code> in the dev venv —
+but that's CI infrastructure, not a parser change.</p>
+<h2 id="stage-4-batched-parallel-parse-issue-94">Stage 4 — Batched parallel parse (issue #94)</h2>
+<p>After Stages 1–3 landed, <code>cProfile</code> of a real Fortiche resolve
+showed the static parser itself was no longer in the top of the
+flamegraph. The cost had moved one layer up: the shim's serial
+Python loop of <code>open()</code> calls feeding the parser. On a 132-package
+resolve that was 3.20 s of pure I/O (35% of total wall time), one
+file at a time while seven cores idled.</p>
+<p><code>parse_static_packages_py(paths)</code> is the response: open + parse
+every path in one Rust call across a Rayon thread pool, with the
+GIL released for the whole batch. Same per-file semantics as
+<code>parse_static_package_py</code> — accept rate, output shape, differential
+correctness all carry over.</p>
+<h3 id="result-on-fortiche">Result on Fortiche</h3>
+<p><code>scripts/bench_batched_parser.py</code> against <code>/thierry/rez/pkg</code> over
+CIFS, best-of-3:</p>
+<table><thead><tr><th style="text-align: right">Sample</th><th style="text-align: right">Serial <code>open</code> + parse</th><th style="text-align: right">Batched</th><th style="text-align: right">Speedup</th></tr></thead><tbody>
+<tr><td style="text-align: right">500 files (warm cache)</td><td style="text-align: right">56.71 ms</td><td style="text-align: right">40.76 ms</td><td style="text-align: right"><strong>1.39×</strong></td></tr>
+<tr><td style="text-align: right">2,000 files</td><td style="text-align: right">4,234 ms</td><td style="text-align: right">1,508 ms</td><td style="text-align: right"><strong>2.81×</strong></td></tr>
+</tbody></table>
+<p>Per-file saving on the 2,000-file run: <strong>~1.36 ms</strong>. Extrapolated
+to the issue's target workload (132-package resolve, ~2,600
+<code>package.py</code> files): <strong>~3.5 s saved per resolve</strong>.</p>
+<p>Both paths produce identical accepts (1,864/2,000 → static-parseable
+fraction matches the per-file parser) — zero correctness drift.</p>
+<p>The 500-file bench is bottlenecked on warm-page-cache parsing CPU;
+the Rayon dispatch overhead amortises less on small batches. On
+cold-cache or larger batches the parallel-I/O overlap shows
+through. The 2.81× is a lower bound on warm hardware; on cold CIFS
+(Windows production) it should grow.</p>
+<h3 id="design-choices">Design choices</h3>
+<ul>
+<li><strong>Output is positionally aligned with input.</strong> Missing files,
+unreadable bytes, and parser bails all become <code>None</code> at the
+matching index. The shim's <code>zip(pkgs, result)</code> is then trivially
+correct.</li>
+<li><strong>No exception escapes.</strong> Per-file failures map to <code>None</code>. The
+function only raises if the input type is wrong.</li>
+<li><strong>Pool size = Rayon default</strong> (<code>RAYON_NUM_THREADS</code> env var or
+logical core count). No per-call knob initially; capacity
+control is environmental.</li>
+<li><strong>Pure addition.</strong> The single-file API stays. Shims feature-detect
+with <code>hasattr(pyrer, "parse_static_packages_py")</code> and fall back
+to the per-file loop on older pyrer.</li>
+</ul>
+<h3 id="safety-net">Safety net</h3>
+<p>Reused from Stage 2. The same <code>from_rez(pkg)</code> comparison can be
+shadow-checked at production runtime, gated on
+<code>REZ_PYRER_VALIDATE_BATCHED</code>. The integration page in the
+<a href="../../getting-started/rez-integration/#shadow-validation-mode-1">rez integration docs</a>
+has the recipe.</p>
+<p>The offline Stage 2 differential — 5,813 / 5,813 matched on the
+Fortiche corpus — covers the per-file semantics. Stage 4's batched
+call uses the exact same <code>parse_static_package_py</code> per file, so the
+existing safety net carries over byte-for-byte; the only Stage 4
+specific risk is around ordering / completion which the
+positional-alignment contract handles explicitly.</p>
+<h3 id="what-s-next-after-this">What's next after this</h3>
+<p>Stage 4 takes us to:</p>
+<ul>
+<li>~93 % of <code>package.py</code> files served by the Rust fast path</li>
+<li>~75 µs per file via the static parser (Stage 3)</li>
+<li>~1/3 the wall-time on the open+parse phase via the batched call (Stage 4)</li>
+</ul>
+<p>The remaining cost on <code>_load_family</code> is now real I/O (CIFS round-
+trips for files Rayon's pool can't overlap further) plus the
+dynamic-7 % rez evaluator path. Both are architectural —
+addressing them needs a layer outside this RFC (memcache caching
+of parsed <code>PackageData</code> across invocations is the obvious next
+move, as called out in the "Considered alternatives" section
+below).</p>
+<h2 id="considered-alternatives">Considered alternatives</h2>
+<h3 id="parsed-package-cache-on-top-of-the-shared-memcache">Parsed-package cache on top of the shared memcache</h3>
+<p>Instead of parsing <code>package.py</code> fast, parse once via rez and cache
+the four-field result in Fortiche's existing shared memcache, keyed
+by <code>(repo_id, family, version, mtime)</code>. Subsequent reads across the
+studio are sub-millisecond regardless of whether the file is
+static or dynamic.</p>
+<p>Tradeoffs:</p>
+<ul>
+<li><strong>Pro</strong>: no novel parser, no AST-classification edge cases, reuses
+infrastructure already in place. Lower risk, faster to ship.</li>
+<li><strong>Pro</strong>: works for dynamic packages too (cache stores the
+<em>evaluated</em> fields).</li>
+<li><strong>Con</strong>: first hit anywhere in the studio still pays full rez
+evaluation. The Rust parser is "always fast"; the cache is "fast
+after first studio-wide hit".</li>
+<li><strong>Con</strong>: requires invalidation on <code>package.py</code> change (mtime check
+is cheap but adds complexity).</li>
+</ul>
+<p>The user's preference is to explore the Rust parser. The cache is
+worth re-evaluating after Stage 1 — if the static-parseable fraction
+is lower than expected, the cache pays off more reliably with less
+risk.</p>
+<h2 id="concrete-next-step">Concrete next step</h2>
+<p>Open a draft PR with <code>rer-stat-package-py</code> only: the corpus
+classifier walker. No parser yet. The deliverable is a small CLI
+that takes a path and prints a histogram of categories. Two days
+of work; the output decides whether Stages 2–3 happen.</p>
+<p>A reasonable acceptance criterion for the survey tool itself:</p>
+<ul>
+<li>Recognises every pattern listed in the <a href="https://doubleailes.github.io/rer/docs/engineering/fast-package-py-parser/#scope">Scope</a> section.</li>
+<li>Reports per-category counts and percentages.</li>
+<li>Outputs example file paths for each bucket (for hand-inspection of
+edge cases).</li>
+<li>Falls back gracefully on files it can't even parse as Python
+(rare but possible — broken <code>package.py</code> files exist in the wild).</li>
+</ul>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a href="../../getting-started/rez-integration/#lazy-package-discovery-on-cold-caches">Wiring pyrer into rez</a> — the <code>load_family</code> callback this parser composes with.</li>
+<li><a rel="external" href="https://github.com/doubleailes/rer/issues/86">Issue #86</a> — the
+lazy-discovery hook that motivated this RFC.</li>
+<li><a rel="external" href="https://crates.io/crates/rustpython-parser"><code>rustpython-parser</code> on crates.io</a>
+— the AST library this RFC depends on.</li>
+</ul>
+
+        
+        
+<div class="docs-navigation d-flex justify-content-between">
+  
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+          
+        
+      
+        
+        
+          
+            
+              
+              <a href="https:&#x2F;&#x2F;doubleailes.github.io&#x2F;rer&#x2F;docs&#x2F;help&#x2F;faq&#x2F;">
+                <div class="card my-1">
+                  <div class="card-body py-2">
+                    &larr; FAQ
+                  </div>
+                </div>
+              </a>
+            
+            
+            
+          
+        
+      
+        
+        
+          
+        
+      
+        
+        
+          
+        
+      
+    
+  
+
+  
+  
+  
+  
+  
+    
+    
+    
+      
+      
+        
+      
+    
+      
+      
+        
+      
+    
+      
+      
+        
+      
+    
+      
+      
+        
+      
+    
+  
+</div>
+
+      </main>
+    </div>
+  </div>
+</div>
+
+
+  
+    
+<footer class="footer text-muted">
+	<div class="container">
+		<div class="row">
+			<div class="col-lg-8 order-last order-lg-first">
+				<ul class="list-inline">
+					
+						<li class="list-inline-item">Powered by <a href="https://www.netlify.com/">Netlify</a>, <a href="https://www.getzola.org/">Zola</a>, and <a href="https://github.com/doubleailes/adidoks">AdiDoks</a></li>
+					
+				</ul>
+			</div>
+			<div class="col-lg-8 order-first order-lg-last text-lg-end">
+				<ul class="list-inline">
+					
+						
+							<li class="list-inline-item"><a href="https://doubleailes.github.io/rer/privacy-policy/">Privacy</a></li>
+						
+							<li class="list-inline-item"><a href="https://doubleailes.github.io/rer/docs/contributing/code-of-conduct/">Code of Conduct</a></li>
+						
+					
+				</ul>
+			</div>
+		</div>
+	</div>
+</footer>
+
+  
+
+  
+<script type="text/javascript" src="https://doubleailes.github.io/rer/js/main.js" defer></script>
+
+  <script type="text/javascript" src="https://doubleailes.github.io/rer/plugins/elasticlunr.min.js" defer></script>
+  <script type="text/javascript" src="https://doubleailes.github.io/rer/search_index.en.js" defer></script>
+  <script type="text/javascript" src="https://doubleailes.github.io/rer/js/search.js" defer></script>
+
+  
+</body>
+</html>

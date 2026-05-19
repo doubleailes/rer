@@ -1,0 +1,1332 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="x-ua-compatible" content="ie=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+  <link rel="preload" as="font" href="https://doubleailes.github.io/rer/fonts/vendor/jost/jost-v4-latin-regular.woff2" type="font/woff2" crossorigin>
+  <link rel="preload" as="font" href="https://doubleailes.github.io/rer/fonts/vendor/jost/jost-v4-latin-700.woff2"  type="font/woff2" crossorigin>
+
+
+<link rel="stylesheet" href="https://doubleailes.github.io/rer/main.css">
+
+
+
+  
+  
+    
+  
+
+  
+  
+    
+    
+  
+  
+  
+    
+  
+  
+  
+  
+    
+  
+  
+  
+
+
+  <meta name="robots" content="index, follow">
+  <meta name="googlebot" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1">
+  <meta name="bingbot" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1">
+
+
+	
+
+
+	
+
+<title>Wiring `pyrer` into `rez` | rer</title>
+<meta name="description" content="How to use pyrer as the solver backend behind a normal rez workflow.">
+<link rel="canonical" href="https://doubleailes.github.io/rer/docs/getting-started/rez-integration/">
+
+
+  <meta name="twitter:card" content="summary_large_image">
+  
+    <meta name="twitter:image" content="https://doubleailes.github.io/rer//doks.png">
+  
+  <meta name="twitter:title" content="Wiring `pyrer` into `rez`">
+  <meta name="twitter:description" content="How to use pyrer as the solver backend behind a normal rez workflow.">
+  <meta name="twitter:site" content="@Philippe Llerena">
+  <meta name="twitter:creator" content="@Philippe Llerena">
+  
+  <meta property="og:title" content="Wiring `pyrer` into `rez`">
+  <meta property="og:description" content="How to use pyrer as the solver backend behind a normal rez workflow.">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://doubleailes.github.io/rer/docs/getting-started/rez-integration/">
+
+  
+    <meta property="og:image" content="https://doubleailes.github.io/rer//doks.png">
+  
+
+  <meta property="og:updated_time" content="2026-05-15T08:30:00+00:00">
+  <meta property="og:site_name" content="Wiring `pyrer` into `rez`">
+
+  
+
+  
+
+  
+  <meta property="article:publisher" content="https://www.facebook.com/Philippe Llerena">
+  <meta property="article:author" content="https://www.facebook.com/Philippe Llerena">
+  <meta property="og:locale" content="en_US">
+
+
+
+
+
+  
+
+
+
+
+
+<script type="application/ld+json">
+  {
+    "@context": "http://schema.org",
+    "@type": "BreadcrumbList",
+    
+      
+      
+        
+        
+        
+        
+        
+        
+        
+        
+          {
+            "@type": "ListItem",
+            "position":  1 ,
+            "name": "Home",
+            "item": "https://doubleailes.github.io/rer/"
+          },
+          
+          
+          {
+            "@type": "ListItem",
+            "position":  2 ,
+            "name": "Docs",
+            "item": "https://doubleailes.github.io/rer/docs/"
+          },
+        
+      
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+          
+          
+          {
+            "@type": "ListItem",
+            "position":  3 ,
+            "name": "Getting Started",
+            "item": "https://doubleailes.github.io/rer/docs/getting-started/"
+          },
+        
+      
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+          
+          
+          {
+            "@type": "ListItem",
+            "position":  4 ,
+            "name": "Rez Integration",
+            "item": "https://doubleailes.github.io/rer/docs/getting-started/rez-integration/"
+          },
+        
+      
+    
+  }
+</script>
+
+
+
+
+
+
+  <meta name="theme-color" content="#fff">
+  <link rel="apple-touch-icon" sizes="180x180" href="https://doubleailes.github.io/rer/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="https://doubleailes.github.io/rer/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="https://doubleailes.github.io/rer/favicon-16x16.png">
+  
+
+
+  
+
+</head>
+
+  
+
+<body class="docs single">
+  
+  
+  
+  
+<div class="header-bar fixed-top"></div>
+<header class="navbar fixed-top navbar-expand-md navbar-light">
+	<div class="container">
+		<input class="menu-btn order-0" type="checkbox" id="menu-btn">
+		<label class="menu-icon d-md-none" for="menu-btn"><span class="navicon"></span></label>
+		<a class="navbar-brand order-1 order-md-0 me-auto" href="https://doubleailes.github.io/rer/">rer</a>
+		<button id="mode" class="btn btn-link order-2 order-md-4" type="button" aria-label="Toggle mode">
+			<span class="toggle-dark"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-moon"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg></span>
+			<span class="toggle-light"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-sun"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg></span>
+		</button>
+		<ul class="navbar-nav fork-me order-3 order-md-5">
+			
+				
+					<li class="nav-item">
+						<a class="nav-link" href="twitter.com/doubleailes"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-twitter"><path d="M23 3a10.9 10.9 0 0 1-3.14 1.53 4.48 4.48 0 0 0-7.86 3v1A10.66 10.66 0 0 1 3 4s-4 9 5 13a11.64 11.64 0 0 1-7 2c9 5 20 0 20-11.5a4.5 4.5 0 0 0-.08-.83A7.72 7.72 0 0 0 23 3z"></path></svg><span class="ms-2 visually-hidden">Twitter</span></a>
+					</li>
+				
+					<li class="nav-item">
+						<a class="nav-link" href="https://github.com/doubleailes/rer"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-github"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path></svg><span class="ms-2 visually-hidden">GitHub</span></a>
+					</li>
+				
+			
+		</ul>
+		<div class="collapse navbar-collapse order-4 order-md-1">
+			<ul class="navbar-nav main-nav me-auto order-5 order-md-2">
+				
+					
+				
+				
+				
+					
+						<li class="nav-item docs active">
+							<a class="nav-link" href="https://doubleailes.github.io/rer/docs/getting-started/introduction/">Docs</a>
+						</li>
+					
+				
+			</ul>
+			<div class="break order-6 d-md-none"></div>
+			
+				<form class="navbar-form flex-grow-1 order-7 order-md-3">
+					<input id="userinput" class="form-control is-search" type="search" placeholder="Search docs..."
+						aria-label="Search docs..." autocomplete="off">
+					<div id="suggestions" class="shadow bg-white rounded"></div>
+				</form>
+			
+		</div>
+	</div>
+</header>
+
+
+
+  
+<div class="wrap container" role="document">
+  <div class="content">
+    <div class="row flex-xl-nowrap">
+	  
+<div class="col-lg-5 col-xl-4 docs-sidebar">
+	<nav class="docs-links" aria-label="Main navigation">
+			
+			
+			
+			
+					
+					
+					
+							<h3>Getting Started</h3>
+							<ul class="list-unstyled">
+							                           
+									<li><a class="docs-link" href="https://doubleailes.github.io/rer/docs/getting-started/introduction/">Introduction</a></li>
+							                           
+									<li><a class="docs-link" href="https://doubleailes.github.io/rer/docs/getting-started/quick-start/">Quick Start</a></li>
+							                           
+									<li><a class="docs-link active" href="https://doubleailes.github.io/rer/docs/getting-started/rez-integration/">Wiring `pyrer` into `rez`</a></li>
+							
+					</ul>
+					
+					
+					
+					
+							<h3>Contributing</h3>
+							<ul class="list-unstyled">
+							                           
+									<li><a class="docs-link" href="https://doubleailes.github.io/rer/docs/contributing/how-to-contribute/">How to Contribute</a></li>
+							                           
+									<li><a class="docs-link" href="https://doubleailes.github.io/rer/docs/contributing/code-of-conduct/">Code of Conduct</a></li>
+							
+					</ul>
+					
+					
+					
+					
+							<h3>Help</h3>
+							<ul class="list-unstyled">
+							                           
+									<li><a class="docs-link" href="https://doubleailes.github.io/rer/docs/help/faq/">FAQ</a></li>
+							
+					</ul>
+					
+					
+					
+					
+							<h3>Engineering notes</h3>
+							<ul class="list-unstyled">
+							                           
+									<li><a class="docs-link" href="https://doubleailes.github.io/rer/docs/engineering/dedup-caches/">Why rer doesn&#x27;t cache intersect &#x2F; reduce_by results</a></li>
+							                           
+									<li><a class="docs-link" href="https://doubleailes.github.io/rer/docs/engineering/stability/">Stability commitments (1.0 onwards)</a></li>
+							                           
+									<li><a class="docs-link" href="https://doubleailes.github.io/rer/docs/engineering/fast-package-py-parser/">RFC — A blazing-fast Rust `package.py` parser</a></li>
+							
+					</ul>
+					
+					
+			
+	</nav>
+</div>
+
+	  
+  
+  <nav class="docs-toc d-none d-xl-block col-xl-3" aria-label="Secondary navigation">
+  	<div class="page-links">
+  			<h3>On this page</h3>
+  			<nav id="TableOfContents">
+  					<ul>
+  							
+  							<li><a href="https://doubleailes.github.io/rer/docs/getting-started/rez-integration/#what-pyrer-is-and-what-it-is-not">What pyrer is, and what it is not</a></li>
+  							
+  							
+  							<li><a href="https://doubleailes.github.io/rer/docs/getting-started/rez-integration/#building-the-pyrer-repo-from-rez">Building the pyrer repo from rez</a></li>
+  							
+  									<ul>
+  											
+  											<li><a href="https://doubleailes.github.io/rer/docs/getting-started/rez-integration/#faster-construction-with-from-strings">Faster construction with from_strings</a></li>
+  											
+  									</ul>
+  							
+  							
+  							<li><a href="https://doubleailes.github.io/rer/docs/getting-started/rez-integration/#lazy-package-discovery-on-cold-caches">Lazy package discovery on cold caches</a></li>
+  							
+  									<ul>
+  											
+  											<li><a href="https://doubleailes.github.io/rer/docs/getting-started/rez-integration/#the-version-range-hint-issue-92-pre-filter-at-the-shim">The version_range hint (issue #92) — pre-filter at the shim</a></li>
+  											
+  											<li><a href="https://doubleailes.github.io/rer/docs/getting-started/rez-integration/#when-this-actually-helps">When this actually helps</a></li>
+  											
+  											<li><a href="https://doubleailes.github.io/rer/docs/getting-started/rez-integration/#worked-example-windows-cifs">Worked example: Windows + CIFS</a></li>
+  											
+  											<li><a href="https://doubleailes.github.io/rer/docs/getting-started/rez-integration/#lazy-variant-of-the-shim">Lazy variant of the shim</a></li>
+  											
+  											<li><a href="https://doubleailes.github.io/rer/docs/getting-started/rez-integration/#what-lazy-loading-does-not-fix">What lazy loading does not fix</a></li>
+  											
+  									</ul>
+  							
+  							
+  							<li><a href="https://doubleailes.github.io/rer/docs/getting-started/rez-integration/#plugging-in-the-static-package-py-fast-parser">Plugging in the static package.py fast-parser</a></li>
+  							
+  									<ul>
+  											
+  											<li><a href="https://doubleailes.github.io/rer/docs/getting-started/rez-integration/#two-tier-load-family">Two-tier load_family</a></li>
+  											
+  											<li><a href="https://doubleailes.github.io/rer/docs/getting-started/rez-integration/#faster-batched-parallel-parse-issue-94">Faster: batched parallel parse (issue #94)</a></li>
+  											
+  											<li><a href="https://doubleailes.github.io/rer/docs/getting-started/rez-integration/#shadow-validation-mode-for-the-first-weeks-in-production">Shadow-validation mode for the first weeks in production</a></li>
+  											
+  											<li><a href="https://doubleailes.github.io/rer/docs/getting-started/rez-integration/#metrics-confirm-the-hit-rate">Metrics — confirm the hit rate</a></li>
+  											
+  											<li><a href="https://doubleailes.github.io/rer/docs/getting-started/rez-integration/#rollout-plan-1">Rollout plan</a></li>
+  											
+  											<li><a href="https://doubleailes.github.io/rer/docs/getting-started/rez-integration/#where-this-won-t-help-so-nobody-s-surprised">Where this WON&#x27;T help (so nobody&#x27;s surprised)</a></li>
+  											
+  									</ul>
+  							
+  							
+  							<li><a href="https://doubleailes.github.io/rer/docs/getting-started/rez-integration/#solving">Solving</a></li>
+  							
+  							
+  							<li><a href="https://doubleailes.github.io/rer/docs/getting-started/rez-integration/#translating-the-result-back-to-rez">Translating the result back to rez</a></li>
+  							
+  							
+  							<li><a href="https://doubleailes.github.io/rer/docs/getting-started/rez-integration/#a-complete-monkey-patch-shim">A complete monkey-patch shim</a></li>
+  							
+  							
+  							<li><a href="https://doubleailes.github.io/rer/docs/getting-started/rez-integration/#caveats-and-what-isn-t-supported-yet">Caveats and what isn&#x27;t supported yet</a></li>
+  							
+  							
+  							<li><a href="https://doubleailes.github.io/rer/docs/getting-started/rez-integration/#sanity-checking-against-rez">Sanity-checking against rez</a></li>
+  							
+  									<ul>
+  											
+  											<li><a href="https://doubleailes.github.io/rer/docs/getting-started/rez-integration/#interpreting-the-output">Interpreting the output</a></li>
+  											
+  									</ul>
+  							
+  							
+  							<li><a href="https://doubleailes.github.io/rer/docs/getting-started/rez-integration/#see-also">See also</a></li>
+  							
+  							
+  					</ul>
+  			</nav>
+  	</div>
+  </nav>
+  
+
+      <main class="docs-content col-lg-11 col-xl-9">
+        <h1>Wiring `pyrer` into `rez`</h1>
+        <p class="lead">How to plug pyrer into a normal rez workflow: rez still handles package discovery and environment construction; pyrer just does the solve.</p>
+        <h2 id="what-pyrer-is-and-what-it-is-not">What <code>pyrer</code> is, and what it is not</h2>
+<p><code>pyrer</code> is <strong>only the solver hotpath</strong> — the rez-faithful phase-based
+backtracking algorithm, ported to Rust and called from Python through
+PyO3. It is <em>not</em> a replacement for <code>rez</code>. It does not:</p>
+<ul>
+<li>discover packages on the filesystem,</li>
+<li>parse <code>package.py</code> (it takes pre-parsed requirements as strings),</li>
+<li>build the runtime environment (PATH, env vars, shell hooks),</li>
+<li>handle the <code>rxt</code> context lifecycle, suites, or context bundling.</li>
+</ul>
+<p><code>rez</code> keeps doing all of that. <code>pyrer</code> is dropped in at the one step
+where the cost lives: solving the version constraints.</p>
+<p>The minimum integration looks like:</p>
+<pre class="giallo" style="color: #CDD6F4; background-color: #1E1E2E;"><code data-lang="plain"><span class="giallo-l"><span>┌────────────────────────────────────────────┐</span></span>
+<span class="giallo-l"><span>│ rez: iter_package_families / iter_packages │  ← package discovery</span></span>
+<span class="giallo-l"><span>└────────────────────────────────────────────┘</span></span>
+<span class="giallo-l"><span>                    │</span></span>
+<span class="giallo-l"><span>                    ▼</span></span>
+<span class="giallo-l"><span>┌────────────────────────────────────────────┐</span></span>
+<span class="giallo-l"><span>│ build a pyrer repo dict (name → version    │</span></span>
+<span class="giallo-l"><span>│ → {requires, variants})                    │  ← one-time conversion</span></span>
+<span class="giallo-l"><span>└────────────────────────────────────────────┘</span></span>
+<span class="giallo-l"><span>                    │</span></span>
+<span class="giallo-l"><span>                    ▼</span></span>
+<span class="giallo-l"><span>┌────────────────────────────────────────────┐</span></span>
+<span class="giallo-l"><span>│ pyrer.solve(requests, packages)            │  ← the fast bit</span></span>
+<span class="giallo-l"><span>└────────────────────────────────────────────┘</span></span>
+<span class="giallo-l"><span>                    │</span></span>
+<span class="giallo-l"><span>                    ▼</span></span>
+<span class="giallo-l"><span>┌────────────────────────────────────────────┐</span></span>
+<span class="giallo-l"><span>│ resolve → rez Variant objects →            │</span></span>
+<span class="giallo-l"><span>│ ResolvedContext / env build                │  ← rez again</span></span>
+<span class="giallo-l"><span>└────────────────────────────────────────────┘</span></span></code></pre><h2 id="building-the-pyrer-repo-from-rez">Building the <code>pyrer</code> repo from <code>rez</code></h2>
+<p><code>pyrer.solve()</code> accepts a Python list of <code>pyrer.PackageData</code> objects —
+one per (package, version). Use <code>PackageData.from_rez(pkg)</code> to convert
+each rez <code>Package</code> in one line:</p>
+<pre class="giallo" style="color: #CDD6F4; background-color: #1E1E2E;"><code data-lang="python"><span class="giallo-l"><span style="color: #CBA6F7;">import</span><span> pyrer</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">from</span><span> rez</span><span style="color: #9399B2;">.</span><span>packages</span><span style="color: #CBA6F7;"> import</span><span> iter_package_families</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">def</span><span style="color: #89B4FA;font-style: italic;"> build_pyrer_packages</span><span style="color: #9399B2;">(</span><span style="color: #EBA0AC;font-style: italic;">package_paths</span><span style="color: #9399B2;">):</span></span>
+<span class="giallo-l"><span style="color: #A6E3A1;">    &quot;&quot;&quot;Walk rez&#39;s package paths and yield pyrer.PackageData instances.&quot;&quot;&quot;</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">    for</span><span> family</span><span style="color: #CBA6F7;"> in</span><span style="color: #89B4FA;"> iter_package_families</span><span style="color: #9399B2;">(</span><span style="color: #EBA0AC;font-style: italic;">paths</span><span style="color: #94E2D5;">=</span><span>package_paths</span><span style="color: #9399B2;">):</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">        for</span><span> pkg</span><span style="color: #CBA6F7;"> in</span><span> family</span><span style="color: #9399B2;">.</span><span style="color: #89B4FA;">iter_packages</span><span style="color: #9399B2;">():</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">            yield</span><span> pyrer</span><span style="color: #9399B2;">.</span><span>PackageData</span><span style="color: #9399B2;">.</span><span style="color: #89B4FA;">from_rez</span><span style="color: #9399B2;">(</span><span>pkg</span><span style="color: #9399B2;">)</span></span></code></pre>
+<p><code>from_rez(pkg)</code> reads <code>name</code>, <code>version</code>, <code>requires</code> and <code>variants</code>
+off the rez <code>Package</code>, stringifies each <code>Requirement</code> (rez's
+<code>Requirement</code> instances are not <code>str</code> on their own — they render via
+<code>__str__</code>), and stringifies <code>version</code> (a <code>rez.version.Version</code>). It
+is duck-typed — <code>pyrer</code> itself does not import rez — so you can also
+pass any object exposing the same four attributes (e.g. a test
+fixture).</p>
+<h3 id="faster-construction-with-from-strings">Faster construction with <code>from_strings</code></h3>
+<p><code>from_rez(pkg)</code> triggers rez's <code>AttributeForwardMeta</code> chain on every
+attribute and parses each requirement string into a <code>Requirement</code>
+object only to immediately turn it back into a string. When you
+already have the raw strings, prefer
+<code>PackageData.from_strings(name, version, requires, variants)</code> —
+it skips the wrapper round-trip entirely:</p>
+<pre class="giallo" style="color: #CDD6F4; background-color: #1E1E2E;"><code data-lang="python"><span class="giallo-l"><span style="color: #CBA6F7;">def</span><span style="color: #89B4FA;font-style: italic;"> build_pyrer_packages_fast</span><span style="color: #9399B2;">(</span><span style="color: #EBA0AC;font-style: italic;">package_paths</span><span style="color: #9399B2;">):</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">    for</span><span> family</span><span style="color: #CBA6F7;"> in</span><span style="color: #89B4FA;"> iter_package_families</span><span style="color: #9399B2;">(</span><span style="color: #EBA0AC;font-style: italic;">paths</span><span style="color: #94E2D5;">=</span><span>package_paths</span><span style="color: #9399B2;">):</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">        for</span><span> pkg</span><span style="color: #CBA6F7;"> in</span><span> family</span><span style="color: #9399B2;">.</span><span style="color: #89B4FA;">iter_packages</span><span style="color: #9399B2;">():</span></span>
+<span class="giallo-l"><span>            data</span><span style="color: #94E2D5;"> =</span><span> pkg</span><span style="color: #9399B2;">.</span><span>resource</span><span style="color: #9399B2;">.</span><span>data</span></span>
+<span class="giallo-l"><span style="color: #9399B2;font-style: italic;">            # `data[&quot;requires&quot;]` is a raw list[str] in the common</span></span>
+<span class="giallo-l"><span style="color: #9399B2;font-style: italic;">            # (non-late-bound) case; fall back to from_rez otherwise.</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">            if</span><span style="color: #FAB387;font-style: italic;"> isinstance</span><span style="color: #9399B2;">(</span><span>data</span><span style="color: #9399B2;">.</span><span style="color: #89B4FA;">get</span><span style="color: #9399B2;">(</span><span style="color: #A6E3A1;">&quot;requires&quot;</span><span style="color: #9399B2;">, []),</span><span style="color: #CBA6F7;font-style: italic;"> list</span><span style="color: #9399B2;">)</span><span style="color: #CBA6F7;"> and</span><span style="color: #9399B2;"> \</span></span>
+<span class="giallo-l"><span style="color: #FAB387;font-style: italic;">               isinstance</span><span style="color: #9399B2;">(</span><span>data</span><span style="color: #9399B2;">.</span><span style="color: #89B4FA;">get</span><span style="color: #9399B2;">(</span><span style="color: #A6E3A1;">&quot;variants&quot;</span><span style="color: #9399B2;">, []),</span><span style="color: #CBA6F7;font-style: italic;"> list</span><span style="color: #9399B2;">):</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">                yield</span><span> pyrer</span><span style="color: #9399B2;">.</span><span>PackageData</span><span style="color: #9399B2;">.</span><span style="color: #89B4FA;">from_strings</span><span style="color: #9399B2;">(</span></span>
+<span class="giallo-l"><span style="color: #EBA0AC;font-style: italic;">                    data</span><span style="color: #9399B2;">[</span><span style="color: #A6E3A1;">&quot;</span><span style="color: #A6E3A1;font-style: italic;">name</span><span style="color: #A6E3A1;">&quot;</span><span style="color: #9399B2;">],</span></span>
+<span class="giallo-l"><span style="color: #EBA0AC;font-style: italic;">                    data</span><span style="color: #9399B2;">[</span><span style="color: #A6E3A1;">&quot;</span><span style="color: #A6E3A1;font-style: italic;">version</span><span style="color: #A6E3A1;">&quot;</span><span style="color: #9399B2;">],</span></span>
+<span class="giallo-l"><span>                    data</span><span style="color: #9399B2;">.</span><span style="color: #89B4FA;">get</span><span style="color: #9399B2;">(</span><span style="color: #A6E3A1;">&quot;requires&quot;</span><span style="color: #9399B2;">),</span></span>
+<span class="giallo-l"><span>                    data</span><span style="color: #9399B2;">.</span><span style="color: #89B4FA;">get</span><span style="color: #9399B2;">(</span><span style="color: #A6E3A1;">&quot;variants&quot;</span><span style="color: #9399B2;">),</span></span>
+<span class="giallo-l"><span style="color: #9399B2;">                )</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">            else</span><span style="color: #9399B2;">:</span></span>
+<span class="giallo-l"><span style="color: #9399B2;font-style: italic;">                # @early / @late bindings — let rez evaluate them.</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">                yield</span><span> pyrer</span><span style="color: #9399B2;">.</span><span>PackageData</span><span style="color: #9399B2;">.</span><span style="color: #89B4FA;">from_rez</span><span style="color: #9399B2;">(</span><span>pkg</span><span style="color: #9399B2;">)</span></span></code></pre>
+<p>The <code>from_strings</code> method:</p>
+<ul>
+<li>Skips the per-attribute <code>AttributeForwardMeta</code> lookup.</li>
+<li>Skips the <code>Requirement</code> parse (no <code>Version</code> / <code>VersionRange</code> AST
+is built then discarded).</li>
+<li>Skips the <code>str(Requirement)</code> round-trip per requirement.</li>
+<li>Accepts <code>None</code> for <code>requires</code> / <code>variants</code> (matches
+<code>dict.get(...)</code> ergonomics — no <code>or ()</code> boilerplate needed).</li>
+</ul>
+<p>Functionally equivalent to the four-arg constructor; the
+classmethod form exists so the contract has a name. <strong>Always fall
+back to <code>from_rez</code> for packages with <code>@early</code> or <code>@late</code> binding</strong> —
+in those cases <code>resource.data["requires"]</code> is a <code>SourceCode</code>
+instance, not a <code>list[str]</code>, and <code>from_strings</code> will raise.</p>
+<p>Two notes on this step:</p>
+<ul>
+<li>It is <strong>eager</strong> — every package on every path is loaded before the
+solve starts. <code>rez</code> normally loads lazily; the trade-off is one
+upfront cost vs many small ones during the solve. On a real repo
+on local disk with a warm page cache, eager loading is typically a
+few seconds; on the rez 188-case benchmark it is the dominant
+pre-solve cost.</li>
+<li>If you're running many resolves against the same repo in one
+process (CI, batch validation, a long-lived daemon), build the
+list <strong>once</strong> and reuse it.</li>
+</ul>
+<p>If your repository sits on a slow filesystem (network mount, no
+useful page cache), the eager load can easily exceed the solve
+itself. The <a href="https://doubleailes.github.io/rer/docs/getting-started/rez-integration/#lazy-package-discovery-on-cold-caches">next section</a>
+covers a callback-driven alternative that loads families on demand.</p>
+<h2 id="lazy-package-discovery-on-cold-caches">Lazy package discovery on cold caches</h2>
+<p><code>pyrer.solve</code> accepts an optional <code>load_family</code> callback that is
+invoked the first time the solver needs a family it hasn't already
+been given:</p>
+<pre class="giallo" style="color: #CDD6F4; background-color: #1E1E2E;"><code data-lang="python"><span class="giallo-l"><span style="color: #CBA6F7;">import</span><span> pyrer</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">def</span><span style="color: #89B4FA;font-style: italic;"> load_family</span><span style="color: #9399B2;">(</span><span style="color: #EBA0AC;font-style: italic;">name</span><span style="color: #9399B2;">,</span><span style="color: #EBA0AC;font-style: italic;"> version_range</span><span style="color: #94E2D5;">=</span><span style="color: #FAB387;">None</span><span style="color: #9399B2;">):</span></span>
+<span class="giallo-l"><span style="color: #A6E3A1;">    &quot;&quot;&quot;Return every PackageData for `name` (optionally filtered to</span></span>
+<span class="giallo-l"><span style="color: #A6E3A1;">    `version_range`), or [] if no such family.</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #A6E3A1;">    The `version_range` hint (issue #92) is a rez-syntax string —</span></span>
+<span class="giallo-l"><span style="color: #A6E3A1;">    `&quot;2+&lt;3&quot;`, `&quot;==2.0&quot;`, etc. — that the shim can pass directly to</span></span>
+<span class="giallo-l"><span style="color: #A6E3A1;">    `iter_packages(range_=...)` so on-disk version dirs outside the</span></span>
+<span class="giallo-l"><span style="color: #A6E3A1;">    range are skipped before any `package.py` is opened. `None`</span></span>
+<span class="giallo-l"><span style="color: #A6E3A1;">    means &quot;every version&quot;.</span></span>
+<span class="giallo-l"><span style="color: #A6E3A1;">    &quot;&quot;&quot;</span></span>
+<span class="giallo-l"><span>    pkgs</span><span style="color: #94E2D5;"> =</span><span style="color: #9399B2;"> []</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">    for</span><span> pkg</span><span style="color: #CBA6F7;"> in</span><span style="color: #89B4FA;"> iter_packages</span><span style="color: #9399B2;">(</span><span>name</span><span style="color: #9399B2;">,</span><span style="color: #EBA0AC;font-style: italic;"> range_</span><span style="color: #94E2D5;">=</span><span>version_range</span><span style="color: #9399B2;">,</span><span style="color: #EBA0AC;font-style: italic;"> paths</span><span style="color: #94E2D5;">=</span><span>PACKAGE_PATHS</span><span style="color: #9399B2;">):</span></span>
+<span class="giallo-l"><span>        pkgs</span><span style="color: #9399B2;">.</span><span style="color: #89B4FA;">append</span><span style="color: #9399B2;">(</span><span>pyrer</span><span style="color: #9399B2;">.</span><span>PackageData</span><span style="color: #9399B2;">.</span><span style="color: #89B4FA;">from_rez</span><span style="color: #9399B2;">(</span><span>pkg</span><span style="color: #9399B2;">))</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">    return</span><span> pkgs</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span>result</span><span style="color: #94E2D5;"> =</span><span> pyrer</span><span style="color: #9399B2;">.</span><span style="color: #89B4FA;">solve</span><span style="color: #9399B2;">(</span></span>
+<span class="giallo-l"><span style="color: #9399B2;">    [</span><span style="color: #A6E3A1;">&quot;maya-2024&quot;</span><span style="color: #9399B2;">,</span><span style="color: #A6E3A1;"> &quot;nuke-14&quot;</span><span style="color: #9399B2;">],</span></span>
+<span class="giallo-l"><span style="color: #EBA0AC;font-style: italic;">    packages</span><span style="color: #94E2D5;">=</span><span style="color: #FAB387;">None</span><span style="color: #9399B2;">,</span><span style="color: #9399B2;font-style: italic;">                # or a small eager seed</span></span>
+<span class="giallo-l"><span style="color: #EBA0AC;font-style: italic;">    load_family</span><span style="color: #94E2D5;">=</span><span>load_family</span><span style="color: #9399B2;">,</span></span>
+<span class="giallo-l"><span style="color: #9399B2;">)</span></span></code></pre>
+<p>Semantics:</p>
+<ul>
+<li>The callback is called <strong>at most once per (family, range)</strong> in one
+solve (results are cached internally), and <strong>only for families the
+solver actually exercises</strong>.</li>
+<li>Returning <code>[]</code> means "no such family in the requested range" —
+treated the same as a family that was never added.</li>
+<li>The <code>packages</code> argument is still accepted; entries supplied that
+way are pre-seeded into the cache and the callback is never asked
+for those families. Useful for a hybrid where you pre-load
+hot families and lazy-load the long tail.</li>
+<li><strong>Backward-compatible signature</strong> (issue #92): a callback defined
+as <code>def load_family(name):</code> keeps working — pyrer detects the
+signature and only passes <code>version_range</code> when the callback can
+accept it.</li>
+<li>If the callback raises, the solve returns
+<code>result.status == "error"</code> with the exception message in
+<code>result.failure_description</code>. No exception escapes <code>pyrer.solve</code>.</li>
+<li>Defensive: entries whose <code>name</code> does not match the requested
+family are dropped; a duplicate <code>(family, version)</code> from the
+callback surfaces as <code>status="error"</code>.</li>
+</ul>
+<h3 id="the-version-range-hint-issue-92-pre-filter-at-the-shim">The <code>version_range</code> hint (issue #92) — pre-filter at the shim</h3>
+<p>When a request pins a version (<code>maya-2024+</code>, <code>python&lt;3.12</code>,
+<code>==1.5.0</code>), pyrer propagates that constraint immediately. It then
+passes the resulting range to the <code>load_family</code> callback as the
+<code>version_range</code> keyword argument.</p>
+<p>The shim can use it directly with rez's <code>iter_packages</code>:</p>
+<pre class="giallo" style="color: #CDD6F4; background-color: #1E1E2E;"><code data-lang="python"><span class="giallo-l"><span style="color: #CBA6F7;">def</span><span style="color: #89B4FA;font-style: italic;"> load_family</span><span style="color: #9399B2;">(</span><span style="color: #EBA0AC;font-style: italic;">name</span><span style="color: #9399B2;">,</span><span style="color: #EBA0AC;font-style: italic;"> version_range</span><span style="color: #94E2D5;">=</span><span style="color: #FAB387;">None</span><span style="color: #9399B2;">):</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">    return</span><span style="color: #9399B2;"> [</span></span>
+<span class="giallo-l"><span>        pyrer</span><span style="color: #9399B2;">.</span><span>PackageData</span><span style="color: #9399B2;">.</span><span style="color: #89B4FA;">from_rez</span><span style="color: #9399B2;">(</span><span>pkg</span><span style="color: #9399B2;">)</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">        for</span><span> pkg</span><span style="color: #CBA6F7;"> in</span><span style="color: #89B4FA;"> iter_packages</span><span style="color: #9399B2;">(</span><span>name</span><span style="color: #9399B2;">,</span><span style="color: #EBA0AC;font-style: italic;"> range_</span><span style="color: #94E2D5;">=</span><span>version_range</span><span style="color: #9399B2;">,</span><span style="color: #EBA0AC;font-style: italic;"> paths</span><span style="color: #94E2D5;">=</span><span>PACKAGE_PATHS</span><span style="color: #9399B2;">)</span></span>
+<span class="giallo-l"><span style="color: #9399B2;">    ]</span></span></code></pre>
+<p><code>rez.packages.iter_packages</code> already accepts a <code>range_</code> argument and
+<strong>skips entire version directories</strong> that fall outside it, before
+any <code>package.py</code> is opened. That cuts I/O proportionally to how
+narrow the request is.</p>
+<p>The hint is <strong>advisory</strong>:</p>
+<ul>
+<li>The shim <strong>may</strong> filter; pyrer re-validates anyway, so returning
+the full set is correct but wasteful.</li>
+<li>The shim <strong>must not</strong> drop versions outside the hint without
+reason — pyrer caches the loaded range and re-calls the loader
+with a widened range if a backtrack later needs more.</li>
+<li><code>version_range=None</code> means "the solver needs every version" —
+always return the full family.</li>
+</ul>
+<p><strong>Impact</strong> on a 132-package resolve at a 5,500-package studio
+(per the issue):</p>
+<table><thead><tr><th style="text-align: right">Without hint</th><th style="text-align: right">With hint</th></tr></thead><tbody>
+<tr><td style="text-align: right">2,637 packages loaded for 132 used (95% wasted)</td><td style="text-align: right">~400 packages loaded for 132 used (6.6× cut)</td></tr>
+<tr><td style="text-align: right">~9 s <code>load_family</code> total</td><td style="text-align: right">projected ~2 s</td></tr>
+</tbody></table>
+<p>The hint compounds with the static-<code>package.py</code> parser
+(<a href="https://doubleailes.github.io/rer/docs/getting-started/rez-integration/#plugging-in-the-static-package-py-fast-parser">above</a>) — the
+parser makes each load cheap; the hint makes most loads
+unnecessary.</p>
+<h3 id="when-this-actually-helps">When this actually helps</h3>
+<p>The win is in I/O avoided, not in CPU. Specifically:</p>
+<table><thead><tr><th>Scenario</th><th>Lazy vs eager</th></tr></thead><tbody>
+<tr><td>Local disk, warm page cache, wide healthy resolve</td><td>Roughly equal — reachable ≈ touched, the eager cost is small anyway</td></tr>
+<tr><td>Network filesystem (NFS / CIFS / SMB), studio-scale repo</td><td><strong>Substantial win</strong> — every cold roundtrip avoided is a direct latency saving</td></tr>
+<tr><td>Early-fail conflict resolves (e.g. <code>maya-2024 maya-2025</code>)</td><td><strong>Substantial win</strong> — touches a handful of families instead of the whole reachable closure</td></tr>
+<tr><td>Selective deep resolves in a large package universe</td><td><strong>Substantial win</strong> — sparse subgraph means most reachable families are never opened</td></tr>
+<tr><td>Single tool / CI probe inside a 5000-package store</td><td><strong>Substantial win</strong> — same reason as above</td></tr>
+</tbody></table>
+<p>The shape of the win depends on the gap between the <em>reachable</em>
+subgraph (eager BFS) and the <em>exercised</em> subgraph (what the solver
+actually opens). When those diverge, lazy loading is essentially
+free latency back.</p>
+<h3 id="worked-example-windows-cifs">Worked example: Windows + CIFS</h3>
+<p>A common case: the rez repository lives on a Samba / CIFS share,
+mounted on Windows clients. Windows has no equivalent of Linux's
+page cache for SMB content, so every <code>rez env</code> invocation pays the
+full network roundtrip for every <code>package.py</code> it opens — there is
+no cross-invocation caching to amortise it. On that combination, the
+eager BFS in the basic shim can easily dominate the wall-clock cost
+of <code>rez env</code>, even though the solve itself runs in tens of
+milliseconds.</p>
+<p><code>load_family</code> is the right primitive for this case: the solver only
+asks the network for families it genuinely needs to inspect, and
+each one is fetched at most once per resolve.</p>
+<h3 id="lazy-variant-of-the-shim">Lazy variant of the shim</h3>
+<p>The monkey-patch shim becomes slightly simpler with the callback
+form — no upfront BFS:</p>
+<pre class="giallo" style="color: #CDD6F4; background-color: #1E1E2E;"><code data-lang="python"><span class="giallo-l"><span style="color: #CBA6F7;">import</span><span> pyrer</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">import</span><span> rez</span><span style="color: #9399B2;">.</span><span>solver</span><span style="color: #CBA6F7;"> as</span><span> _rez_solver</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">import</span><span> rez</span><span style="color: #9399B2;">.</span><span>resolver</span><span style="color: #CBA6F7;"> as</span><span> _rez_resolver</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">from</span><span> rez</span><span style="color: #9399B2;">.</span><span>packages</span><span style="color: #CBA6F7;"> import</span><span> iter_packages</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">from</span><span> rez</span><span style="color: #9399B2;">.</span><span>config</span><span style="color: #CBA6F7;"> import</span><span> config</span><span style="color: #CBA6F7;"> as</span><span> _rez_config</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span>_original_resolve</span><span style="color: #94E2D5;"> =</span><span> _rez_resolver</span><span style="color: #9399B2;">.</span><span>Resolver</span><span style="color: #9399B2;">.</span><span>_solve</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">def</span><span style="color: #89B4FA;font-style: italic;"> _pyrer_resolve</span><span style="color: #9399B2;">(</span><span style="color: #F38BA8;font-style: italic;">self</span><span style="color: #9399B2;">):</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">    if</span><span style="color: #F38BA8;font-style: italic;"> self</span><span style="color: #9399B2;">.</span><span>package_filter</span><span style="color: #CBA6F7;"> or</span><span style="color: #F38BA8;font-style: italic;"> self</span><span style="color: #9399B2;">.</span><span>package_orderers</span><span style="color: #9399B2;">:</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">        return</span><span style="color: #89B4FA;"> _original_resolve</span><span style="color: #9399B2;">(</span><span style="color: #F38BA8;font-style: italic;">self</span><span style="color: #9399B2;">)</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #9399B2;font-style: italic;">    # Closure over the resolver&#39;s package paths — pyrer calls this</span></span>
+<span class="giallo-l"><span style="color: #9399B2;font-style: italic;">    # only for families the solver actually needs. The two-tier load:</span></span>
+<span class="giallo-l"><span style="color: #9399B2;font-style: italic;">    # try the Rust AST fast-parser first (skips Python evaluation for</span></span>
+<span class="giallo-l"><span style="color: #9399B2;font-style: italic;">    # the ~93% of `package.py` files at Fortiche that are static),</span></span>
+<span class="giallo-l"><span style="color: #9399B2;font-style: italic;">    # fall back to rez&#39;s `Package` evaluator for the dynamic ones</span></span>
+<span class="giallo-l"><span style="color: #9399B2;font-style: italic;">    # (`@early` / `@late` requires, top-level `if`, imports, …).</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">    def</span><span style="color: #89B4FA;font-style: italic;"> load_family</span><span style="color: #9399B2;">(</span><span style="color: #EBA0AC;font-style: italic;">name</span><span style="color: #9399B2;">):</span></span>
+<span class="giallo-l"><span>        out</span><span style="color: #94E2D5;"> =</span><span style="color: #9399B2;"> []</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">        for</span><span> pkg</span><span style="color: #CBA6F7;"> in</span><span style="color: #89B4FA;"> iter_packages</span><span style="color: #9399B2;">(</span><span>name</span><span style="color: #9399B2;">,</span><span style="color: #EBA0AC;font-style: italic;"> paths</span><span style="color: #94E2D5;">=</span><span style="color: #F38BA8;font-style: italic;">self</span><span style="color: #9399B2;">.</span><span>package_paths</span><span style="color: #9399B2;">):</span></span>
+<span class="giallo-l"><span>            pd</span><span style="color: #94E2D5;"> =</span><span style="color: #FAB387;"> None</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">            try</span><span style="color: #9399B2;">:</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">                with</span><span style="color: #FAB387;font-style: italic;"> open</span><span style="color: #9399B2;">(</span><span>pkg</span><span style="color: #9399B2;">.</span><span>filepath</span><span style="color: #9399B2;">,</span><span style="color: #A6E3A1;"> &quot;r&quot;</span><span style="color: #9399B2;">,</span><span style="color: #EBA0AC;font-style: italic;"> encoding</span><span style="color: #94E2D5;">=</span><span style="color: #A6E3A1;">&quot;utf-8&quot;</span><span style="color: #9399B2;">)</span><span style="color: #CBA6F7;"> as</span><span> f</span><span style="color: #9399B2;">:</span></span>
+<span class="giallo-l"><span>                    source</span><span style="color: #94E2D5;"> =</span><span> f</span><span style="color: #9399B2;">.</span><span style="color: #89B4FA;">read</span><span style="color: #9399B2;">()</span></span>
+<span class="giallo-l"><span>                pd</span><span style="color: #94E2D5;"> =</span><span> pyrer</span><span style="color: #9399B2;">.</span><span style="color: #89B4FA;">parse_static_package_py</span><span style="color: #9399B2;">(</span><span>source</span><span style="color: #9399B2;">)</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">            except</span><span style="color: #FAB387;font-style: italic;"> OSError</span><span style="color: #9399B2;">:</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">                pass</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">            if</span><span> pd</span><span style="color: #CBA6F7;"> is</span><span style="color: #FAB387;"> None</span><span style="color: #9399B2;">:</span></span>
+<span class="giallo-l"><span style="color: #9399B2;font-style: italic;">                # Dynamic file — `@early` / `@late` / imports / etc.</span></span>
+<span class="giallo-l"><span>                pd</span><span style="color: #94E2D5;"> =</span><span> pyrer</span><span style="color: #9399B2;">.</span><span>PackageData</span><span style="color: #9399B2;">.</span><span style="color: #89B4FA;">from_rez</span><span style="color: #9399B2;">(</span><span>pkg</span><span style="color: #9399B2;">)</span></span>
+<span class="giallo-l"><span>            out</span><span style="color: #9399B2;">.</span><span style="color: #89B4FA;">append</span><span style="color: #9399B2;">(</span><span>pd</span><span style="color: #9399B2;">)</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">        return</span><span> out</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span>    requests</span><span style="color: #94E2D5;"> =</span><span style="color: #9399B2;"> [</span><span style="color: #CBA6F7;font-style: italic;">str</span><span style="color: #9399B2;">(</span><span>r</span><span style="color: #9399B2;">)</span><span style="color: #CBA6F7;"> for</span><span> r</span><span style="color: #CBA6F7;"> in</span><span style="color: #F38BA8;font-style: italic;"> self</span><span style="color: #9399B2;">.</span><span>package_requests</span><span style="color: #9399B2;">]</span></span>
+<span class="giallo-l"><span>    result</span><span style="color: #94E2D5;"> =</span><span> pyrer</span><span style="color: #9399B2;">.</span><span style="color: #89B4FA;">solve</span><span style="color: #9399B2;">(</span></span>
+<span class="giallo-l"><span>        requests</span><span style="color: #9399B2;">,</span></span>
+<span class="giallo-l"><span style="color: #EBA0AC;font-style: italic;">        packages</span><span style="color: #94E2D5;">=</span><span style="color: #FAB387;">None</span><span style="color: #9399B2;">,</span></span>
+<span class="giallo-l"><span style="color: #EBA0AC;font-style: italic;">        load_family</span><span style="color: #94E2D5;">=</span><span>load_family</span><span style="color: #9399B2;">,</span></span>
+<span class="giallo-l"><span style="color: #EBA0AC;font-style: italic;">        variant_select_mode</span><span style="color: #94E2D5;">=</span><span>_rez_config</span><span style="color: #9399B2;">.</span><span>variant_select_mode</span><span style="color: #9399B2;">,</span></span>
+<span class="giallo-l"><span style="color: #9399B2;">    )</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">    if</span><span> result</span><span style="color: #9399B2;">.</span><span>status</span><span style="color: #94E2D5;"> !=</span><span style="color: #A6E3A1;"> &quot;solved&quot;</span><span style="color: #9399B2;">:</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">        return</span><span style="color: #89B4FA;"> _original_resolve</span><span style="color: #9399B2;">(</span><span style="color: #F38BA8;font-style: italic;">self</span><span style="color: #9399B2;">)</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #F38BA8;font-style: italic;">    self</span><span style="color: #9399B2;">.</span><span>resolved_packages_</span><span style="color: #94E2D5;"> =</span><span style="color: #89B4FA;"> resolve_to_rez_variants</span><span style="color: #9399B2;">(</span></span>
+<span class="giallo-l"><span>        result</span><span style="color: #9399B2;">,</span><span style="color: #F38BA8;font-style: italic;"> self</span><span style="color: #9399B2;">.</span><span>package_paths</span><span style="color: #9399B2;">,</span></span>
+<span class="giallo-l"><span style="color: #9399B2;">    )</span></span>
+<span class="giallo-l"><span style="color: #F38BA8;font-style: italic;">    self</span><span style="color: #9399B2;">.</span><span>status_</span><span style="color: #94E2D5;"> =</span><span> _rez_solver</span><span style="color: #9399B2;">.</span><span>SolverStatus</span><span style="color: #9399B2;">.</span><span>solved</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">    return</span><span style="color: #F38BA8;font-style: italic;"> self</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span>_rez_resolver</span><span style="color: #9399B2;">.</span><span>Resolver</span><span style="color: #9399B2;">.</span><span>_solve</span><span style="color: #94E2D5;"> =</span><span> _pyrer_resolve</span></span></code></pre>
+<p>If the studio's <code>package_filter</code> configuration matters, apply it
+inside <code>load_family</code> before returning the list — the filter then
+runs only on families the solver actually exercises, instead of
+every reachable family.</p>
+<h3 id="what-lazy-loading-does-not-fix">What lazy loading does <em>not</em> fix</h3>
+<ul>
+<li><strong>Cross-invocation cost.</strong> <code>load_family</code> caches inside one solve;
+the next <code>rez env</code> invocation pays the load cost again for every
+family it touches. Closing that gap would need a persistent cache
+in the shim itself (keyed e.g. by <code>package.py</code> mtime). That sits
+outside <code>pyrer</code> — but <code>load_family</code> is the prerequisite that
+makes such a cache implementable as a wrapper around the
+callback.</li>
+<li><strong>GIL contention during the solve.</strong> <code>pyrer.solve</code> currently
+holds the GIL for the duration of the resolve. In practice this
+rarely matters: the callback itself, when it does I/O via rez's
+loaders, releases the GIL inside the underlying C call. Other
+Python threads block only during the pure-Rust portions, which
+are short.</li>
+<li><strong>Solve-phase CPU.</strong> The solver itself runs the same algorithm
+either way. Lazy loading is purely about avoiding pre-solve I/O.</li>
+</ul>
+<h2 id="plugging-in-the-static-package-py-fast-parser">Plugging in the static <code>package.py</code> fast-parser</h2>
+<p>Once <code>load_family</code> is wired, the inner per-package load is the next
+hot path. <code>pyrer.parse_static_package_py(source)</code> reads the four
+solver-relevant fields directly from a <code>package.py</code> source string —
+no Python interpreter, no <code>Requirement</code> parse, no <code>__str__</code>
+round-trip. About <strong>34.8× faster than <code>DeveloperPackage.from_path + from_rez</code></strong> on the Fortiche-on-CIFS corpus
+(75 μs/file vs 2.6 ms/file). Saves roughly 2.5 ms per file loaded —
+~127 ms / resolve on a typical 50-family resolve.</p>
+<p>The parser accepts the static subset of <code>package.py</code>: literal
+assignments for <code>name</code>, <code>version</code>, <code>requires</code>, <code>variants</code>, plus
+ignorable <code>def commands()</code> and <code>with scope("config")</code> blocks.
+Anything dynamic (<code>@early</code> / <code>@late</code>, top-level <code>if</code>, <code>import</code>,
+…) returns <code>None</code> so the caller falls back to rez. <strong>Bias hard
+toward bailing</strong> — a false positive would diverge from rez and
+produce a silent correctness regression in any resolve. See the
+<a href="../../engineering/fast-package-py-parser/">engineering note</a> for
+the design, the corpus survey, the V2 hand-rolled-lexer rewrite,
+and the differential test result (0 mismatches on 5,979
+V2-accepted files at Fortiche).</p>
+<h3 id="two-tier-load-family">Two-tier <code>load_family</code></h3>
+<p>The integration replaces one function in the shim:</p>
+<pre class="giallo" style="color: #CDD6F4; background-color: #1E1E2E;"><code data-lang="python"><span class="giallo-l"><span style="color: #CBA6F7;">import</span><span> os</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">import</span><span> pyrer</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">from</span><span> rez</span><span style="color: #9399B2;">.</span><span>packages</span><span style="color: #CBA6F7;"> import</span><span> iter_packages</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">def</span><span style="color: #89B4FA;font-style: italic;"> _try_fast_parse</span><span style="color: #9399B2;">(</span><span style="color: #EBA0AC;font-style: italic;">pkg</span><span style="color: #9399B2;">):</span></span>
+<span class="giallo-l"><span style="color: #A6E3A1;">    &quot;&quot;&quot;Try the Rust static parser. Returns a PackageData on success,</span></span>
+<span class="giallo-l"><span style="color: #A6E3A1;">    or None for any reason — non-.py package, unreadable file, or</span></span>
+<span class="giallo-l"><span style="color: #A6E3A1;">    dynamic content the parser bails on. The caller falls back to</span></span>
+<span class="giallo-l"><span style="color: #A6E3A1;">    `from_rez(pkg)`.&quot;&quot;&quot;</span></span>
+<span class="giallo-l"><span>    filepath</span><span style="color: #94E2D5;"> =</span><span style="color: #FAB387;font-style: italic;"> getattr</span><span style="color: #9399B2;">(</span><span>pkg</span><span style="color: #9399B2;">,</span><span style="color: #A6E3A1;"> &quot;filepath&quot;</span><span style="color: #9399B2;">,</span><span style="color: #FAB387;"> None</span><span style="color: #9399B2;">)</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">    if not</span><span> filepath</span><span style="color: #CBA6F7;"> or not</span><span> filepath</span><span style="color: #9399B2;">.</span><span style="color: #89B4FA;">endswith</span><span style="color: #9399B2;">(</span><span style="color: #A6E3A1;">&quot;.py&quot;</span><span style="color: #9399B2;">):</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">        return</span><span style="color: #FAB387;"> None</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">    try</span><span style="color: #9399B2;">:</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">        with</span><span style="color: #FAB387;font-style: italic;"> open</span><span style="color: #9399B2;">(</span><span>filepath</span><span style="color: #9399B2;">,</span><span style="color: #A6E3A1;"> &quot;r&quot;</span><span style="color: #9399B2;">,</span><span style="color: #EBA0AC;font-style: italic;"> encoding</span><span style="color: #94E2D5;">=</span><span style="color: #A6E3A1;">&quot;utf-8&quot;</span><span style="color: #9399B2;">)</span><span style="color: #CBA6F7;"> as</span><span> f</span><span style="color: #9399B2;">:</span></span>
+<span class="giallo-l"><span>            source</span><span style="color: #94E2D5;"> =</span><span> f</span><span style="color: #9399B2;">.</span><span style="color: #89B4FA;">read</span><span style="color: #9399B2;">()</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">    except</span><span style="color: #FAB387;font-style: italic;"> OSError</span><span style="color: #9399B2;">:</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">        return</span><span style="color: #FAB387;"> None</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">    return</span><span> pyrer</span><span style="color: #9399B2;">.</span><span style="color: #89B4FA;">parse_static_package_py</span><span style="color: #9399B2;">(</span><span>source</span><span style="color: #9399B2;">)</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">def</span><span style="color: #89B4FA;font-style: italic;"> load_family</span><span style="color: #9399B2;">(</span><span style="color: #EBA0AC;font-style: italic;">name</span><span style="color: #9399B2;">,</span><span style="color: #EBA0AC;font-style: italic;"> package_paths</span><span style="color: #9399B2;">):</span></span>
+<span class="giallo-l"><span>    out</span><span style="color: #94E2D5;"> =</span><span style="color: #9399B2;"> []</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">    for</span><span> pkg</span><span style="color: #CBA6F7;"> in</span><span style="color: #89B4FA;"> iter_packages</span><span style="color: #9399B2;">(</span><span>name</span><span style="color: #9399B2;">,</span><span style="color: #EBA0AC;font-style: italic;"> paths</span><span style="color: #94E2D5;">=</span><span>package_paths</span><span style="color: #9399B2;">):</span></span>
+<span class="giallo-l"><span>        pd</span><span style="color: #94E2D5;"> =</span><span style="color: #89B4FA;"> _try_fast_parse</span><span style="color: #9399B2;">(</span><span>pkg</span><span style="color: #9399B2;">)</span><span style="color: #CBA6F7;"> or</span><span> pyrer</span><span style="color: #9399B2;">.</span><span>PackageData</span><span style="color: #9399B2;">.</span><span style="color: #89B4FA;">from_rez</span><span style="color: #9399B2;">(</span><span>pkg</span><span style="color: #9399B2;">)</span></span>
+<span class="giallo-l"><span>        out</span><span style="color: #9399B2;">.</span><span style="color: #89B4FA;">append</span><span style="color: #9399B2;">(</span><span>pd</span><span style="color: #9399B2;">)</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">    return</span><span> out</span></span></code></pre>
+<p>That's the minimal integration. ~30 lines added; the existing
+<code>_pyrer_resolve</code> method is unchanged except for using the
+two-tier <code>load_family</code> above.</p>
+<h3 id="faster-batched-parallel-parse-issue-94">Faster: batched parallel parse (issue #94)</h3>
+<p>The shape above is already a big win versus rez's <code>from_rez</code>, but
+the inner Python loop is still serial — one <code>open()</code> per file,
+per package, while the other cores idle. On a 2,600-file resolve
+that's roughly 3 s of pure I/O even with the static parser doing its
+job; <code>cProfile</code> shows it as the top of the flamegraph (35% of total
+wall time) after every other pyrer win was wired up.</p>
+<p><code>pyrer.parse_static_packages_py(paths)</code> replaces that loop with a
+single Rust call. It reads and parses every path on a Rayon thread
+pool, returns a list aligned with the input, and releases the GIL
+for the duration.</p>
+<h4 id="what-it-does">What it does</h4>
+<pre class="giallo" style="color: #CDD6F4; background-color: #1E1E2E;"><code data-lang="python"><span class="giallo-l"><span>pyrer</span><span style="color: #9399B2;">.</span><span style="color: #89B4FA;">parse_static_packages_py</span><span style="color: #9399B2;">(</span><span>paths</span><span style="color: #9399B2;">:</span><span style="color: #EBA0AC;font-style: italic;"> list</span><span style="color: #9399B2;">[</span><span style="color: #CBA6F7;font-style: italic;">str</span><span style="color: #94E2D5;"> |</span><span style="color: #EBA0AC;font-style: italic;"> os</span><span style="color: #9399B2;">.</span><span style="color: #EBA0AC;font-style: italic;">PathLike</span><span style="color: #9399B2;">])</span></span>
+<span class="giallo-l"><span>    -&gt;</span><span style="color: #EBA0AC;font-style: italic;"> list</span><span style="color: #9399B2;">[</span><span style="color: #EBA0AC;font-style: italic;">PackageData</span><span style="color: #94E2D5;"> |</span><span style="color: #FAB387;font-style: italic;"> None</span><span style="color: #9399B2;">]</span></span></code></pre>
+<p>Per-path semantics are identical to <code>parse_static_package_py(source)</code>
+— so the static-vs-dynamic decision, the corpus accept rate, and the
+output <code>PackageData</code> shape are all unchanged. What's different is
+that you pay one round-trip into Rust for the whole batch instead
+of one per file, and the file reads + parses run in parallel.</p>
+<ul>
+<li><strong>Positionally aligned output.</strong> <code>len(result) == len(paths)</code>. A
+missing file (<code>ENOENT</code>), unreadable bytes (permissions, invalid
+UTF-8), a parser bail on dynamic content, and a <code>package.yaml</code> /
+non-<code>.py</code> file all become <code>None</code> at the matching index. Callers
+can <code>zip(paths, result)</code> after.</li>
+<li><strong>No exception escapes.</strong> Per-file failures map to <code>None</code>. The
+function as a whole only raises if the input type is wrong (e.g.
+passing a non-iterable for <code>paths</code>).</li>
+<li><strong>GIL released.</strong> <code>Python::allow_threads</code> is used internally, so
+other Python threads run during the batch. The result list is
+built back on the GIL after the parallel section completes.</li>
+<li><strong>Pool size = <code>RAYON_NUM_THREADS</code></strong> (default: logical core count).
+No per-call knob. Cap with the env var on shared CI hosts.</li>
+<li><strong>Order doesn't depend on completion order.</strong> Rayon's <code>par_iter</code>
+may finish files out of order; the returned list is rebuilt by
+index, so the shim's <code>zip(pkgs, result)</code> is always correct.</li>
+</ul>
+<h4 id="measured-impact-on-fortiche">Measured impact on Fortiche</h4>
+<p><code>scripts/bench_batched_parser.py</code> samples files from a real rez
+repo, runs both paths best-of-3, and reports the speedup. On
+<code>/thierry/rez/pkg</code> over CIFS:</p>
+<table><thead><tr><th style="text-align: right">Sample</th><th style="text-align: right">Serial <code>open</code> + parse</th><th style="text-align: right">Batched</th><th style="text-align: right">Speedup</th></tr></thead><tbody>
+<tr><td style="text-align: right">500 files (warm cache)</td><td style="text-align: right">56.71 ms</td><td style="text-align: right">40.76 ms</td><td style="text-align: right"><strong>1.39×</strong></td></tr>
+<tr><td style="text-align: right">2,000 files</td><td style="text-align: right">4,234 ms</td><td style="text-align: right">1,508 ms</td><td style="text-align: right"><strong>2.81×</strong></td></tr>
+</tbody></table>
+<p>Per-file saving on the 2,000-file run: <strong>~1.36 ms</strong>. The issue's
+target workload (132-package resolve, ~2,600 <code>package.py</code> files
+touched) extrapolates to ~3.5 s saved per resolve.</p>
+<p>The smaller-sample bench is bottlenecked on warm-page-cache parsing
+CPU and the Rayon dispatch overhead amortises less. Real production
+loads (cold or partially-cold CIFS, many uncached versions) see more
+of the parallel-I/O overlap — the 2.81× is a lower bound on warm
+hardware.</p>
+<h4 id="integration-two-tier-load-family-with-batched-read">Integration: two-tier <code>load_family</code> with batched read</h4>
+<pre class="giallo" style="color: #CDD6F4; background-color: #1E1E2E;"><code data-lang="python"><span class="giallo-l"><span style="color: #CBA6F7;">import</span><span> logging</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">import</span><span> os</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">import</span><span> pyrer</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">from</span><span> rez</span><span style="color: #9399B2;">.</span><span>packages</span><span style="color: #CBA6F7;"> import</span><span> iter_packages</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span>_logger</span><span style="color: #94E2D5;"> =</span><span> logging</span><span style="color: #9399B2;">.</span><span style="color: #89B4FA;">getLogger</span><span style="color: #9399B2;">(</span><span style="color: #A6E3A1;">&quot;pyrer.batched_parser&quot;</span><span style="color: #9399B2;">)</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">def</span><span style="color: #89B4FA;font-style: italic;"> _gather_paths</span><span style="color: #9399B2;">(</span><span style="color: #EBA0AC;font-style: italic;">pkgs</span><span style="color: #9399B2;">):</span></span>
+<span class="giallo-l"><span style="color: #A6E3A1;">    &quot;&quot;&quot;Split rez Packages into (pkg, filepath_or_None). `None` means</span></span>
+<span class="giallo-l"><span style="color: #A6E3A1;">    the package isn&#39;t filesystem-`.py`-based — yaml, memory repo,</span></span>
+<span class="giallo-l"><span style="color: #A6E3A1;">    @early-bound — and goes straight to the slow rez path.&quot;&quot;&quot;</span></span>
+<span class="giallo-l"><span>    out</span><span style="color: #94E2D5;"> =</span><span style="color: #9399B2;"> []</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">    for</span><span> pkg</span><span style="color: #CBA6F7;"> in</span><span> pkgs</span><span style="color: #9399B2;">:</span></span>
+<span class="giallo-l"><span>        filepath</span><span style="color: #94E2D5;"> =</span><span style="color: #FAB387;font-style: italic;"> getattr</span><span style="color: #9399B2;">(</span><span>pkg</span><span style="color: #9399B2;">,</span><span style="color: #A6E3A1;"> &quot;filepath&quot;</span><span style="color: #9399B2;">,</span><span style="color: #FAB387;"> None</span><span style="color: #9399B2;">)</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">        if</span><span> filepath</span><span style="color: #CBA6F7;"> and</span><span> filepath</span><span style="color: #9399B2;">.</span><span style="color: #89B4FA;">endswith</span><span style="color: #9399B2;">(</span><span style="color: #A6E3A1;">&quot;.py&quot;</span><span style="color: #9399B2;">):</span></span>
+<span class="giallo-l"><span>            out</span><span style="color: #9399B2;">.</span><span style="color: #89B4FA;">append</span><span style="color: #9399B2;">((</span><span>pkg</span><span style="color: #9399B2;">,</span><span> filepath</span><span style="color: #9399B2;">))</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">        else</span><span style="color: #9399B2;">:</span></span>
+<span class="giallo-l"><span>            out</span><span style="color: #9399B2;">.</span><span style="color: #89B4FA;">append</span><span style="color: #9399B2;">((</span><span>pkg</span><span style="color: #9399B2;">,</span><span style="color: #FAB387;"> None</span><span style="color: #9399B2;">))</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">    return</span><span> out</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">def</span><span style="color: #89B4FA;font-style: italic;"> load_family</span><span style="color: #9399B2;">(</span><span style="color: #EBA0AC;font-style: italic;">name</span><span style="color: #9399B2;">,</span><span style="color: #EBA0AC;font-style: italic;"> package_paths</span><span style="color: #9399B2;">,</span><span style="color: #EBA0AC;font-style: italic;"> version_range</span><span style="color: #94E2D5;">=</span><span style="color: #FAB387;">None</span><span style="color: #9399B2;">):</span></span>
+<span class="giallo-l"><span style="color: #A6E3A1;">    &quot;&quot;&quot;The shim&#39;s load_family callback — batched fast-path + rez</span></span>
+<span class="giallo-l"><span style="color: #A6E3A1;">    fallback per file. Wires together everything pyrer offers:</span></span>
+<span class="giallo-l"><span style="color: #A6E3A1;">    #86 (load_family), #92 (version_range hint), the static parser,</span></span>
+<span class="giallo-l"><span style="color: #A6E3A1;">    and #94 (batched parallel parse).&quot;&quot;&quot;</span></span>
+<span class="giallo-l"><span style="color: #9399B2;font-style: italic;">    # Apply the #92 hint at the iter level so rez skips on-disk</span></span>
+<span class="giallo-l"><span style="color: #9399B2;font-style: italic;">    # version dirs outside the range.</span></span>
+<span class="giallo-l"><span>    pkgs</span><span style="color: #94E2D5;"> =</span><span style="color: #CBA6F7;font-style: italic;"> list</span><span style="color: #9399B2;">(</span><span style="color: #89B4FA;">iter_packages</span><span style="color: #9399B2;">(</span><span>name</span><span style="color: #9399B2;">,</span><span style="color: #EBA0AC;font-style: italic;"> range_</span><span style="color: #94E2D5;">=</span><span>version_range</span><span style="color: #9399B2;">,</span><span style="color: #EBA0AC;font-style: italic;"> paths</span><span style="color: #94E2D5;">=</span><span>package_paths</span><span style="color: #9399B2;">))</span></span>
+<span class="giallo-l"><span>    pairs</span><span style="color: #94E2D5;"> =</span><span style="color: #89B4FA;"> _gather_paths</span><span style="color: #9399B2;">(</span><span>pkgs</span><span style="color: #9399B2;">)</span></span>
+<span class="giallo-l"><span>    paths</span><span style="color: #94E2D5;"> =</span><span style="color: #9399B2;"> [</span><span>fp</span><span style="color: #CBA6F7;"> for</span><span> _</span><span style="color: #9399B2;">,</span><span> fp</span><span style="color: #CBA6F7;"> in</span><span> pairs</span><span style="color: #CBA6F7;"> if</span><span> fp</span><span style="color: #CBA6F7;"> is not</span><span style="color: #FAB387;"> None</span><span style="color: #9399B2;">]</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #9399B2;font-style: italic;">    # One Rust call across all .py files. GIL released; cores in use.</span></span>
+<span class="giallo-l"><span>    pds</span><span style="color: #94E2D5;"> =</span><span> pyrer</span><span style="color: #9399B2;">.</span><span style="color: #89B4FA;">parse_static_packages_py</span><span style="color: #9399B2;">(</span><span>paths</span><span style="color: #9399B2;">)</span><span style="color: #CBA6F7;"> if</span><span> paths</span><span style="color: #CBA6F7;"> else</span><span style="color: #9399B2;"> []</span></span>
+<span class="giallo-l"><span>    pds_iter</span><span style="color: #94E2D5;"> =</span><span style="color: #FAB387;font-style: italic;"> iter</span><span style="color: #9399B2;">(</span><span>pds</span><span style="color: #9399B2;">)</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span>    out</span><span style="color: #94E2D5;"> =</span><span style="color: #9399B2;"> []</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">    for</span><span> pkg</span><span style="color: #9399B2;">,</span><span> filepath</span><span style="color: #CBA6F7;"> in</span><span> pairs</span><span style="color: #9399B2;">:</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">        if</span><span> filepath</span><span style="color: #CBA6F7;"> is</span><span style="color: #FAB387;"> None</span><span style="color: #9399B2;">:</span></span>
+<span class="giallo-l"><span style="color: #9399B2;font-style: italic;">            # Non-.py — straight to rez evaluator.</span></span>
+<span class="giallo-l"><span>            out</span><span style="color: #9399B2;">.</span><span style="color: #89B4FA;">append</span><span style="color: #9399B2;">(</span><span>pyrer</span><span style="color: #9399B2;">.</span><span>PackageData</span><span style="color: #9399B2;">.</span><span style="color: #89B4FA;">from_rez</span><span style="color: #9399B2;">(</span><span>pkg</span><span style="color: #9399B2;">))</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">            continue</span></span>
+<span class="giallo-l"><span>        pd</span><span style="color: #94E2D5;"> =</span><span style="color: #FAB387;font-style: italic;"> next</span><span style="color: #9399B2;">(</span><span>pds_iter</span><span style="color: #9399B2;">)</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">        if</span><span> pd</span><span style="color: #CBA6F7;"> is</span><span style="color: #FAB387;"> None</span><span style="color: #9399B2;">:</span></span>
+<span class="giallo-l"><span style="color: #9399B2;font-style: italic;">            # Parser bailed (dynamic content) or I/O error.</span></span>
+<span class="giallo-l"><span>            out</span><span style="color: #9399B2;">.</span><span style="color: #89B4FA;">append</span><span style="color: #9399B2;">(</span><span>pyrer</span><span style="color: #9399B2;">.</span><span>PackageData</span><span style="color: #9399B2;">.</span><span style="color: #89B4FA;">from_rez</span><span style="color: #9399B2;">(</span><span>pkg</span><span style="color: #9399B2;">))</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">        else</span><span style="color: #9399B2;">:</span></span>
+<span class="giallo-l"><span>            out</span><span style="color: #9399B2;">.</span><span style="color: #89B4FA;">append</span><span style="color: #9399B2;">(</span><span>pd</span><span style="color: #9399B2;">)</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">    return</span><span> out</span></span></code></pre><h4 id="backward-compatibility-feature-detection">Backward compatibility / feature detection</h4>
+<p>The function is a pure addition. Shims that haven't been updated keep
+working with the per-file <code>parse_static_package_py</code>. Feature-detect
+once at shim init:</p>
+<pre class="giallo" style="color: #CDD6F4; background-color: #1E1E2E;"><code data-lang="python"><span class="giallo-l"><span>_BATCHED_PARSE</span><span style="color: #94E2D5;"> =</span><span style="color: #FAB387;font-style: italic;"> hasattr</span><span style="color: #9399B2;">(</span><span>pyrer</span><span style="color: #9399B2;">,</span><span style="color: #A6E3A1;"> &quot;parse_static_packages_py&quot;</span><span style="color: #9399B2;">)</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">def</span><span style="color: #89B4FA;font-style: italic;"> load_family</span><span style="color: #9399B2;">(</span><span style="color: #EBA0AC;font-style: italic;">name</span><span style="color: #9399B2;">,</span><span style="color: #EBA0AC;font-style: italic;"> package_paths</span><span style="color: #9399B2;">,</span><span style="color: #EBA0AC;font-style: italic;"> version_range</span><span style="color: #94E2D5;">=</span><span style="color: #FAB387;">None</span><span style="color: #9399B2;">):</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">    if</span><span> _BATCHED_PARSE</span><span style="color: #9399B2;">:</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">        return</span><span style="color: #89B4FA;"> _batched_load_family</span><span style="color: #9399B2;">(</span><span>name</span><span style="color: #9399B2;">,</span><span> package_paths</span><span style="color: #9399B2;">,</span><span> version_range</span><span style="color: #9399B2;">)</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">    else</span><span style="color: #9399B2;">:</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">        return</span><span style="color: #89B4FA;"> _serial_load_family</span><span style="color: #9399B2;">(</span><span>name</span><span style="color: #9399B2;">,</span><span> package_paths</span><span style="color: #9399B2;">,</span><span> version_range</span><span style="color: #9399B2;">)</span></span></code></pre>
+<p>This is the same pattern the shim uses for <code>load_family</code> (#86),
+<code>version_range</code> (#92), and <code>parse_static_package_py</code> itself. No
+flag day; pyrer &lt; 1.0.0-rc.3 falls back automatically.</p>
+<h4 id="shadow-validation-mode">Shadow-validation mode</h4>
+<p>Same shape as the single-file parser: gate on an env var, run a
+release with it on, log any divergence, then flip off.</p>
+<pre class="giallo" style="color: #CDD6F4; background-color: #1E1E2E;"><code data-lang="python"><span class="giallo-l"><span>_VALIDATE</span><span style="color: #94E2D5;"> =</span><span> os</span><span style="color: #9399B2;">.</span><span>environ</span><span style="color: #9399B2;">.</span><span style="color: #89B4FA;">get</span><span style="color: #9399B2;">(</span><span style="color: #A6E3A1;">&quot;REZ_PYRER_VALIDATE_BATCHED&quot;</span><span style="color: #9399B2;">)</span><span style="color: #94E2D5;"> ==</span><span style="color: #A6E3A1;"> &quot;1&quot;</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">def</span><span style="color: #89B4FA;font-style: italic;"> _validate</span><span style="color: #9399B2;">(</span><span style="color: #EBA0AC;font-style: italic;">pkg</span><span style="color: #9399B2;">,</span><span style="color: #EBA0AC;font-style: italic;"> batched_pd</span><span style="color: #9399B2;">):</span></span>
+<span class="giallo-l"><span style="color: #A6E3A1;">    &quot;&quot;&quot;Compare `batched_pd` (from parse_static_packages_py) against</span></span>
+<span class="giallo-l"><span style="color: #A6E3A1;">    what `from_rez(pkg)` would have produced. Used in production</span></span>
+<span class="giallo-l"><span style="color: #A6E3A1;">    spot-checks during the rollout.&quot;&quot;&quot;</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">    if not</span><span> _VALIDATE</span><span style="color: #CBA6F7;"> or</span><span> batched_pd</span><span style="color: #CBA6F7;"> is</span><span style="color: #FAB387;"> None</span><span style="color: #9399B2;">:</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">        return</span></span>
+<span class="giallo-l"><span>    rez_pd</span><span style="color: #94E2D5;"> =</span><span> pyrer</span><span style="color: #9399B2;">.</span><span>PackageData</span><span style="color: #9399B2;">.</span><span style="color: #89B4FA;">from_rez</span><span style="color: #9399B2;">(</span><span>pkg</span><span style="color: #9399B2;">)</span></span>
+<span class="giallo-l"><span>    fast</span><span style="color: #94E2D5;"> =</span><span style="color: #9399B2;"> (</span></span>
+<span class="giallo-l"><span>        batched_pd</span><span style="color: #9399B2;">.</span><span>name</span><span style="color: #9399B2;">,</span><span> batched_pd</span><span style="color: #9399B2;">.</span><span>version</span><span style="color: #9399B2;">,</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;font-style: italic;">        list</span><span style="color: #9399B2;">(</span><span>batched_pd</span><span style="color: #9399B2;">.</span><span>requires</span><span style="color: #9399B2;">),</span></span>
+<span class="giallo-l"><span style="color: #9399B2;">        [</span><span style="color: #CBA6F7;font-style: italic;">list</span><span style="color: #9399B2;">(</span><span>v</span><span style="color: #9399B2;">)</span><span style="color: #CBA6F7;"> for</span><span> v</span><span style="color: #CBA6F7;"> in</span><span> batched_pd</span><span style="color: #9399B2;">.</span><span>variants</span><span style="color: #9399B2;">],</span></span>
+<span class="giallo-l"><span style="color: #9399B2;">    )</span></span>
+<span class="giallo-l"><span>    slow</span><span style="color: #94E2D5;"> =</span><span style="color: #9399B2;"> (</span></span>
+<span class="giallo-l"><span>        rez_pd</span><span style="color: #9399B2;">.</span><span>name</span><span style="color: #9399B2;">,</span><span> rez_pd</span><span style="color: #9399B2;">.</span><span>version</span><span style="color: #9399B2;">,</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;font-style: italic;">        list</span><span style="color: #9399B2;">(</span><span>rez_pd</span><span style="color: #9399B2;">.</span><span>requires</span><span style="color: #9399B2;">),</span></span>
+<span class="giallo-l"><span style="color: #9399B2;">        [</span><span style="color: #CBA6F7;font-style: italic;">list</span><span style="color: #9399B2;">(</span><span>v</span><span style="color: #9399B2;">)</span><span style="color: #CBA6F7;"> for</span><span> v</span><span style="color: #CBA6F7;"> in</span><span> rez_pd</span><span style="color: #9399B2;">.</span><span>variants</span><span style="color: #9399B2;">],</span></span>
+<span class="giallo-l"><span style="color: #9399B2;">    )</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">    if</span><span> fast</span><span style="color: #94E2D5;"> !=</span><span> slow</span><span style="color: #9399B2;">:</span></span>
+<span class="giallo-l"><span>        _logger</span><span style="color: #9399B2;">.</span><span style="color: #89B4FA;">warning</span><span style="color: #9399B2;">(</span></span>
+<span class="giallo-l"><span style="color: #A6E3A1;">            &quot;pyrer batched parser DIVERGED for </span><span style="color: #F5C2E7;">%s\n</span><span style="color: #A6E3A1;">&quot;</span></span>
+<span class="giallo-l"><span style="color: #A6E3A1;">            &quot;  fast: </span><span style="color: #F5C2E7;">%r\n</span><span style="color: #A6E3A1;">  slow: </span><span style="color: #F5C2E7;">%r</span><span style="color: #A6E3A1;">&quot;</span><span style="color: #9399B2;">,</span></span>
+<span class="giallo-l"><span style="color: #FAB387;font-style: italic;">            getattr</span><span style="color: #9399B2;">(</span><span>pkg</span><span style="color: #9399B2;">,</span><span style="color: #A6E3A1;"> &quot;filepath&quot;</span><span style="color: #9399B2;">,</span><span style="color: #A6E3A1;"> &quot;?&quot;</span><span style="color: #9399B2;">),</span><span> fast</span><span style="color: #9399B2;">,</span><span> slow</span><span style="color: #9399B2;">,</span></span>
+<span class="giallo-l"><span style="color: #9399B2;">        )</span></span></code></pre>
+<p>Spot-check the first hits each <code>load_family</code> call rather than
+every package (the offline differential covered the full corpus —
+this is a runtime sanity net). Drop the flag after a clean release.</p>
+<h4 id="metrics-confirm-what-s-actually-happening">Metrics — confirm what's actually happening</h4>
+<pre class="giallo" style="color: #CDD6F4; background-color: #1E1E2E;"><code data-lang="python"><span class="giallo-l"><span style="color: #CBA6F7;">class</span><span style="color: #F9E2AF;font-style: italic;"> _PyrerStats</span><span style="color: #9399B2;">:</span></span>
+<span class="giallo-l"><span>    batched_calls</span><span style="color: #94E2D5;"> =</span><span style="color: #FAB387;"> 0</span><span style="color: #9399B2;font-style: italic;">          # number of parse_static_packages_py invocations</span></span>
+<span class="giallo-l"><span>    batched_files</span><span style="color: #94E2D5;"> =</span><span style="color: #FAB387;"> 0</span><span style="color: #9399B2;font-style: italic;">          # sum of len(paths) across those calls</span></span>
+<span class="giallo-l"><span>    batched_hits</span><span style="color: #94E2D5;"> =</span><span style="color: #FAB387;"> 0</span><span style="color: #9399B2;font-style: italic;">           # files the batched call accepted</span></span>
+<span class="giallo-l"><span>    batched_misses_io</span><span style="color: #94E2D5;"> =</span><span style="color: #FAB387;"> 0</span><span style="color: #9399B2;font-style: italic;">      # missing / unreadable files</span></span>
+<span class="giallo-l"><span>    batched_misses_dynamic</span><span style="color: #94E2D5;"> =</span><span style="color: #FAB387;"> 0</span><span style="color: #9399B2;font-style: italic;"> # parser bailed</span></span>
+<span class="giallo-l"><span>    non_py_packages</span><span style="color: #94E2D5;"> =</span><span style="color: #FAB387;"> 0</span><span style="color: #9399B2;font-style: italic;">        # filesystem package isn&#39;t .py (yaml, memory repo)</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #FAB387;font-style: italic;">    @</span><span style="color: #CBA6F7;font-style: italic;">classmethod</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">    def</span><span style="color: #89B4FA;font-style: italic;"> log_summary</span><span style="color: #9399B2;">(</span><span style="color: #EBA0AC;font-style: italic;">cls</span><span style="color: #9399B2;">):</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">        if not</span><span> cls</span><span style="color: #9399B2;">.</span><span>batched_calls</span><span style="color: #9399B2;">:</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">            return</span></span>
+<span class="giallo-l"><span>        _logger</span><span style="color: #9399B2;">.</span><span style="color: #89B4FA;">info</span><span style="color: #9399B2;">(</span></span>
+<span class="giallo-l"><span style="color: #A6E3A1;">            &quot;pyrer batched parser: </span><span style="color: #F5C2E7;">%d</span><span style="color: #A6E3A1;"> calls, </span><span style="color: #F5C2E7;">%d</span><span style="color: #A6E3A1;"> files; &quot;</span></span>
+<span class="giallo-l"><span style="color: #A6E3A1;">            &quot;hits=</span><span style="color: #F5C2E7;">%d</span><span style="color: #A6E3A1;"> misses_io=</span><span style="color: #F5C2E7;">%d</span><span style="color: #A6E3A1;"> misses_dynamic=</span><span style="color: #F5C2E7;">%d</span><span style="color: #A6E3A1;"> non_py=</span><span style="color: #F5C2E7;">%d</span><span style="color: #A6E3A1;">&quot;</span><span style="color: #9399B2;">,</span></span>
+<span class="giallo-l"><span>            cls</span><span style="color: #9399B2;">.</span><span>batched_calls</span><span style="color: #9399B2;">,</span><span> cls</span><span style="color: #9399B2;">.</span><span>batched_files</span><span style="color: #9399B2;">,</span></span>
+<span class="giallo-l"><span>            cls</span><span style="color: #9399B2;">.</span><span>batched_hits</span><span style="color: #9399B2;">,</span><span> cls</span><span style="color: #9399B2;">.</span><span>batched_misses_io</span><span style="color: #9399B2;">,</span></span>
+<span class="giallo-l"><span>            cls</span><span style="color: #9399B2;">.</span><span>batched_misses_dynamic</span><span style="color: #9399B2;">,</span><span> cls</span><span style="color: #9399B2;">.</span><span>non_py_packages</span><span style="color: #9399B2;">,</span></span>
+<span class="giallo-l"><span style="color: #9399B2;">        )</span></span></code></pre>
+<p>Expected at Fortiche from the corpus survey: ~93% hit rate on
+filesystem <code>.py</code> packages, with the misses split between
+<code>@early</code>/<code>@late</code> dynamic packages and the occasional unreadable file.</p>
+<h4 id="rollout-plan">Rollout plan</h4>
+<p>Three layered flags on top of the existing <code>use_rer_solver</code>:</p>
+<pre class="giallo" style="color: #CDD6F4; background-color: #1E1E2E;"><code data-lang="python"><span class="giallo-l"><span>USE_RER_SOLVER</span><span style="color: #94E2D5;"> =</span><span> _rez_config</span><span style="color: #9399B2;">.</span><span>use_rer_solver</span></span>
+<span class="giallo-l"><span>USE_BATCHED_PARSER</span><span style="color: #94E2D5;"> =</span><span> USE_RER_SOLVER</span><span style="color: #CBA6F7;"> and</span><span style="color: #9399B2;"> \</span></span>
+<span class="giallo-l"><span style="color: #FAB387;font-style: italic;">    hasattr</span><span style="color: #9399B2;">(</span><span>pyrer</span><span style="color: #9399B2;">,</span><span style="color: #A6E3A1;"> &quot;parse_static_packages_py&quot;</span><span style="color: #9399B2;">)</span><span style="color: #CBA6F7;"> and</span><span style="color: #9399B2;"> \</span></span>
+<span class="giallo-l"><span>    os</span><span style="color: #9399B2;">.</span><span>environ</span><span style="color: #9399B2;">.</span><span style="color: #89B4FA;">get</span><span style="color: #9399B2;">(</span><span style="color: #A6E3A1;">&quot;REZ_PYRER_BATCHED_PARSER&quot;</span><span style="color: #9399B2;">,</span><span style="color: #A6E3A1;"> &quot;1&quot;</span><span style="color: #9399B2;">)</span><span style="color: #94E2D5;"> ==</span><span style="color: #A6E3A1;"> &quot;1&quot;</span></span>
+<span class="giallo-l"><span>VALIDATE_BATCHED_PARSER</span><span style="color: #94E2D5;"> =</span><span> USE_BATCHED_PARSER</span><span style="color: #CBA6F7;"> and</span><span style="color: #9399B2;"> \</span></span>
+<span class="giallo-l"><span>    os</span><span style="color: #9399B2;">.</span><span>environ</span><span style="color: #9399B2;">.</span><span style="color: #89B4FA;">get</span><span style="color: #9399B2;">(</span><span style="color: #A6E3A1;">&quot;REZ_PYRER_VALIDATE_BATCHED&quot;</span><span style="color: #9399B2;">)</span><span style="color: #94E2D5;"> ==</span><span style="color: #A6E3A1;"> &quot;1&quot;</span></span></code></pre><table><thead><tr><th>Week</th><th>Flags</th><th>What to verify</th></tr></thead><tbody>
+<tr><td>1</td><td><code>USE_BATCHED_PARSER=1</code>, <code>VALIDATE=1</code>, ~5% of users</td><td>0 divergences in logs? Hit rate ≥ 90%? <code>_load_family</code> wall-time drops vs baseline?</td></tr>
+<tr><td>2</td><td>Same flags, ~50% of users</td><td>Same, at scale. Confirm <code>RAYON_NUM_THREADS</code> not oversubscribing on shared hosts (check CPU%).</td></tr>
+<tr><td>3</td><td><code>USE_BATCHED_PARSER=1</code>, <code>VALIDATE=0</code>, 100%</td><td>Production wall-time + telemetry</td></tr>
+<tr><td>4</td><td>Permanent in <code>use_rer_solver</code> config</td><td>Drop the env var</td></tr>
+</tbody></table>
+<p>Each step is one env var flip away from the previous behaviour.</p>
+<h4 id="where-this-won-t-help">Where this WON'T help</h4>
+<ul>
+<li><strong>Resolves with very few packages touched.</strong> The Rayon dispatch
+overhead is small (~µs per batch) but on a 5-package resolve
+there's almost nothing to parallelise. The win scales with batch
+size; tiny batches see negligible speedup.</li>
+<li><strong>The dynamic 7%.</strong> <code>@early</code> / <code>@late</code>-bound packages still need
+rez's evaluator — those bypass the batched path entirely (see
+<code>non_py</code> / parser-bail accounting in the metrics).</li>
+<li><strong><code>load_family</code> cache hits within a single <code>solve()</code>.</strong> When a
+family is already cached on the pyrer side (#86), the loader
+isn't called — batched or otherwise.</li>
+<li><strong>Cross-invocation cost.</strong> Each <code>rez env</code> is a fresh process and
+pays a fresh batched-parse cost. A persistent memcache of parsed
+<code>PackageData</code> is the next layer; this work is the prerequisite.</li>
+</ul>
+<h3 id="shadow-validation-mode-for-the-first-weeks-in-production">Shadow-validation mode for the first weeks in production</h3>
+<p>The differential harness already ran clean on the Fortiche corpus
+(5,813/5,813 matched). But a shadow check in production catches
+runtime patterns the offline survey didn't exercise. Gate it on an
+env var so it can be turned on for a release and off afterwards:</p>
+<pre class="giallo" style="color: #CDD6F4; background-color: #1E1E2E;"><code data-lang="python"><span class="giallo-l"><span style="color: #CBA6F7;">import</span><span> logging</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">import</span><span> os</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span>_VALIDATE</span><span style="color: #94E2D5;"> =</span><span> os</span><span style="color: #9399B2;">.</span><span>environ</span><span style="color: #9399B2;">.</span><span style="color: #89B4FA;">get</span><span style="color: #9399B2;">(</span><span style="color: #A6E3A1;">&quot;REZ_PYRER_VALIDATE_PARSER&quot;</span><span style="color: #9399B2;">)</span><span style="color: #94E2D5;"> ==</span><span style="color: #A6E3A1;"> &quot;1&quot;</span></span>
+<span class="giallo-l"><span>_logger</span><span style="color: #94E2D5;"> =</span><span> logging</span><span style="color: #9399B2;">.</span><span style="color: #89B4FA;">getLogger</span><span style="color: #9399B2;">(</span><span style="color: #A6E3A1;">&quot;pyrer.fast_parser&quot;</span><span style="color: #9399B2;">)</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">def</span><span style="color: #89B4FA;font-style: italic;"> _try_fast_parse</span><span style="color: #9399B2;">(</span><span style="color: #EBA0AC;font-style: italic;">pkg</span><span style="color: #9399B2;">):</span></span>
+<span class="giallo-l"><span>    filepath</span><span style="color: #94E2D5;"> =</span><span style="color: #FAB387;font-style: italic;"> getattr</span><span style="color: #9399B2;">(</span><span>pkg</span><span style="color: #9399B2;">,</span><span style="color: #A6E3A1;"> &quot;filepath&quot;</span><span style="color: #9399B2;">,</span><span style="color: #FAB387;"> None</span><span style="color: #9399B2;">)</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">    if not</span><span> filepath</span><span style="color: #CBA6F7;"> or not</span><span> filepath</span><span style="color: #9399B2;">.</span><span style="color: #89B4FA;">endswith</span><span style="color: #9399B2;">(</span><span style="color: #A6E3A1;">&quot;.py&quot;</span><span style="color: #9399B2;">):</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">        return</span><span style="color: #FAB387;"> None</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">    try</span><span style="color: #9399B2;">:</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">        with</span><span style="color: #FAB387;font-style: italic;"> open</span><span style="color: #9399B2;">(</span><span>filepath</span><span style="color: #9399B2;">,</span><span style="color: #A6E3A1;"> &quot;r&quot;</span><span style="color: #9399B2;">,</span><span style="color: #EBA0AC;font-style: italic;"> encoding</span><span style="color: #94E2D5;">=</span><span style="color: #A6E3A1;">&quot;utf-8&quot;</span><span style="color: #9399B2;">)</span><span style="color: #CBA6F7;"> as</span><span> f</span><span style="color: #9399B2;">:</span></span>
+<span class="giallo-l"><span>            source</span><span style="color: #94E2D5;"> =</span><span> f</span><span style="color: #9399B2;">.</span><span style="color: #89B4FA;">read</span><span style="color: #9399B2;">()</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">    except</span><span style="color: #FAB387;font-style: italic;"> OSError</span><span style="color: #9399B2;">:</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">        return</span><span style="color: #FAB387;"> None</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span>    pd_fast</span><span style="color: #94E2D5;"> =</span><span> pyrer</span><span style="color: #9399B2;">.</span><span style="color: #89B4FA;">parse_static_package_py</span><span style="color: #9399B2;">(</span><span>source</span><span style="color: #9399B2;">)</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">    if</span><span> pd_fast</span><span style="color: #CBA6F7;"> is</span><span style="color: #FAB387;"> None</span><span style="color: #9399B2;">:</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">        return</span><span style="color: #FAB387;"> None</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">    if</span><span> _VALIDATE</span><span style="color: #9399B2;">:</span></span>
+<span class="giallo-l"><span>        pd_slow</span><span style="color: #94E2D5;"> =</span><span> pyrer</span><span style="color: #9399B2;">.</span><span>PackageData</span><span style="color: #9399B2;">.</span><span style="color: #89B4FA;">from_rez</span><span style="color: #9399B2;">(</span><span>pkg</span><span style="color: #9399B2;">)</span></span>
+<span class="giallo-l"><span>        fast_t</span><span style="color: #94E2D5;"> =</span><span style="color: #9399B2;"> (</span></span>
+<span class="giallo-l"><span>            pd_fast</span><span style="color: #9399B2;">.</span><span>name</span><span style="color: #9399B2;">,</span><span> pd_fast</span><span style="color: #9399B2;">.</span><span>version</span><span style="color: #9399B2;">,</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;font-style: italic;">            list</span><span style="color: #9399B2;">(</span><span>pd_fast</span><span style="color: #9399B2;">.</span><span>requires</span><span style="color: #9399B2;">),</span></span>
+<span class="giallo-l"><span style="color: #9399B2;">            [</span><span style="color: #CBA6F7;font-style: italic;">list</span><span style="color: #9399B2;">(</span><span>v</span><span style="color: #9399B2;">)</span><span style="color: #CBA6F7;"> for</span><span> v</span><span style="color: #CBA6F7;"> in</span><span> pd_fast</span><span style="color: #9399B2;">.</span><span>variants</span><span style="color: #9399B2;">],</span></span>
+<span class="giallo-l"><span style="color: #9399B2;">        )</span></span>
+<span class="giallo-l"><span>        slow_t</span><span style="color: #94E2D5;"> =</span><span style="color: #9399B2;"> (</span></span>
+<span class="giallo-l"><span>            pd_slow</span><span style="color: #9399B2;">.</span><span>name</span><span style="color: #9399B2;">,</span><span> pd_slow</span><span style="color: #9399B2;">.</span><span>version</span><span style="color: #9399B2;">,</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;font-style: italic;">            list</span><span style="color: #9399B2;">(</span><span>pd_slow</span><span style="color: #9399B2;">.</span><span>requires</span><span style="color: #9399B2;">),</span></span>
+<span class="giallo-l"><span style="color: #9399B2;">            [</span><span style="color: #CBA6F7;font-style: italic;">list</span><span style="color: #9399B2;">(</span><span>v</span><span style="color: #9399B2;">)</span><span style="color: #CBA6F7;"> for</span><span> v</span><span style="color: #CBA6F7;"> in</span><span> pd_slow</span><span style="color: #9399B2;">.</span><span>variants</span><span style="color: #9399B2;">],</span></span>
+<span class="giallo-l"><span style="color: #9399B2;">        )</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">        if</span><span> fast_t</span><span style="color: #94E2D5;"> !=</span><span> slow_t</span><span style="color: #9399B2;">:</span></span>
+<span class="giallo-l"><span>            _logger</span><span style="color: #9399B2;">.</span><span style="color: #89B4FA;">warning</span><span style="color: #9399B2;">(</span></span>
+<span class="giallo-l"><span style="color: #A6E3A1;">                &quot;pyrer fast parser DIVERGED for </span><span style="color: #F5C2E7;">%s\n</span><span style="color: #A6E3A1;">&quot;</span></span>
+<span class="giallo-l"><span style="color: #A6E3A1;">                &quot;  fast: </span><span style="color: #F5C2E7;">%r\n</span><span style="color: #A6E3A1;">  slow: </span><span style="color: #F5C2E7;">%r\n</span><span style="color: #A6E3A1;">&quot;</span></span>
+<span class="giallo-l"><span style="color: #A6E3A1;">                &quot;  Using slow path; please report this upstream.&quot;</span><span style="color: #9399B2;">,</span></span>
+<span class="giallo-l"><span>                filepath</span><span style="color: #9399B2;">,</span><span> fast_t</span><span style="color: #9399B2;">,</span><span> slow_t</span><span style="color: #9399B2;">,</span></span>
+<span class="giallo-l"><span style="color: #9399B2;">            )</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">            return</span><span style="color: #FAB387;"> None</span><span style="color: #9399B2;font-style: italic;">  # divergence — fall back to rez</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">    return</span><span> pd_fast</span></span></code></pre>
+<p>Run a release with <code>REZ_PYRER_VALIDATE_PARSER=1</code> set in the shim's
+environment. Grep your studio logs for the warning; the count is
+your real-world divergence rate. If it stays zero (which the
+offline differential predicts), drop the flag.</p>
+<h3 id="metrics-confirm-the-hit-rate">Metrics — confirm the hit rate</h3>
+<p>Class-level counters tell you what fraction of packages are
+actually taking the fast path in production:</p>
+<pre class="giallo" style="color: #CDD6F4; background-color: #1E1E2E;"><code data-lang="python"><span class="giallo-l"><span style="color: #CBA6F7;">class</span><span style="color: #F9E2AF;font-style: italic;"> _PyrerStats</span><span style="color: #9399B2;">:</span></span>
+<span class="giallo-l"><span>    fast_hits</span><span style="color: #94E2D5;"> =</span><span style="color: #FAB387;"> 0</span></span>
+<span class="giallo-l"><span>    fast_misses_non_py</span><span style="color: #94E2D5;"> =</span><span style="color: #FAB387;"> 0</span><span style="color: #9399B2;font-style: italic;">   # yaml package, memory repo, etc.</span></span>
+<span class="giallo-l"><span>    fast_misses_dynamic</span><span style="color: #94E2D5;"> =</span><span style="color: #FAB387;"> 0</span><span style="color: #9399B2;font-style: italic;">  # parser bailed (real dynamic content)</span></span>
+<span class="giallo-l"><span>    fast_misses_io</span><span style="color: #94E2D5;"> =</span><span style="color: #FAB387;"> 0</span><span style="color: #9399B2;font-style: italic;">       # couldn&#39;t read the file</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #FAB387;font-style: italic;">    @</span><span style="color: #CBA6F7;font-style: italic;">classmethod</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">    def</span><span style="color: #89B4FA;font-style: italic;"> log_summary</span><span style="color: #9399B2;">(</span><span style="color: #EBA0AC;font-style: italic;">cls</span><span style="color: #9399B2;">):</span></span>
+<span class="giallo-l"><span>        total</span><span style="color: #94E2D5;"> =</span><span style="color: #9399B2;"> (</span><span>cls</span><span style="color: #9399B2;">.</span><span>fast_hits</span><span style="color: #94E2D5;"> +</span><span> cls</span><span style="color: #9399B2;">.</span><span>fast_misses_non_py</span></span>
+<span class="giallo-l"><span style="color: #94E2D5;">                 +</span><span> cls</span><span style="color: #9399B2;">.</span><span>fast_misses_dynamic</span><span style="color: #94E2D5;"> +</span><span> cls</span><span style="color: #9399B2;">.</span><span>fast_misses_io</span><span style="color: #9399B2;">)</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">        if not</span><span> total</span><span style="color: #9399B2;">:</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">            return</span></span>
+<span class="giallo-l"><span>        _logger</span><span style="color: #9399B2;">.</span><span style="color: #89B4FA;">info</span><span style="color: #9399B2;">(</span></span>
+<span class="giallo-l"><span style="color: #A6E3A1;">            &quot;pyrer fast parser: </span><span style="color: #F5C2E7;">%d</span><span style="color: #A6E3A1;">/</span><span style="color: #F5C2E7;">%d</span><span style="color: #A6E3A1;"> hit (</span><span style="color: #F5C2E7;">%.1f%%</span><span style="color: #A6E3A1;">); &quot;</span></span>
+<span class="giallo-l"><span style="color: #A6E3A1;">            &quot;non-py=</span><span style="color: #F5C2E7;">%d</span><span style="color: #A6E3A1;"> dynamic=</span><span style="color: #F5C2E7;">%d</span><span style="color: #A6E3A1;"> io=</span><span style="color: #F5C2E7;">%d</span><span style="color: #A6E3A1;">&quot;</span><span style="color: #9399B2;">,</span></span>
+<span class="giallo-l"><span>            cls</span><span style="color: #9399B2;">.</span><span>fast_hits</span><span style="color: #9399B2;">,</span><span> total</span><span style="color: #9399B2;">,</span><span> cls</span><span style="color: #9399B2;">.</span><span>fast_hits</span><span style="color: #94E2D5;"> /</span><span> total</span><span style="color: #94E2D5;"> *</span><span style="color: #FAB387;"> 100</span><span style="color: #9399B2;">,</span></span>
+<span class="giallo-l"><span>            cls</span><span style="color: #9399B2;">.</span><span>fast_misses_non_py</span><span style="color: #9399B2;">,</span><span> cls</span><span style="color: #9399B2;">.</span><span>fast_misses_dynamic</span><span style="color: #9399B2;">,</span></span>
+<span class="giallo-l"><span>            cls</span><span style="color: #9399B2;">.</span><span>fast_misses_io</span><span style="color: #9399B2;">,</span></span>
+<span class="giallo-l"><span style="color: #9399B2;">        )</span></span></code></pre>
+<p>Increment from inside <code>_try_fast_parse</code>; call <code>log_summary</code> from
+the shim's existing telemetry hook. Expected hit rate at Fortiche:
+~93% based on the corpus survey.</p>
+<h3 id="rollout-plan-1">Rollout plan</h3>
+<p>Three flags stacked on top of the existing <code>use_rer_solver</code>:</p>
+<pre class="giallo" style="color: #CDD6F4; background-color: #1E1E2E;"><code data-lang="python"><span class="giallo-l"><span>USE_RER_SOLVER</span><span style="color: #94E2D5;"> =</span><span> _rez_config</span><span style="color: #9399B2;">.</span><span>use_rer_solver</span></span>
+<span class="giallo-l"><span>USE_FAST_PARSER</span><span style="color: #94E2D5;"> =</span><span> USE_RER_SOLVER</span><span style="color: #CBA6F7;"> and</span><span style="color: #9399B2;"> \</span></span>
+<span class="giallo-l"><span>    os</span><span style="color: #9399B2;">.</span><span>environ</span><span style="color: #9399B2;">.</span><span style="color: #89B4FA;">get</span><span style="color: #9399B2;">(</span><span style="color: #A6E3A1;">&quot;REZ_PYRER_FAST_PARSER&quot;</span><span style="color: #9399B2;">,</span><span style="color: #A6E3A1;"> &quot;1&quot;</span><span style="color: #9399B2;">)</span><span style="color: #94E2D5;"> ==</span><span style="color: #A6E3A1;"> &quot;1&quot;</span></span>
+<span class="giallo-l"><span>VALIDATE_FAST_PARSER</span><span style="color: #94E2D5;"> =</span><span> USE_FAST_PARSER</span><span style="color: #CBA6F7;"> and</span><span style="color: #9399B2;"> \</span></span>
+<span class="giallo-l"><span>    os</span><span style="color: #9399B2;">.</span><span>environ</span><span style="color: #9399B2;">.</span><span style="color: #89B4FA;">get</span><span style="color: #9399B2;">(</span><span style="color: #A6E3A1;">&quot;REZ_PYRER_VALIDATE_PARSER&quot;</span><span style="color: #9399B2;">)</span><span style="color: #94E2D5;"> ==</span><span style="color: #A6E3A1;"> &quot;1&quot;</span></span></code></pre>
+<p>A reasonable rollout sequence:</p>
+<table><thead><tr><th>Week</th><th>Flags</th><th>What you're checking</th></tr></thead><tbody>
+<tr><td>1</td><td><code>USE_FAST_PARSER=1</code>, <code>VALIDATE=1</code>, ~5% of users</td><td>Production divergence count = 0? Hit rate ≥ 90%? Wall-time A/B looks right?</td></tr>
+<tr><td>2</td><td>Same flags, ~50% of users</td><td>Same checks at scale + memcache impact</td></tr>
+<tr><td>3</td><td><code>USE_FAST_PARSER=1</code>, <code>VALIDATE=0</code>, 100%</td><td>Production wall-time + telemetry</td></tr>
+<tr><td>4</td><td>Flag stays on by default in <code>use_rer_solver</code> config</td><td>Make permanent</td></tr>
+</tbody></table>
+<p>Each step is a kill-switch flip away from the previous behaviour.</p>
+<h3 id="where-this-won-t-help-so-nobody-s-surprised">Where this WON'T help (so nobody's surprised)</h3>
+<ul>
+<li><strong>Cold <code>rez env</code> startup time.</strong> The dominant ~200-300 ms of
+Python interpreter init is unchanged. The parser saves on the
+per-package-load step that happens <em>after</em> startup.</li>
+<li><strong><code>@early</code> / <code>@late</code> packages.</strong> These fall back to rez
+(the dynamic 7% at Fortiche). Studios with heavier late-bound use
+see proportionally less of the win.</li>
+<li><strong><code>package.yaml</code>.</strong> The parser is <code>.py</code> only; YAML goes through
+rez.</li>
+<li><strong>Resolves served from a cached <code>rxt</code> context.</strong> rxt loading
+is its own path — the parser isn't invoked.</li>
+<li><strong>First invocation on a cold CIFS cache.</strong> I/O dominates the
+file read; the parser saves CPU, not network roundtrips.</li>
+</ul>
+<h2 id="solving">Solving</h2>
+<pre class="giallo" style="color: #CDD6F4; background-color: #1E1E2E;"><code data-lang="python"><span class="giallo-l"><span style="color: #CBA6F7;">import</span><span> pyrer</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span>packages</span><span style="color: #94E2D5;"> =</span><span style="color: #CBA6F7;font-style: italic;"> list</span><span style="color: #9399B2;">(</span><span style="color: #89B4FA;">build_pyrer_packages</span><span style="color: #9399B2;">([</span><span style="color: #A6E3A1;">&quot;/sw/pkg&quot;</span><span style="color: #9399B2;">,</span><span style="color: #A6E3A1;"> &quot;/sw/site&quot;</span><span style="color: #9399B2;">]))</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span>result</span><span style="color: #94E2D5;"> =</span><span> pyrer</span><span style="color: #9399B2;">.</span><span style="color: #89B4FA;">solve</span><span style="color: #9399B2;">([</span><span style="color: #A6E3A1;">&quot;maya-2024&quot;</span><span style="color: #9399B2;">,</span><span style="color: #A6E3A1;"> &quot;nuke-14&quot;</span><span style="color: #9399B2;">],</span><span> packages</span><span style="color: #9399B2;">)</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #FAB387;font-style: italic;">print</span><span style="color: #9399B2;">(</span><span>result</span><span style="color: #9399B2;">.</span><span>status</span><span style="color: #9399B2;">)</span><span style="color: #9399B2;font-style: italic;">        # &quot;solved&quot; | &quot;failed&quot; | &quot;error&quot;</span></span>
+<span class="giallo-l"><span style="color: #FAB387;font-style: italic;">print</span><span style="color: #9399B2;">(</span><span>result</span><span style="color: #9399B2;">.</span><span>solve_time_ms</span><span style="color: #9399B2;">)</span><span style="color: #9399B2;font-style: italic;"> # wall-clock of just the Rust solve</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">for</span><span> variant</span><span style="color: #CBA6F7;"> in</span><span> result</span><span style="color: #9399B2;">.</span><span>resolved_packages</span><span style="color: #9399B2;">:</span></span>
+<span class="giallo-l"><span style="color: #FAB387;font-style: italic;">    print</span><span style="color: #9399B2;">(</span><span>variant</span><span style="color: #9399B2;">.</span><span>name</span><span style="color: #9399B2;">,</span><span> variant</span><span style="color: #9399B2;">.</span><span>version</span><span style="color: #9399B2;">,</span><span> variant</span><span style="color: #9399B2;">.</span><span>variant_index</span><span style="color: #9399B2;">)</span></span>
+<span class="giallo-l"><span style="color: #FAB387;font-style: italic;">    print</span><span style="color: #9399B2;">(</span><span>variant</span><span style="color: #9399B2;">.</span><span>uri</span><span style="color: #9399B2;">)</span><span style="color: #9399B2;font-style: italic;">      # &quot;maya/2024.0/package.py[1]&quot;</span></span>
+<span class="giallo-l"><span style="color: #FAB387;font-style: italic;">    print</span><span style="color: #9399B2;">(</span><span>variant</span><span style="color: #9399B2;">.</span><span>requires</span><span style="color: #9399B2;">)</span><span style="color: #9399B2;font-style: italic;"> # merged base + variant-specific requires</span></span></code></pre>
+<p><code>status</code> distinguishes:</p>
+<ul>
+<li><strong><code>"solved"</code></strong> — <code>result.resolved_packages</code> is a list of
+[<code>ResolvedVariant</code>] objects with <code>name</code>, <code>version</code>, <code>variant_index</code>,
+<code>requires</code>, and <code>uri</code>. <code>variant_index</code> is <code>None</code> for packages with no
+<code>variants</code> defined. The same resolution is also exposed as a list of
+<code>(name, version, variant_index)</code> tuples on <code>result.resolved</code> for
+callers that prefer that shape.</li>
+<li><strong><code>"failed"</code></strong> — a real resolve conflict; <code>result.failure_description</code>
+has a human-readable reason.</li>
+<li><strong><code>"error"</code></strong> — bad input (malformed repo, unparseable requirement
+string, missing top-level package).</li>
+</ul>
+<p>No Python exception is raised from a failed or errored solve — both
+are reported via <code>result.status</code>. Only a <code>TypeError</code> is raised, and
+only when the <code>packages</code> argument is not a list of <code>PackageData</code>.</p>
+<h2 id="translating-the-result-back-to-rez">Translating the result back to <code>rez</code></h2>
+<p><code>pyrer.ResolvedVariant</code> objects already expose the attribute surface
+most rez consumers need (<code>name</code>, <code>version</code>, <code>variant_index</code>,
+<code>requires</code>, <code>uri</code>). If you need rez's own <code>Variant</code> object (because
+some downstream code reads attributes beyond that surface — built-in
+<code>commands</code>, <code>private_build_requires</code>, <code>tools</code>, …), look it up from
+rez:</p>
+<pre class="giallo" style="color: #CDD6F4; background-color: #1E1E2E;"><code data-lang="python"><span class="giallo-l"><span style="color: #CBA6F7;">from</span><span> rez</span><span style="color: #9399B2;">.</span><span>packages</span><span style="color: #CBA6F7;"> import</span><span> get_package</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">def</span><span style="color: #89B4FA;font-style: italic;"> resolve_to_rez_variants</span><span style="color: #9399B2;">(</span><span style="color: #EBA0AC;font-style: italic;">result</span><span style="color: #9399B2;">,</span><span style="color: #EBA0AC;font-style: italic;"> package_paths</span><span style="color: #9399B2;">):</span></span>
+<span class="giallo-l"><span style="color: #A6E3A1;">    &quot;&quot;&quot;Turn pyrer.ResolvedVariant objects into rez Variants.&quot;&quot;&quot;</span></span>
+<span class="giallo-l"><span>    variants</span><span style="color: #94E2D5;"> =</span><span style="color: #9399B2;"> []</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">    for</span><span> rv</span><span style="color: #CBA6F7;"> in</span><span> result</span><span style="color: #9399B2;">.</span><span>resolved_packages</span><span style="color: #9399B2;">:</span></span>
+<span class="giallo-l"><span>        pkg</span><span style="color: #94E2D5;"> =</span><span style="color: #89B4FA;"> get_package</span><span style="color: #9399B2;">(</span><span>rv</span><span style="color: #9399B2;">.</span><span>name</span><span style="color: #9399B2;">,</span><span> rv</span><span style="color: #9399B2;">.</span><span>version</span><span style="color: #9399B2;">,</span><span style="color: #EBA0AC;font-style: italic;"> paths</span><span style="color: #94E2D5;">=</span><span>package_paths</span><span style="color: #9399B2;">)</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">        if</span><span> pkg</span><span style="color: #CBA6F7;"> is</span><span style="color: #FAB387;"> None</span><span style="color: #9399B2;">:</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">            raise</span><span style="color: #FAB387;font-style: italic;"> RuntimeError</span><span style="color: #9399B2;">(</span><span style="color: #A6E3A1;font-style: italic;">f</span><span style="color: #A6E3A1;">&quot;package vanished after solve: </span><span style="color: #F5C2E7;">{</span><span>rv</span><span style="color: #9399B2;">.</span><span>name</span><span style="color: #F5C2E7;">}</span><span style="color: #A6E3A1;">-</span><span style="color: #F5C2E7;">{</span><span>rv</span><span style="color: #9399B2;">.</span><span>version</span><span style="color: #F5C2E7;">}</span><span style="color: #A6E3A1;">&quot;</span><span style="color: #9399B2;">)</span></span>
+<span class="giallo-l"><span style="color: #9399B2;font-style: italic;">        # variant_index is None for packages with no variants — rez models</span></span>
+<span class="giallo-l"><span style="color: #9399B2;font-style: italic;">        # that as a single variant with index 0 internally.</span></span>
+<span class="giallo-l"><span>        idx</span><span style="color: #94E2D5;"> =</span><span> rv</span><span style="color: #9399B2;">.</span><span>variant_index</span><span style="color: #CBA6F7;"> if</span><span> rv</span><span style="color: #9399B2;">.</span><span>variant_index</span><span style="color: #CBA6F7;"> is not</span><span style="color: #FAB387;"> None</span><span style="color: #CBA6F7;"> else</span><span style="color: #FAB387;"> 0</span></span>
+<span class="giallo-l"><span>        variants</span><span style="color: #9399B2;">.</span><span style="color: #89B4FA;">append</span><span style="color: #9399B2;">(</span><span>pkg</span><span style="color: #9399B2;">.</span><span style="color: #89B4FA;">get_variant</span><span style="color: #9399B2;">(</span><span>idx</span><span style="color: #9399B2;">))</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">    return</span><span> variants</span></span></code></pre>
+<p>These <code>Variant</code> objects can be fed into rez's normal context machinery
+(see <code>rez.resolved_context.ResolvedContext</code> — you'll want to look at
+how its internal solver result is normally consumed and substitute the
+list above). For most workflows the most useful thing is to call
+<code>rez.rex.bind</code> / <code>Variant.apply_value</code> on each variant against an
+<code>ActionInterpreter</code>, which is the same code rez runs after its own
+solve.</p>
+<h2 id="a-complete-monkey-patch-shim">A complete monkey-patch shim</h2>
+<p>If you want pyrer to transparently accelerate <code>rez env</code> /
+<code>ResolvedContext</code> without changing call sites, the smallest sound
+patch is to replace <code>rez.solver.Solver.solve</code> with a delegating
+implementation. This is non-trivial to get right (rez's <code>Solver</code>
+exposes a rich status surface — <code>phase_stack</code>, <code>failure_reason</code>,
+graph rendering, callback support) so the patch is best kept narrow:
+intercept the happy path, fall back to the real rez solver on any
+non-default config (custom orderer, <code>late</code> binding requires,
+<code>@early</code> evaluation, etc.).</p>
+<p>The eager-loading shim below is the simplest form; for cold-cache
+repos prefer the lazy variant shown
+<a href="https://doubleailes.github.io/rer/docs/getting-started/rez-integration/#lazy-variant-of-the-shim">earlier</a>, which lets the solver drive
+the loading directly:</p>
+<pre class="giallo" style="color: #CDD6F4; background-color: #1E1E2E;"><code data-lang="python"><span class="giallo-l"><span style="color: #CBA6F7;">import</span><span> pyrer</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">import</span><span> rez</span><span style="color: #9399B2;">.</span><span>solver</span><span style="color: #CBA6F7;"> as</span><span> _rez_solver</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">import</span><span> rez</span><span style="color: #9399B2;">.</span><span>resolver</span><span style="color: #CBA6F7;"> as</span><span> _rez_resolver</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span>_original_resolve</span><span style="color: #94E2D5;"> =</span><span> _rez_resolver</span><span style="color: #9399B2;">.</span><span>Resolver</span><span style="color: #9399B2;">.</span><span>_solve</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">def</span><span style="color: #89B4FA;font-style: italic;"> _pyrer_resolve</span><span style="color: #9399B2;">(</span><span style="color: #F38BA8;font-style: italic;">self</span><span style="color: #9399B2;">):</span></span>
+<span class="giallo-l"><span style="color: #9399B2;font-style: italic;">    # Fall back to rez on anything pyrer doesn&#39;t support yet.</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">    if</span><span style="color: #F38BA8;font-style: italic;"> self</span><span style="color: #9399B2;">.</span><span>package_filter</span><span style="color: #CBA6F7;"> or</span><span style="color: #F38BA8;font-style: italic;"> self</span><span style="color: #9399B2;">.</span><span>package_orderers</span><span style="color: #9399B2;">:</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">        return</span><span style="color: #89B4FA;"> _original_resolve</span><span style="color: #9399B2;">(</span><span style="color: #F38BA8;font-style: italic;">self</span><span style="color: #9399B2;">)</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">    from</span><span> rez</span><span style="color: #9399B2;">.</span><span>config</span><span style="color: #CBA6F7;"> import</span><span> config</span><span style="color: #CBA6F7;"> as</span><span> _rez_config</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span>    packages</span><span style="color: #94E2D5;"> =</span><span style="color: #CBA6F7;font-style: italic;"> list</span><span style="color: #9399B2;">(</span><span style="color: #89B4FA;">build_pyrer_packages</span><span style="color: #9399B2;">(</span><span style="color: #F38BA8;font-style: italic;">self</span><span style="color: #9399B2;">.</span><span>package_paths</span><span style="color: #9399B2;">))</span></span>
+<span class="giallo-l"><span>    requests</span><span style="color: #94E2D5;"> =</span><span style="color: #9399B2;"> [</span><span style="color: #CBA6F7;font-style: italic;">str</span><span style="color: #9399B2;">(</span><span>r</span><span style="color: #9399B2;">)</span><span style="color: #CBA6F7;"> for</span><span> r</span><span style="color: #CBA6F7;"> in</span><span style="color: #F38BA8;font-style: italic;"> self</span><span style="color: #9399B2;">.</span><span>package_requests</span><span style="color: #9399B2;">]</span></span>
+<span class="giallo-l"><span>    result</span><span style="color: #94E2D5;"> =</span><span> pyrer</span><span style="color: #9399B2;">.</span><span style="color: #89B4FA;">solve</span><span style="color: #9399B2;">(</span></span>
+<span class="giallo-l"><span>        requests</span><span style="color: #9399B2;">,</span></span>
+<span class="giallo-l"><span>        packages</span><span style="color: #9399B2;">,</span></span>
+<span class="giallo-l"><span style="color: #EBA0AC;font-style: italic;">        variant_select_mode</span><span style="color: #94E2D5;">=</span><span>_rez_config</span><span style="color: #9399B2;">.</span><span>variant_select_mode</span><span style="color: #9399B2;">,</span></span>
+<span class="giallo-l"><span style="color: #9399B2;">    )</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">    if</span><span> result</span><span style="color: #9399B2;">.</span><span>status</span><span style="color: #94E2D5;"> !=</span><span style="color: #A6E3A1;"> &quot;solved&quot;</span><span style="color: #9399B2;">:</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">        return</span><span style="color: #89B4FA;"> _original_resolve</span><span style="color: #9399B2;">(</span><span style="color: #F38BA8;font-style: italic;">self</span><span style="color: #9399B2;">)</span><span style="color: #9399B2;font-style: italic;">  # let rez produce the canonical failure</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #F38BA8;font-style: italic;">    self</span><span style="color: #9399B2;">.</span><span>resolved_packages_</span><span style="color: #94E2D5;"> =</span><span style="color: #89B4FA;"> resolve_to_rez_variants</span><span style="color: #9399B2;">(</span></span>
+<span class="giallo-l"><span>        result</span><span style="color: #9399B2;">,</span><span style="color: #F38BA8;font-style: italic;"> self</span><span style="color: #9399B2;">.</span><span>package_paths</span><span style="color: #9399B2;">,</span></span>
+<span class="giallo-l"><span style="color: #9399B2;">    )</span></span>
+<span class="giallo-l"><span style="color: #F38BA8;font-style: italic;">    self</span><span style="color: #9399B2;">.</span><span>status_</span><span style="color: #94E2D5;"> =</span><span> _rez_solver</span><span style="color: #9399B2;">.</span><span>SolverStatus</span><span style="color: #9399B2;">.</span><span>solved</span></span>
+<span class="giallo-l"><span style="color: #CBA6F7;">    return</span><span style="color: #F38BA8;font-style: italic;"> self</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span>_rez_resolver</span><span style="color: #9399B2;">.</span><span>Resolver</span><span style="color: #9399B2;">.</span><span>_solve</span><span style="color: #94E2D5;"> =</span><span> _pyrer_resolve</span></span></code></pre>
+<p>Load this once at process start (e.g. via a <code>rezconfig.py</code>'s
+<code>plugin_path</code> entry or a <code>sitecustomize.py</code>) and any <code>rez env</code>,
+<code>rez build</code>, <code>rez-bundle</code> etc. running in that process will route
+through <code>pyrer</code> for the solve.</p>
+<h2 id="caveats-and-what-isn-t-supported-yet">Caveats and what isn't supported yet</h2>
+<p><code>pyrer.solve</code> is the solver only. The following are <strong>not</strong> modelled
+by it — if your studio depends on any of these, fall back to rez's
+solver for those resolves:</p>
+<ul>
+<li><strong><code>@early</code> / <code>@late</code> binding requires.</strong> <code>pyrer</code> takes already-
+parsed strings; if a package's requires depend on the resolve
+context, rez has to evaluate them first.</li>
+<li><strong>Custom package orderers and filters.</strong> Anything that hooks into
+<code>PackageOrder</code> / <code>PackageFilter</code> runs in rez; the integration shim
+above falls back when these are configured.</li>
+<li><strong>Cyclic-failure detail.</strong> Both solvers detect cycles; the human-
+readable failure message differs in wording.</li>
+</ul>
+<h2 id="sanity-checking-against-rez">Sanity-checking against rez</h2>
+<p>The repository ships <code>scripts/compare_resolves.py</code> — the canonical
+bisect tool for "my shim's resolves diverge from rez" reports. It
+uses the recommended shim shape from this page (static parser +
+<code>load_family</code> + <code>version_range</code> hint + <code>from_rez</code> fallback) to
+call <code>pyrer.solve</code> directly, then compares to <code>rez.ResolvedContext</code>
+on the same request:</p>
+<pre class="giallo" style="color: #CDD6F4; background-color: #1E1E2E;"><code data-lang="shellscript"><span class="giallo-l"><span style="color: #F38BA8;font-style: italic;">.</span><span style="color: #A6E3A1;"> .venv/bin/activate</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #9399B2;font-style: italic;"># Spot-check 30 random families from your repo</span></span>
+<span class="giallo-l"><span style="color: #89B4FA;font-style: italic;">python</span><span style="color: #A6E3A1;"> scripts/compare_resolves.py /path/to/rez/pkg --n</span><span style="color: #FAB387;"> 30</span></span>
+<span class="giallo-l"></span>
+<span class="giallo-l"><span style="color: #9399B2;font-style: italic;"># Or a specific request</span></span>
+<span class="giallo-l"><span style="color: #89B4FA;font-style: italic;">python</span><span style="color: #A6E3A1;"> scripts/compare_resolves.py /path/to/rez/pkg --request maya-2024 nuke-15</span></span></code></pre>
+<p>The script reports per-request: <code>✓</code> identical, <code>≠</code> divergent,
+<code>x</code> rer-only failure, <code>X</code> rez-only failure, <code>·</code> both fail. Exit
+code is <code>0</code> if every resolve matched (no <code>≠</code>, no <code>x</code>), <code>1</code>
+otherwise. Divergent and rer-only-failure cases get a per-package
+diff printed for the first few examples.</p>
+<h3 id="interpreting-the-output">Interpreting the output</h3>
+<ul>
+<li>
+<p><strong>0 divergences over a meaningful sample</strong> (say, 30+ random
+families from your own corpus) means pyrer + the recommended
+shim shape works correctly on your repo. If a downstream rez
+integration shim then <em>does</em> show divergence, the bug is in the
+shim's translation — not in pyrer. Bisect from there: turn the
+shim's features (filters, orderers, custom <code>from_rez</code> wiring,
+cache layers) on one at a time and re-run.</p>
+</li>
+<li>
+<p><strong>Any divergence reproduced by this script</strong> is a pyrer
+correctness bug — please open an issue with the failing request,
+the rez version, the package paths, and (ideally) a minimal
+package subset that reproduces. The project's correctness bar
+is "match rez 1:1" and a script-reproducible divergence is a
+release blocker.</p>
+</li>
+</ul>
+<p>The 188-case <code>test_rez_benchmark</code> integration test catches the
+common shapes; this script is for the long-tail-of-real-studio-
+corpora that the benchmark dataset doesn't cover.</p>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a href="../quick-start/">Quick Start →</a> — the basic <code>pyrer.solve</code> API in
+isolation, without any rez integration.</li>
+<li><a href="../../engineering/">Engineering notes →</a> — design decisions behind
+the port (e.g. why some rez optimisations are intentionally absent).</li>
+<li><a rel="external" href="https://github.com/doubleailes/rer/blob/main/README.md">rez integration in the repo README</a>
+— short reference card.</li>
+</ul>
+
+        
+        
+<div class="docs-navigation d-flex justify-content-between">
+  
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+  
+
+  
+  
+  
+  
+  
+    
+    
+    
+      
+      
+        
+      
+    
+      
+      
+        
+          
+          
+          <a class="ms-auto" href="https:&#x2F;&#x2F;doubleailes.github.io&#x2F;rer&#x2F;docs&#x2F;contributing&#x2F;how-to-contribute&#x2F;">
+            <div class="card my-1">
+              <div class="card-body py-2">
+                How to Contribute &rarr;
+              </div>
+            </div>
+          </a>
+          
+          
+          
+        
+      
+    
+      
+      
+        
+      
+    
+      
+      
+        
+      
+    
+  
+</div>
+
+      </main>
+    </div>
+  </div>
+</div>
+
+
+  
+    
+<footer class="footer text-muted">
+	<div class="container">
+		<div class="row">
+			<div class="col-lg-8 order-last order-lg-first">
+				<ul class="list-inline">
+					
+						<li class="list-inline-item">Powered by <a href="https://www.netlify.com/">Netlify</a>, <a href="https://www.getzola.org/">Zola</a>, and <a href="https://github.com/doubleailes/adidoks">AdiDoks</a></li>
+					
+				</ul>
+			</div>
+			<div class="col-lg-8 order-first order-lg-last text-lg-end">
+				<ul class="list-inline">
+					
+						
+							<li class="list-inline-item"><a href="https://doubleailes.github.io/rer/privacy-policy/">Privacy</a></li>
+						
+							<li class="list-inline-item"><a href="https://doubleailes.github.io/rer/docs/contributing/code-of-conduct/">Code of Conduct</a></li>
+						
+					
+				</ul>
+			</div>
+		</div>
+	</div>
+</footer>
+
+  
+
+  
+<script type="text/javascript" src="https://doubleailes.github.io/rer/js/main.js" defer></script>
+
+  <script type="text/javascript" src="https://doubleailes.github.io/rer/plugins/elasticlunr.min.js" defer></script>
+  <script type="text/javascript" src="https://doubleailes.github.io/rer/search_index.en.js" defer></script>
+  <script type="text/javascript" src="https://doubleailes.github.io/rer/js/search.js" defer></script>
+
+  
+</body>
+</html>

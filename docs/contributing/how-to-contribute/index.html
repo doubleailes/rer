@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="x-ua-compatible" content="ie=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+  <link rel="preload" as="font" href="https://doubleailes.github.io/rer/fonts/vendor/jost/jost-v4-latin-regular.woff2" type="font/woff2" crossorigin>
+  <link rel="preload" as="font" href="https://doubleailes.github.io/rer/fonts/vendor/jost/jost-v4-latin-700.woff2"  type="font/woff2" crossorigin>
+
+
+<link rel="stylesheet" href="https://doubleailes.github.io/rer/main.css">
+
+
+
+  
+  
+    
+  
+
+  
+  
+    
+    
+  
+  
+  
+    
+  
+  
+  
+  
+    
+  
+  
+  
+
+
+  <meta name="robots" content="index, follow">
+  <meta name="googlebot" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1">
+  <meta name="bingbot" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1">
+
+
+	
+
+
+	
+
+<title>How to Contribute | rer</title>
+<meta name="description" content="Contribute to rer — report bugs, send patches, improve documentation.">
+<link rel="canonical" href="https://doubleailes.github.io/rer/docs/contributing/how-to-contribute/">
+
+
+  <meta name="twitter:card" content="summary_large_image">
+  
+    <meta name="twitter:image" content="https://doubleailes.github.io/rer//doks.png">
+  
+  <meta name="twitter:title" content="How to Contribute">
+  <meta name="twitter:description" content="Contribute to rer — report bugs, send patches, improve documentation.">
+  <meta name="twitter:site" content="@Philippe Llerena">
+  <meta name="twitter:creator" content="@Philippe Llerena">
+  
+  <meta property="og:title" content="How to Contribute">
+  <meta property="og:description" content="Contribute to rer — report bugs, send patches, improve documentation.">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://doubleailes.github.io/rer/docs/contributing/how-to-contribute/">
+
+  
+    <meta property="og:image" content="https://doubleailes.github.io/rer//doks.png">
+  
+
+  <meta property="og:updated_time" content="2026-05-15T18:10:00+00:00">
+  <meta property="og:site_name" content="How to Contribute">
+
+  
+
+  
+
+  
+  <meta property="article:publisher" content="https://www.facebook.com/Philippe Llerena">
+  <meta property="article:author" content="https://www.facebook.com/Philippe Llerena">
+  <meta property="og:locale" content="en_US">
+
+
+
+
+
+  
+
+
+
+
+
+<script type="application/ld+json">
+  {
+    "@context": "http://schema.org",
+    "@type": "BreadcrumbList",
+    
+      
+      
+        
+        
+        
+        
+        
+        
+        
+        
+          {
+            "@type": "ListItem",
+            "position":  1 ,
+            "name": "Home",
+            "item": "https://doubleailes.github.io/rer/"
+          },
+          
+          
+          {
+            "@type": "ListItem",
+            "position":  2 ,
+            "name": "Docs",
+            "item": "https://doubleailes.github.io/rer/docs/"
+          },
+        
+      
+        
+        
+        
+        
+        
+        
+        
+        
+          
+          
+          {
+            "@type": "ListItem",
+            "position":  3 ,
+            "name": "Contributing",
+            "item": "https://doubleailes.github.io/rer/docs/contributing/"
+          },
+        
+      
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+          
+          
+          {
+            "@type": "ListItem",
+            "position":  4 ,
+            "name": "How To Contribute",
+            "item": "https://doubleailes.github.io/rer/docs/contributing/how-to-contribute/"
+          },
+        
+      
+    
+  }
+</script>
+
+
+
+
+
+
+  <meta name="theme-color" content="#fff">
+  <link rel="apple-touch-icon" sizes="180x180" href="https://doubleailes.github.io/rer/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="https://doubleailes.github.io/rer/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="https://doubleailes.github.io/rer/favicon-16x16.png">
+  
+
+
+  
+
+</head>
+
+  
+
+<body class="docs single">
+  
+  
+  
+  
+<div class="header-bar fixed-top"></div>
+<header class="navbar fixed-top navbar-expand-md navbar-light">
+	<div class="container">
+		<input class="menu-btn order-0" type="checkbox" id="menu-btn">
+		<label class="menu-icon d-md-none" for="menu-btn"><span class="navicon"></span></label>
+		<a class="navbar-brand order-1 order-md-0 me-auto" href="https://doubleailes.github.io/rer/">rer</a>
+		<button id="mode" class="btn btn-link order-2 order-md-4" type="button" aria-label="Toggle mode">
+			<span class="toggle-dark"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-moon"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg></span>
+			<span class="toggle-light"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-sun"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg></span>
+		</button>
+		<ul class="navbar-nav fork-me order-3 order-md-5">
+			
+				
+					<li class="nav-item">
+						<a class="nav-link" href="twitter.com/doubleailes"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-twitter"><path d="M23 3a10.9 10.9 0 0 1-3.14 1.53 4.48 4.48 0 0 0-7.86 3v1A10.66 10.66 0 0 1 3 4s-4 9 5 13a11.64 11.64 0 0 1-7 2c9 5 20 0 20-11.5a4.5 4.5 0 0 0-.08-.83A7.72 7.72 0 0 0 23 3z"></path></svg><span class="ms-2 visually-hidden">Twitter</span></a>
+					</li>
+				
+					<li class="nav-item">
+						<a class="nav-link" href="https://github.com/doubleailes/rer"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-github"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path></svg><span class="ms-2 visually-hidden">GitHub</span></a>
+					</li>
+				
+			
+		</ul>
+		<div class="collapse navbar-collapse order-4 order-md-1">
+			<ul class="navbar-nav main-nav me-auto order-5 order-md-2">
+				
+					
+				
+				
+				
+					
+						<li class="nav-item docs active">
+							<a class="nav-link" href="https://doubleailes.github.io/rer/docs/getting-started/introduction/">Docs</a>
+						</li>
+					
+				
+			</ul>
+			<div class="break order-6 d-md-none"></div>
+			
+				<form class="navbar-form flex-grow-1 order-7 order-md-3">
+					<input id="userinput" class="form-control is-search" type="search" placeholder="Search docs..."
+						aria-label="Search docs..." autocomplete="off">
+					<div id="suggestions" class="shadow bg-white rounded"></div>
+				</form>
+			
+		</div>
+	</div>
+</header>
+
+
+
+  
+<div class="wrap container" role="document">
+  <div class="content">
+    <div class="row flex-xl-nowrap">
+	  
+<div class="col-lg-5 col-xl-4 docs-sidebar">
+	<nav class="docs-links" aria-label="Main navigation">
+			
+			
+			
+			
+					
+					
+					
+							<h3>Getting Started</h3>
+							<ul class="list-unstyled">
+							                           
+									<li><a class="docs-link" href="https://doubleailes.github.io/rer/docs/getting-started/introduction/">Introduction</a></li>
+							                           
+									<li><a class="docs-link" href="https://doubleailes.github.io/rer/docs/getting-started/quick-start/">Quick Start</a></li>
+							                           
+									<li><a class="docs-link" href="https://doubleailes.github.io/rer/docs/getting-started/rez-integration/">Wiring `pyrer` into `rez`</a></li>
+							
+					</ul>
+					
+					
+					
+					
+							<h3>Contributing</h3>
+							<ul class="list-unstyled">
+							                           
+									<li><a class="docs-link active" href="https://doubleailes.github.io/rer/docs/contributing/how-to-contribute/">How to Contribute</a></li>
+							                           
+									<li><a class="docs-link" href="https://doubleailes.github.io/rer/docs/contributing/code-of-conduct/">Code of Conduct</a></li>
+							
+					</ul>
+					
+					
+					
+					
+							<h3>Help</h3>
+							<ul class="list-unstyled">
+							                           
+									<li><a class="docs-link" href="https://doubleailes.github.io/rer/docs/help/faq/">FAQ</a></li>
+							
+					</ul>
+					
+					
+					
+					
+							<h3>Engineering notes</h3>
+							<ul class="list-unstyled">
+							                           
+									<li><a class="docs-link" href="https://doubleailes.github.io/rer/docs/engineering/dedup-caches/">Why rer doesn&#x27;t cache intersect &#x2F; reduce_by results</a></li>
+							                           
+									<li><a class="docs-link" href="https://doubleailes.github.io/rer/docs/engineering/stability/">Stability commitments (1.0 onwards)</a></li>
+							                           
+									<li><a class="docs-link" href="https://doubleailes.github.io/rer/docs/engineering/fast-package-py-parser/">RFC — A blazing-fast Rust `package.py` parser</a></li>
+							
+					</ul>
+					
+					
+			
+	</nav>
+</div>
+
+	  
+  
+  <nav class="docs-toc d-none d-xl-block col-xl-3" aria-label="Secondary navigation">
+  	<div class="page-links">
+  			<h3>On this page</h3>
+  			<nav id="TableOfContents">
+  					<ul>
+  							
+  							<li><a href="https://doubleailes.github.io/rer/docs/contributing/how-to-contribute/#contribute-code">Contribute code</a></li>
+  							
+  									<ul>
+  											
+  											<li><a href="https://doubleailes.github.io/rer/docs/contributing/how-to-contribute/#commit-scopes">Commit scopes</a></li>
+  											
+  											<li><a href="https://doubleailes.github.io/rer/docs/contributing/how-to-contribute/#before-you-push">Before you push</a></li>
+  											
+  											<li><a href="https://doubleailes.github.io/rer/docs/contributing/how-to-contribute/#create-an-issue">Create an issue</a></li>
+  											
+  									</ul>
+  							
+  							
+  							<li><a href="https://doubleailes.github.io/rer/docs/contributing/how-to-contribute/#improve-documentation">Improve documentation</a></li>
+  							
+  							
+  							<li><a href="https://doubleailes.github.io/rer/docs/contributing/how-to-contribute/#reporting-a-regression-against-rez">Reporting a regression against rez</a></li>
+  							
+  							
+  					</ul>
+  			</nav>
+  	</div>
+  </nav>
+  
+
+      <main class="docs-content col-lg-11 col-xl-9">
+        <h1>How to Contribute</h1>
+        <p class="lead">Contribute to rer — report bugs, send patches, improve documentation.</p>
+        <p>👉 Make sure to read the <a href="../code-of-conduct/">Code of Conduct</a>.</p>
+<h2 id="contribute-code">Contribute code</h2>
+<p>👉 The rer source lives at <a rel="external" href="https://github.com/doubleailes/rer"><code>doubleailes/rer</code></a>.</p>
+<ul>
+<li>Follow the <a rel="external" href="https://guides.github.com/introduction/flow/">GitHub flow</a>.</li>
+<li>Follow the <a rel="external" href="https://www.conventionalcommits.org/en/v1.0.0/">Conventional Commits</a> specification.</li>
+</ul>
+<h3 id="commit-scopes">Commit scopes</h3>
+<p>The commit scope is the crate name without the <code>rer-</code> prefix:</p>
+<ul>
+<li><code>feat(version): …</code></li>
+<li><code>fix(resolver): …</code></li>
+<li><code>chore(python): …</code></li>
+<li><code>docs: …</code></li>
+<li><code>ci: …</code></li>
+</ul>
+<h3 id="before-you-push">Before you push</h3>
+<pre class="giallo" style="color: #CDD6F4; background-color: #1E1E2E;"><code data-lang="shellscript"><span class="giallo-l"><span style="color: #89B4FA;font-style: italic;">cargo</span><span style="color: #A6E3A1;"> fmt --all</span></span>
+<span class="giallo-l"><span style="color: #89B4FA;font-style: italic;">cargo</span><span style="color: #A6E3A1;"> build</span></span>
+<span class="giallo-l"><span style="color: #89B4FA;font-style: italic;">cargo</span><span style="color: #A6E3A1;"> test</span></span></code></pre>
+<p>For changes that touch the solver, also run the rez differential
+benchmark (it needs the <code>rez</code> git submodule and several minutes):</p>
+<pre class="giallo" style="color: #CDD6F4; background-color: #1E1E2E;"><code data-lang="shellscript"><span class="giallo-l"><span style="color: #89B4FA;font-style: italic;">git</span><span style="color: #A6E3A1;"> submodule update --init</span></span>
+<span class="giallo-l"><span style="color: #89B4FA;font-style: italic;">python</span><span style="color: #A6E3A1;"> scripts/prepare_benchmark_data.py</span></span>
+<span class="giallo-l"><span style="color: #89B4FA;font-style: italic;">cargo</span><span style="color: #A6E3A1;"> test --release -p rer-resolver --test test_rez_benchmark -- --ignored</span></span></code></pre>
+<p>The <code>benchmark</code> CI workflow runs this on every PR touching the resolver.</p>
+<h3 id="create-an-issue">Create an issue</h3>
+<ul>
+<li><a rel="external" href="https://github.com/doubleailes/rer/issues/new">Bug report</a></li>
+<li><a rel="external" href="https://github.com/doubleailes/rer/issues/new">Feature request</a></li>
+</ul>
+<h2 id="improve-documentation">Improve documentation</h2>
+<p>This site lives in <a rel="external" href="https://github.com/doubleailes/rer/tree/main/docs"><code>docs/</code></a>
+and is built with <a rel="external" href="https://www.getzola.org/">Zola</a>. The page-level
+content is in <code>docs/content/</code>; the configuration is in <code>docs/config.toml</code>.</p>
+<pre class="giallo" style="color: #CDD6F4; background-color: #1E1E2E;"><code data-lang="shellscript"><span class="giallo-l"><span style="color: #F38BA8;font-style: italic;">cd</span><span style="color: #A6E3A1;"> docs</span></span>
+<span class="giallo-l"><span style="color: #89B4FA;font-style: italic;">zola</span><span style="color: #A6E3A1;"> serve</span></span></code></pre>
+<p>The README and <code>CLAUDE.md</code> at the repo root are the authoritative
+descriptions of the code; if you spot drift between those and this site,
+the README/CLAUDE.md wins — please send a PR.</p>
+<h2 id="reporting-a-regression-against-rez">Reporting a regression against rez</h2>
+<p>If you find a request that resolves differently in <code>rer</code> than in <code>rez</code>,
+that is a bug. Please include:</p>
+<ul>
+<li>the request list (e.g. <code>["python-3", "maya-2024"]</code>)</li>
+<li>a minimal package repository that reproduces the divergence</li>
+<li>rez's resolution and rer's resolution</li>
+</ul>
+<p>The 188-case rez benchmark is the authoritative reference — if a case
+from that suite ever diverges, that's a release blocker.</p>
+
+        
+        
+<div class="docs-navigation d-flex justify-content-between">
+  
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+          
+        
+      
+        
+        
+          
+        
+      
+        
+        
+          
+        
+      
+        
+        
+          
+            
+              
+              <a href="https:&#x2F;&#x2F;doubleailes.github.io&#x2F;rer&#x2F;docs&#x2F;getting-started&#x2F;rez-integration&#x2F;">
+                <div class="card my-1">
+                  <div class="card-body py-2">
+                    &larr; Wiring `pyrer` into `rez`
+                  </div>
+                </div>
+              </a>
+            
+            
+            
+          
+        
+      
+    
+  
+
+  
+  
+  
+  
+  
+    
+    
+    
+      
+      
+        
+      
+    
+      
+      
+        
+      
+    
+      
+      
+        
+          
+          
+          <a class="ms-auto" href="https:&#x2F;&#x2F;doubleailes.github.io&#x2F;rer&#x2F;docs&#x2F;help&#x2F;faq&#x2F;">
+            <div class="card my-1">
+              <div class="card-body py-2">
+                FAQ &rarr;
+              </div>
+            </div>
+          </a>
+          
+          
+          
+        
+      
+    
+      
+      
+        
+      
+    
+  
+</div>
+
+      </main>
+    </div>
+  </div>
+</div>
+
+
+  
+    
+<footer class="footer text-muted">
+	<div class="container">
+		<div class="row">
+			<div class="col-lg-8 order-last order-lg-first">
+				<ul class="list-inline">
+					
+						<li class="list-inline-item">Powered by <a href="https://www.netlify.com/">Netlify</a>, <a href="https://www.getzola.org/">Zola</a>, and <a href="https://github.com/doubleailes/adidoks">AdiDoks</a></li>
+					
+				</ul>
+			</div>
+			<div class="col-lg-8 order-first order-lg-last text-lg-end">
+				<ul class="list-inline">
+					
+						
+							<li class="list-inline-item"><a href="https://doubleailes.github.io/rer/privacy-policy/">Privacy</a></li>
+						
+							<li class="list-inline-item"><a href="https://doubleailes.github.io/rer/docs/contributing/code-of-conduct/">Code of Conduct</a></li>
+						
+					
+				</ul>
+			</div>
+		</div>
+	</div>
+</footer>
+
+  
+
+  
+<script type="text/javascript" src="https://doubleailes.github.io/rer/js/main.js" defer></script>
+
+  <script type="text/javascript" src="https://doubleailes.github.io/rer/plugins/elasticlunr.min.js" defer></script>
+  <script type="text/javascript" src="https://doubleailes.github.io/rer/search_index.en.js" defer></script>
+  <script type="text/javascript" src="https://doubleailes.github.io/rer/js/search.js" defer></script>
+
+  
+</body>
+</html>
