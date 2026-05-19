@@ -12,93 +12,179 @@ page.
 
 ## [Unreleased]
 
+## [1.0.0-rc.3] — 2026-05-19
+
+First release candidate of the 1.0 line. Closes the integration
+loop with rez: pyrer now ships a Rust `package.py` parser, a
+batched parallel I/O path, and a lazy-discovery hook with
+constraint-aware filtering, on top of the rez-faithful solver.
+The strict 188-case rez differential still passes 188/188 —
+public API is from this release forward under the
+[Stability commitments](https://doubleailes.github.io/rer/docs/engineering/stability/).
+
 ### Added
 
+#### Rust `package.py` parser
+
+- **New crate `rer-package`** — hand-rolled lexer that extracts the
+  four solver-relevant fields (`name`, `version`, `requires`,
+  `variants`) from a rez `package.py` source string without
+  invoking Python. Zero non-stdlib dependencies. Accepts the static
+  subset: literal assignments, ignorable `def commands(...)` /
+  `def pre_commands(...)`, ignorable `with scope("config")`
+  declarative DSL. Bails to `None` (caller falls back to rez) on
+  `@early` / `@late`, top-level `if` / `for` / `class`, `import`,
+  non-literal assignment to a solver field, or anything the scanner
+  doesn't explicitly recognise — biased hard toward bailing so
+  silent correctness regressions can't slip in. See the
+  [engineering RFC](https://doubleailes.github.io/rer/docs/engineering/fast-package-py-parser/).
+- **`pyrer.parse_static_package_py(source) -> Optional[PackageData]`** —
+  PyO3 binding for the per-file parser. Returns the four-field
+  `PackageData` on success, `None` on any reason to bail. No
+  exception ever escapes; even a syntax error becomes `None` (the
+  caller would invoke rez on it anyway).
 - **`pyrer.parse_static_packages_py(paths) -> list[PackageData | None]`** —
-  batched, Rayon-parallel variant of `parse_static_package_py`
-  that opens and parses every path in one Rust call across a
-  thread pool. Output is positionally aligned with the input;
-  missing files, unreadable bytes, and parser-bails all map to
-  `None`. The GIL is released for the whole batch via
-  `Python::allow_threads`. Pool size follows
-  `RAYON_NUM_THREADS` (default: logical core count). Targets
-  issue #94's profile finding that serial Python `open()` was
-  the top of the resolve flamegraph (3.20 s of 9.12 s, 35% of
-  wall time) after the per-file static parser landed.
-  Closes #94.
-- **`version_range` hint on the `load_family` callback** (issue #92) —
-  `pyrer.solve(..., load_family=cb)` now invokes `cb` as
-  `cb(name, version_range="2+<3")` when the callback's signature can
-  accept a second `version_range` argument (named param or `**kwargs`).
-  The hint is a rez-syntax range string the shim can pass directly to
+  batched, Rayon-parallel variant. Opens and parses every path in
+  one Rust call across a thread pool with the GIL released
+  (`Python::allow_threads`). Output is positionally aligned with
+  the input; missing files, unreadable bytes, and parser-bails all
+  map to `None` at the matching index. Pool size follows
+  `RAYON_NUM_THREADS` (default: logical core count). Targets the
+  serial-Python-`open()`-loop bottleneck after the per-file parser
+  landed (#94 cProfile showed 3.20 s of 9.12 s — 35% of resolve
+  wall time — in serial `open()`). Closes #94.
+
+#### `pyrer.solve()` integration surface
+
+- **`load_family` callback** for lazy package discovery — pass
+  `load_family: Callable[[str], list[PackageData]]` and pyrer
+  invokes it on demand the first time the solver needs a family
+  it hasn't seen. Each family is loaded at most once per solve.
+  Returning `[]` means "no such family". Aimed at cold-cache and
+  network-filesystem integrations (Windows + CIFS in particular)
+  where the up-front BFS of every reachable family dominates
+  `rez env` wall time. Closes #86.
+- **`version_range` hint on `load_family`** — the callback signature
+  can now accept a second `version_range` argument (named parameter
+  or `**kwargs`); pyrer detects via `inspect.signature` once per
+  `solve()`. The hint is a rez-syntax range string (e.g. `"2+<3"`,
+  `None` for unconstrained) the shim can pass directly to
   `rez.packages.iter_packages(range_=...)` to skip on-disk version
-  directories outside the request. Backward-compatible: 1-arg
-  callbacks (`def cb(name):`) keep working unchanged — pyrer detects
-  the signature via `inspect.signature` once per `solve()` call.
-  Targets the 95% load-fan-out waste documented in #92 (2,637
-  packages loaded for 132 used on a typical Fortiche resolve);
-  projected 6-20× cut to `_load_family` wall time. The 188-case rez
-  differential still passes 188/188.
+  directories outside the request. Targets the 95% load-fan-out
+  waste documented in #92 (2,637 packages loaded for 132 used on a
+  typical Fortiche resolve). The repo tracks the loaded range per
+  family and reloads with a widened range if the solver backtracks
+  and needs more — see `PackageRepo` notes in **Changed** below.
+  Backward-compatible: 1-arg callbacks keep working. Closes #92.
 - **`PackageData.from_strings(name, version, requires=None, variants=None)`** —
   classmethod constructor for raw-string callers, symmetric with
   `from_rez(pkg)`. Skips rez's `AttributeForwardMeta` chain, the
-  `Requirement` parse, and the `str(Requirement)` round-trip — the
-  latter being a measurable fraction of integration overhead on
-  rez-shim hot paths (per-package, every package, every resolve).
-  Functionally equivalent to the four-arg constructor; the
-  classmethod form exists so callers wiring `pkg.resource.data`
-  through pyrer have a named, documented contract to reach for.
-  Falls back to `from_rez` for `@early` / `@late`-bound attributes.
-  Closes #88.
-- **`load_family` callback** on `pyrer.solve()` — opt-in lazy package
-  discovery: pass `load_family: Callable[[str], list[PackageData]]` and the
-  solver calls it on demand the first time it needs a family it hasn't seen.
-  Each family is loaded at most once per solve; returning `[]` means "no
-  such family". Aimed at cold-cache / network-filesystem integrations
-  (Windows + CIFS in particular) where the up-front BFS of every reachable
-  family dominates the wall-clock cost of `rez env`. See the
-  [lazy-discovery section of the rez integration page](https://doubleailes.github.io/rer/docs/getting-started/rez-integration/#lazy-package-discovery-on-cold-caches).
-  Closes #86.
-- **`resolved_ephemerals`** on `pyrer.SolveResult` — list of rez-style
-  ephemeral requirement strings (e.g. `[".feature-1.5", ".mode-debug"]`)
-  surfaced from the solver, matching `rez.solver.Solver.resolved_ephemerals`.
-  Closes #84.
-- **Borrowing-iterator forms** on the Rust API: `Solver::resolved_packages_iter`
-  / `resolved_ephemerals_iter` and `ResolvePhase::iter_solved_variants` /
-  `iter_solved_ephemerals`. Avoid the intermediate `Vec` (and, for
-  ephemerals, the per-element `Requirement::clone`) when callers just want
-  to iterate.
-
-### Changed
-
-- **`PackageRepo` is now a struct**, not a `HashMap` type alias. Carries a
-  cache (`RefCell<HashMap<…>>`) and an optional `FamilyLoader` closure.
-  Construct with `PackageRepo::from_map(map)` for the eager case, or
-  `PackageRepo::with_loader(loader)` for lazy. `From<HashMap<…>>` is
-  implemented for back-compat with the old type-alias shape. The eager
-  path's perf is unchanged in measurement (within run-to-run noise of the
-  README baseline).
-
-## [1.0.0] — TBD
-
-The first stable release. Public API is now under semver — see the
-[Stability commitments](https://doubleailes.github.io/rer/docs/engineering/stability/)
-page for what's covered.
-
-### Added
-
+  `Requirement` parse, and the `str(Requirement)` round-trip on
+  the rez-shim hot path. Functionally equivalent to the four-arg
+  constructor; the classmethod form exists so callers wiring
+  `pkg.resource.data` through pyrer have a named, documented
+  contract to reach for. Falls back to `from_rez` for `@early` /
+  `@late`-bound attributes. Closes #88.
+- **`resolved_ephemerals`** on `pyrer.SolveResult` — list of
+  rez-style ephemeral requirement strings (`[".feature-1.5",
+  ".mode-debug"]`) surfaced from the solver, matching
+  `rez.solver.Solver.resolved_ephemerals`. Closes #84.
 - **`variant_select_mode`** parameter on `pyrer.solve()` —
-  `"version_priority"` (rez's default) and `"intersection_priority"`. Mirrors
-  rez's `config.variant_select_mode`. On the Rust side: new
-  `VariantSelectMode` enum, `SolverContext::with_variant_select_mode(mode)`
-  builder, `Solver::new_with_options(reqs, repo, cache, mode)` constructor.
-  Closes #63.
+  `"version_priority"` (rez's default) and `"intersection_priority"`.
+  Mirrors `config.variant_select_mode`. New `VariantSelectMode` enum
+  on the Rust side, plus `SolverContext::with_variant_select_mode`
+  / `Solver::new_with_options` constructors. Closes #63.
+
+#### Rust API additions
+
+- **Borrowing-iterator forms** on `Solver` and `ResolvePhase`:
+  `resolved_packages_iter`, `resolved_ephemerals_iter`,
+  `iter_solved_variants`, `iter_solved_ephemerals`. Avoid the
+  intermediate `Vec` (and, for ephemerals, the per-element
+  `Requirement::clone`) when callers just want to iterate.
 
 ### Changed
 
-- **Differential test now enforces variant-index parity.** The 188-case rez
-  benchmark gate previously checked `(name, version)` only; it now also
-  compares the variant index rez picked for each entry. 188/188 still pass.
+- **`PackageRepo` is now a struct**, not a `HashMap` type alias.
+  Carries a cache (`RefCell<HashMap<…>>`), optional `FamilyLoader`
+  closure, and a per-family `loaded_range` so `get_family(name,
+  hint)` can reload with a widened range when the solver
+  backtracks. Construct with `PackageRepo::from_map(map)` for the
+  eager case or `PackageRepo::with_loader(loader)` for lazy;
+  `From<HashMap<…>>` is implemented for back-compat. Eager-path
+  perf unchanged in measurement (within run-to-run noise of the
+  README baseline).
+- **`FamilyLoader` type signature** is now
+  `Fn(&str, Option<&VersionRange>) -> Vec<(String, PackageData)>`
+  (was 1-arg) — required to thread the `version_range` hint through.
+- **Differential test now enforces variant-index parity.** The
+  188-case rez benchmark gate previously checked `(name, version)`
+  only; it now also compares the variant index rez picked for each
+  entry. 188/188 still pass.
+
+### Performance
+
+Measured on the Fortiche corpus (`/thierry/rez/pkg`, ~6,400 `package.py`
+files, served over CIFS) against rez 3.3.0:
+
+- **Static parser, end-to-end**: 75 μs/file (`open + read + parse`)
+  vs rez's `DeveloperPackage.from_path + from_rez` at 2,615 μs/file.
+  **34.8× speedup.** The parse step alone dropped from 1,990 μs
+  (V1 rustpython-parser) to **59 μs (V2 hand-rolled lexer)** —
+  the hand-rolled rewrite was a 33× win on its own layer.
+- **Corpus accept rate**: 92.9% of files (5,979 / 6,439) are
+  statically parseable. Per the issue #84 differential harness,
+  the parser produces **0 mismatches** against rez on the
+  V2-accepted set.
+- **Batched parser**: 2.81× speedup on 2,000-file batches over the
+  serial Python `open()` loop the shim ran before (4,234 ms → 1,508
+  ms). Per-file saving ~1.36 ms; extrapolated to a 2,600-file
+  resolve, ~3.5 s saved per `_load_family`.
+- **Solver**: unchanged. Strict 188-case rez differential remains
+  188/188.
+
+### Tooling
+
+- **`scripts/survey_package_py.py`** — Stage 1 corpus classifier that
+  walks a rez repo and reports per-file: fast-parseable / dynamic-
+  requires / imports / top-level-classdef / etc. Pure stdlib; the
+  go/no-go signal for whether the parser is worth wiring into a
+  given studio.
+- **`scripts/diff_against_rez.py`** — Stage 2 safety net. For every
+  file `parse_static_package_py` accepts, also load via rez's
+  `DeveloperPackage.from_path` and assert the four solver fields
+  match byte-for-byte. Run on the full Fortiche corpus: **0
+  mismatches on 5,979 V2-accepted files** in 74 seconds. Treats
+  any divergence as a release blocker.
+- **`scripts/bench_package_py_parser.py`** — full-load comparison
+  (`open + read + parse_static_package_py` vs `DeveloperPackage.from_path
+  + from_rez`), the source of the 34.8× number.
+- **`scripts/bench_batched_parser.py`** — serial-loop vs batched
+  comparison, the source of the 2.81× number.
+- **`scripts/bench_python_construction.py`** — `PackageData`
+  construction microbench (`from_strings` vs `from_rez` paths).
+- **`scripts/compare_resolves.py`** — pyrer-vs-rez bisect tool for
+  divergence reports. Uses the recommended shim shape internally
+  (static parser + `load_family` + `version_range` + `from_rez`
+  fallback) and reports per-request agreement / divergence /
+  failure. Used to triage #96.
+
+### Docs
+
+- **[Wiring `pyrer` into `rez`](https://doubleailes.github.io/rer/docs/getting-started/rez-integration/)**:
+  full production integration guide covering the static parser
+  (per-file + batched), `load_family`, `version_range` hint,
+  `from_strings`, shadow-validation mode, metrics counters,
+  rollout plan, and a "Where this WON'T help" honest-caveat list
+  for each feature.
+- **[Static `package.py` parser RFC](https://doubleailes.github.io/rer/docs/engineering/fast-package-py-parser/)**:
+  Stages 1-4 design + measured results, the V1 → V2 spike story
+  (1.7× → 34.8×), the differential safety-net result, and a
+  "Considered alternatives" section flagging the parsed-package
+  cache as the next architectural lever.
+- **FAQ entry** for "Where does rer get package data from?"
+  updated to mention both eager and lazy (`load_family`) supply
+  paths.
 
 ## [0.1.0-rc.6] — 2026-05-15
 
