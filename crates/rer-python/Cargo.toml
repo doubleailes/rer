@@ -15,9 +15,11 @@ license = "MIT"
 publish = false
 
 [lib]
-# The Python import name — `rer-python` ships to PyPI as `pyrer`, so
-# `import pyrer` in Python loads this cdylib.
-name = "pyrer"
+# `pyrer` is a mixed Rust+Python package: this cdylib is the compiled
+# extension `pyrer._native`, and the pure-Python `python/pyrer/` package
+# wraps it and hosts the plugin SDK. `import pyrer` loads the Python
+# package; it re-exports from `pyrer._native`.
+name = "_native"
 crate-type = ["cdylib", "lib"]
 
 # abi3-py39 builds a single stable-ABI wheel that works on Python 3.9+,

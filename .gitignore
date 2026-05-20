@@ -30,3 +30,7 @@ __pycache__
 /data_set/benchmark_packages.json
 /data_set/benchmark_requests.json
 /data_set/benchmark_expected.json
+
+# maturin develop drops the compiled extension into the python source tree
+crates/rer-python/python/pyrer/_native*.so
+crates/rer-python/python/pyrer/_native*.pyd

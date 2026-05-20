@@ -28,3 +28,9 @@ Repository = "https://github.com/doubleailes/rer"
 
 [tool.maturin]
 features = ["pyo3/extension-module"]
+# Mixed Rust+Python layout: the compiled extension is built as the
+# `pyrer._native` submodule, and the pure-Python package under
+# `python/pyrer/` (which re-exports `_native` and hosts the plugin SDK)
+# is the `pyrer` users import.
+python-source = "python"
+module-name = "pyrer._native"

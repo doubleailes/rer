@@ -905,3 +905,125 @@ requires = ["lib-2"]
     assert result_parsed.status == "solved"
     assert result_constructed.status == "solved"
     assert result_parsed.resolved == result_constructed.resolved
+
+
+# ---------------------------------------------------------------------------
+# package orderer plugin — pyrer.PackageOrderer + register_orderer
+# ---------------------------------------------------------------------------
+
+
+def _three_versions(name):
+    """A family `name` with versions 1.0.0 / 2.0.0 / 3.0.0, no deps."""
+    return [_pkg(name, "1.0.0"), _pkg(name, "2.0.0"), _pkg(name, "3.0.0")]
+
+
+def test_package_orderer_default_prefers_highest():
+    """No orderer → rez-default order → highest version resolved."""
+    result = pyrer.solve(["foo"], _three_versions("foo"))
+    assert result.status == "solved"
+    assert result.resolved_packages[0].version == "3.0.0"
+
+
+def test_package_orderer_reverses_preference():
+    """An orderer that sorts ascending makes the solver pick the lowest
+    version. Selected by registered name."""
+
+    class LowestFirst(pyrer.PackageOrderer):
+        name = "test-lowest-first"
+
+        def order(self, family, versions):
+            return sorted(versions)  # ascending — lowest most preferred
+
+    pyrer.register_orderer(LowestFirst)
+    result = pyrer.solve(
+        ["foo"], _three_versions("foo"), package_orderer="test-lowest-first"
+    )
+    assert result.status == "solved"
+    assert result.resolved_packages[0].version == "1.0.0"
+
+
+def test_package_orderer_accepts_instance_directly():
+    """`package_orderer` also takes a PackageOrderer instance, not just a
+    registered name."""
+
+    class PinTwo(pyrer.PackageOrderer):
+        name = "test-pin-two"
+
+        def order(self, family, versions):
+            rest = [v for v in versions if v != "2.0.0"]
+            return ["2.0.0", *rest]
+
+    result = pyrer.solve(["foo"], _three_versions("foo"), package_orderer=PinTwo())
+    assert result.status == "solved"
+    assert result.resolved_packages[0].version == "2.0.0"
+
+
+def test_package_orderer_unknown_name_raises():
+    """Selecting an unregistered name is a caller error."""
+    import pytest
+
+    with pytest.raises(ValueError, match="no package orderer registered"):
+        pyrer.solve(["foo"], _three_versions("foo"), package_orderer="does-not-exist")
+
+
+def test_package_orderer_wrong_type_raises():
+    import pytest
+
+    with pytest.raises(TypeError, match="package_orderer must be"):
+        pyrer.solve(["foo"], _three_versions("foo"), package_orderer=42)
+
+
+def test_register_orderer_without_name_raises():
+    """A PackageOrderer subclass must set a non-empty `name`."""
+    import pytest
+
+    class Nameless(pyrer.PackageOrderer):
+        def order(self, family, versions):
+            return versions
+
+    with pytest.raises(ValueError, match="non-empty"):
+        pyrer.register_orderer(Nameless)
+
+
+def test_register_orderer_rejects_non_orderer():
+    import pytest
+
+    with pytest.raises(TypeError, match="PackageOrderer"):
+        pyrer.register_orderer(object())
+
+
+def test_package_orderer_exception_surfaces_as_error():
+    """If `order()` raises, the solve returns status='error' — no
+    exception escapes pyrer.solve."""
+
+    class Boom(pyrer.PackageOrderer):
+        name = "test-boom"
+
+        def order(self, family, versions):
+            raise RuntimeError("orderer blew up")
+
+    result = pyrer.solve(["foo"], _three_versions("foo"), package_orderer=Boom())
+    assert result.status == "error"
+    assert "orderer blew up" in (result.failure_description or "")
+
+
+def test_package_orderer_partial_output_no_crash():
+    """An orderer naming only some versions must not crash — omitted
+    versions sink to the bottom (least preferred)."""
+
+    class OnlyOne(pyrer.PackageOrderer):
+        name = "test-only-one"
+
+        def order(self, family, versions):
+            return ["1.0.0"]  # omits 2.0.0, 3.0.0
+
+    result = pyrer.solve(["foo"], _three_versions("foo"), package_orderer=OnlyOne())
+    assert result.status == "solved"
+    assert result.resolved_packages[0].version == "1.0.0"
+
+
+def test_package_orderer_none_is_default():
+    """package_orderer=None is identical to omitting it."""
+    a = pyrer.solve(["foo"], _three_versions("foo"))
+    b = pyrer.solve(["foo"], _three_versions("foo"), package_orderer=None)
+    assert a.resolved == b.resolved
