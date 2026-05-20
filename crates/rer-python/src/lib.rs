@@ -410,6 +410,41 @@ fn make_loader(
     )
 }
 
+/// Build a [`FamilyOrderer`] from a Python callable — the bridge for the
+/// package-orderer plugin SDK. The callable is invoked once per family with
+/// `(family_name, version_strings)` and must return the version strings
+/// reordered, most-preferred-first.
+///
+/// Shares the loader's `err_slot`: if the callable raises, the message is
+/// captured there (the outer `solve()` surfaces it as `status="error"`) and
+/// the loader/orderer falls back to a harmless result so the solve doesn't
+/// diverge before the error is reported — here, the input order unchanged.
+fn make_orderer(
+    callback: Py<PyAny>,
+    err_slot: Rc<RefCell<Option<String>>>,
+) -> Rc<rer_resolver::rez_solver::FamilyOrderer> {
+    Rc::new(move |family: &str, versions: &[&str]| -> Vec<String> {
+        let input_order = || versions.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        // A previous callback already errored — don't pile on.
+        if err_slot.borrow().is_some() {
+            return input_order();
+        }
+        let result: PyResult<Vec<String>> = Python::with_gil(|py| {
+            let ret = callback.bind(py).call1((family, versions.to_vec()))?;
+            ret.extract::<Vec<String>>()
+        });
+        match result {
+            Ok(ordered) => ordered,
+            Err(err) => {
+                let msg = Python::with_gil(|py| err.value(py).to_string());
+                *err_slot.borrow_mut() =
+                    Some(format!("package_orderer for {family:?} raised: {msg}"));
+                input_order()
+            }
+        }
+    })
+}
+
 /// Inspect the Python callable's signature and return `true` if it can
 /// accept a second `version_range` argument — either as a named parameter
 /// or via `**kwargs` / `*args`. False means the legacy 1-arg shape.
@@ -422,7 +457,10 @@ fn callback_takes_range(py: Python<'_>, callback: &Py<PyAny>) -> bool {
         Ok(m) => m,
         Err(_) => return false,
     };
-    let sig = match inspect.getattr("signature").and_then(|f| f.call1((callback,))) {
+    let sig = match inspect
+        .getattr("signature")
+        .and_then(|f| f.call1((callback,)))
+    {
         Ok(s) => s,
         Err(_) => return false,
     };
@@ -457,7 +495,9 @@ fn callback_takes_range(py: Python<'_>, callback: &Py<PyAny>) -> bool {
         let Ok(name_val) = item.get_item(0) else {
             continue;
         };
-        let Ok(param) = item.get_item(1) else { continue };
+        let Ok(param) = item.get_item(1) else {
+            continue;
+        };
         let Ok(name_s) = name_val.extract::<String>() else {
             continue;
         };
@@ -521,6 +561,12 @@ fn parse_variant_select_mode(s: &str) -> PyResult<VariantSelectMode> {
 /// * `variant_select_mode` — either `"version_priority"` (default, rez's
 ///   default config) or `"intersection_priority"`. Mirrors rez's
 ///   `config.variant_select_mode`.
+/// * `package_order` — Optional `Callable[[str, list[str]], list[str]]`
+///   invoked once per family with `(family, version_strings)`, returning
+///   the versions reordered most-preferred-first. `None` keeps the default
+///   version-descending order. This is the low-level bridge for the
+///   `pyrer.PackageOrderer` plugin SDK — Python callers use the
+///   `package_orderer=` argument on the `pyrer.solve` wrapper instead.
 /// * `filters` — Optional `(filter_type, pattern)` tuples (reserved, ignored).
 /// * `max_iterations` — Optional iteration cap (reserved, ignored).
 ///
@@ -536,6 +582,7 @@ fn parse_variant_select_mode(s: &str) -> PyResult<VariantSelectMode> {
         *,
         load_family=None,
         variant_select_mode="version_priority",
+        package_order=None,
         filters=None, max_iterations=None,
     )
 )]
@@ -544,6 +591,7 @@ fn solve(
     packages: Option<Vec<PackageData>>,
     load_family: Option<Py<PyAny>>,
     variant_select_mode: &str,
+    package_order: Option<Py<PyAny>>,
     filters: Option<Vec<(String, String)>>,
     max_iterations: Option<u32>,
 ) -> PyResult<SolveResult> {
@@ -568,11 +616,8 @@ fn solve(
         // Backward-compatible: callbacks with the 1-arg shape keep
         // working unchanged.
         let takes_range = Python::with_gil(|py| callback_takes_range(py, &callback));
-        let lazy = PackageRepo::with_loader(make_loader(
-            callback,
-            Rc::clone(&load_err),
-            takes_range,
-        ));
+        let lazy =
+            PackageRepo::with_loader(make_loader(callback, Rc::clone(&load_err), takes_range));
         // Seed the eager set so the loader is never called for families
         // the caller already supplied.
         for (name, fam) in initial_map {
@@ -583,6 +628,11 @@ fn solve(
         PackageRepo::from_map(initial_map)
     };
 
+    // Build the pluggable package orderer from the Python callback, if one
+    // was supplied. Shares the same error slot as the loader — the first
+    // callback exception wins and surfaces as a `"error"`-status result.
+    let orderer = package_order.map(|cb| make_orderer(cb, Rc::clone(&load_err)));
+
     // `Requirement::parse` panics on a syntactically invalid version range;
     // catch that at the FFI boundary and report it as `"error"` rather than
     // letting it surface as a Python `PanicException`.
@@ -591,7 +641,8 @@ fn solve(
             .iter()
             .map(|s| Requirement::parse(s))
             .collect();
-        let mut solver = Solver::new_with_options(reqs, Rc::new(repo), make_shared_cache(), mode)?;
+        let mut solver =
+            Solver::new_with_options(reqs, Rc::new(repo), make_shared_cache(), mode, orderer)?;
         solver.solve();
         Ok::<Solver, ScopeError>(solver)
     }));
@@ -770,9 +821,14 @@ fn parse_static_packages_py(
         .collect()
 }
 
-/// The `pyrer` Python module — Rez-compatible package resolver.
+/// The compiled `pyrer._native` extension — the Rust core of `pyrer`.
+///
+/// `pyrer` is a mixed Rust+Python package: this module is wrapped by the
+/// pure-Python `pyrer` package (`python/pyrer/`), which re-exports these
+/// symbols and adds the package-orderer plugin SDK. End users
+/// `import pyrer`, never `pyrer._native` directly.
 #[pymodule]
-fn pyrer(m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(solve, m)?)?;
     m.add_function(wrap_pyfunction!(parse_static_package_py, m)?)?;
     m.add_function(wrap_pyfunction!(parse_static_packages_py, m)?)?;

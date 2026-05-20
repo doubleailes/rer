@@ -821,6 +821,63 @@ No Python exception is raised from a failed or errored solve — both
 are reported via `result.status`. Only a `TypeError` is raised, and
 only when the `packages` argument is not a list of `PackageData`.
 
+## Custom package ordering
+
+By default `pyrer` prefers the **highest** version of a family —
+rez's `SortedOrder(descending=True)`, using rez's native
+alphanumeric-token version comparison.
+
+A studio that runs a custom rez orderer (registered via rez's
+`register_orderer()` / `config.package_orderers`) needs `pyrer` to
+order versions the same way, or the two solvers pick different
+versions of the same family. `pyrer` exposes a parallel **plugin
+SDK** for this: subclass `pyrer.PackageOrderer`, implement
+`order()`, register it, and select it on `solve()`.
+
+```python
+import pyrer
+
+
+class Pep440Orderer(pyrer.PackageOrderer):
+    """Order versions by PEP 440 semantics instead of rez-native."""
+
+    name = "pep440"
+
+    def order(self, family, versions):
+        # `versions` is every candidate version string for `family`.
+        # Return them most-preferred-first — here, sorted as PEP 440.
+        return sorted(versions, key=_pep440_key, reverse=True)
+
+
+pyrer.register_orderer(Pep440Orderer)
+
+result = pyrer.solve(requests, packages, package_orderer="pep440")
+```
+
+The SDK contract:
+
+- **`name`** — a class attribute; the registry key. `register_orderer`
+  rejects an orderer with an empty `name`.
+- **`order(family, versions) -> list[str]`** — return `versions`
+  reordered, most-preferred-first. It should be a permutation;
+  `pyrer` is defensive — a version omitted from the result sinks to
+  the bottom (least preferred), a version not in `versions` is
+  ignored. The orderer is consulted **once per family**.
+- An orderer is a **preference** function: it changes which solution
+  is found, never whether a solve succeeds.
+- If `order()` raises, the solve returns `status == "error"` with the
+  message in `failure_description` — no exception escapes
+  `pyrer.solve`.
+
+`package_orderer` accepts the registered **name** (a `str`), a
+`PackageOrderer` **instance** directly, or `None` (the default).
+
+This mirrors rez's own orderer model — an SDK base class plus an
+explicit registry — without rez's heavyweight plugin-manager
+discovery. To match a rez studio's resolves, port that studio's
+`PackageOrder` subclass: the `sort_key` logic copies almost verbatim
+into `order()` (wrap it in `sorted(versions, key=..., reverse=True)`).
+
 ## Translating the result back to `rez`
 
 `pyrer.ResolvedVariant` objects already expose the attribute surface

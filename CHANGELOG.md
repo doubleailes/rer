@@ -12,6 +12,35 @@ page.
 
 ## [Unreleased]
 
+### Added
+
+- **Package-orderer plugin SDK.** `pyrer` now exposes
+  `pyrer.PackageOrderer` (an SDK base class) and
+  `pyrer.register_orderer()` (an explicit registry), mirroring rez's
+  own orderer model. A studio subclasses `PackageOrderer`, implements
+  `order(family, versions) -> list[str]` (versions reordered
+  most-preferred-first), registers it, and selects it via
+  `pyrer.solve(..., package_orderer="<name>")` — by registered name or
+  by passing an instance. This lets a host override `rer`'s default
+  highest-version preference to match a custom rez orderer (e.g. a
+  PEP 440 orderer), the root cause of the version-selection divergence
+  in #96. The orderer is a preference function — it never changes
+  whether a solve succeeds; a misbehaving orderer (omitted/extra
+  versions) is handled defensively; a raising `order()` surfaces as
+  `status="error"`. On the Rust side: new `FamilyOrderer` callback
+  type, `SolverContext::with_package_order` builder,
+  `SolverContext.package_order` field, and a 5th `package_order`
+  parameter on `Solver::new_with_options`.
+
+### Changed
+
+- **`pyrer` is now a mixed Rust+Python package.** The compiled PyO3
+  extension moved to the `pyrer._native` submodule; a pure-Python
+  `pyrer` package wraps it and hosts the plugin SDK. `import pyrer`
+  and every existing symbol (`solve`, `PackageData`, `SolveResult`,
+  `parse_static_package_py`, …) are unchanged for callers — the
+  restructure is transparent. `pyrer.__version__` is now available.
+
 ## [1.0.0-rc.3] — 2026-05-19
 
 First release candidate of the 1.0 line. Closes the integration

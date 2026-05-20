@@ -5,7 +5,7 @@
 //! next step pops and archives it, then resumes the alternative phase beneath
 //! (the "without selection" half produced by an earlier `split`).
 
-use super::context::{SharedVariantCache, SolverContext, VariantSelectMode};
+use super::context::{FamilyOrderer, SharedVariantCache, SolverContext, VariantSelectMode};
 use super::failure::{FailureReason, SolverStatus};
 use super::phase::ResolvePhase;
 use super::requirement::{Requirement, RequirementList};
@@ -53,17 +53,31 @@ impl Solver {
         repo: Rc<PackageRepo>,
         cache: SharedVariantCache,
     ) -> Result<Self, ScopeError> {
-        Self::new_with_options(package_requests, repo, cache, VariantSelectMode::default())
+        Self::new_with_options(
+            package_requests,
+            repo,
+            cache,
+            VariantSelectMode::default(),
+            None,
+        )
     }
 
-    /// Create a solver with full control over both the shared cache and the
-    /// variant-select mode. Use this when you need `intersection_priority`
-    /// or when wiring rez's `config.variant_select_mode` through.
+    /// Create a solver with full control over the shared cache, the
+    /// variant-select mode, and the pluggable package orderer. Use this
+    /// when you need `intersection_priority`, a custom
+    /// [`FamilyOrderer`](super::context::FamilyOrderer), or when wiring
+    /// rez's `config` through.
+    ///
+    /// `package_order` is `None` for the default version-descending order.
+    /// When sharing `cache` across solves, the orderer (like the
+    /// variant-select mode) must be consistent — see
+    /// [`SolverContext::with_package_order`].
     pub fn new_with_options(
         package_requests: Vec<Requirement>,
         repo: Rc<PackageRepo>,
         cache: SharedVariantCache,
         variant_select_mode: VariantSelectMode,
+        package_order: Option<Rc<FamilyOrderer>>,
     ) -> Result<Self, ScopeError> {
         let request_list = RequirementList::new(package_requests);
 
@@ -71,7 +85,8 @@ impl Solver {
             |repo: Rc<PackageRepo>, request_list: RequirementList| -> Rc<SolverContext> {
                 Rc::new(
                     SolverContext::new_with_cache(repo, request_list, Rc::clone(&cache))
-                        .with_variant_select_mode(variant_select_mode),
+                        .with_variant_select_mode(variant_select_mode)
+                        .with_package_order(package_order.clone()),
                 )
             };
 
@@ -285,6 +300,25 @@ mod tests {
         solver
     }
 
+    /// Solve with a pluggable package orderer (issue: package-orderer plugin).
+    fn solve_with_orderer(
+        repo: PackageRepo,
+        requests: &[&str],
+        orderer: Rc<crate::rez_solver::FamilyOrderer>,
+    ) -> Solver {
+        let reqs = requests.iter().map(|s| Requirement::parse(s)).collect();
+        let mut solver = Solver::new_with_options(
+            reqs,
+            Rc::new(repo),
+            crate::rez_solver::make_shared_cache(),
+            crate::rez_solver::VariantSelectMode::default(),
+            Some(orderer),
+        )
+        .expect("solver construction");
+        solver.solve();
+        solver
+    }
+
     fn resolved_set(solver: &Solver) -> Vec<(String, String)> {
         let mut out: Vec<(String, String)> = solver
             .resolved_packages()
@@ -306,18 +340,20 @@ mod tests {
         let calls: Rc<RefCell<Vec<String>>> = Rc::new(RefCell::new(Vec::new()));
         let calls_inner = Rc::clone(&calls);
 
-        let repo = crate::rez_solver::PackageRepo::with_loader(Box::new(move |name: &str, _hint: Option<&rer_version::VersionRange>| {
-            calls_inner.borrow_mut().push(name.to_string());
-            match name {
-                "app" => vec![("1.0".to_string(), pkg(&["lib-2"], &[]))],
-                "lib" => vec![
-                    ("1.0".to_string(), pkg(&[], &[])),
-                    ("2.0".to_string(), pkg(&[], &[])),
-                ],
-                "unrelated" => vec![("1.0".to_string(), pkg(&[], &[]))],
-                _ => Vec::new(),
-            }
-        }));
+        let repo = crate::rez_solver::PackageRepo::with_loader(Box::new(
+            move |name: &str, _hint: Option<&rer_version::VersionRange>| {
+                calls_inner.borrow_mut().push(name.to_string());
+                match name {
+                    "app" => vec![("1.0".to_string(), pkg(&["lib-2"], &[]))],
+                    "lib" => vec![
+                        ("1.0".to_string(), pkg(&[], &[])),
+                        ("2.0".to_string(), pkg(&[], &[])),
+                    ],
+                    "unrelated" => vec![("1.0".to_string(), pkg(&[], &[]))],
+                    _ => Vec::new(),
+                }
+            },
+        ));
 
         let reqs = vec![Requirement::parse("app")];
         let mut solver = Solver::new(reqs, Rc::new(repo)).expect("solver construction");
@@ -344,15 +380,17 @@ mod tests {
 
         // A diamond: app -> lib & util; util -> lib. lib is reached twice
         // but the loader must only be invoked once.
-        let repo = crate::rez_solver::PackageRepo::with_loader(Box::new(move |name: &str, _hint: Option<&rer_version::VersionRange>| {
-            calls_inner.borrow_mut().push(name.to_string());
-            match name {
-                "app" => vec![("1.0".into(), pkg(&["lib", "util"], &[]))],
-                "util" => vec![("1.0".into(), pkg(&["lib"], &[]))],
-                "lib" => vec![("1.0".into(), pkg(&[], &[]))],
-                _ => Vec::new(),
-            }
-        }));
+        let repo = crate::rez_solver::PackageRepo::with_loader(Box::new(
+            move |name: &str, _hint: Option<&rer_version::VersionRange>| {
+                calls_inner.borrow_mut().push(name.to_string());
+                match name {
+                    "app" => vec![("1.0".into(), pkg(&["lib", "util"], &[]))],
+                    "util" => vec![("1.0".into(), pkg(&["lib"], &[]))],
+                    "lib" => vec![("1.0".into(), pkg(&[], &[]))],
+                    _ => Vec::new(),
+                }
+            },
+        ));
 
         let reqs = vec![Requirement::parse("app")];
         let mut solver = Solver::new(reqs, Rc::new(repo)).expect("solver construction");
@@ -444,7 +482,9 @@ mod tests {
     fn test_loader_empty_means_missing_family() {
         // The loader returns no entries for an unknown name; the solver
         // treats that as a missing family (failed resolve), not a panic.
-        let repo = crate::rez_solver::PackageRepo::with_loader(Box::new(|_: &str, _: Option<&rer_version::VersionRange>| Vec::new()));
+        let repo = crate::rez_solver::PackageRepo::with_loader(Box::new(
+            |_: &str, _: Option<&rer_version::VersionRange>| Vec::new(),
+        ));
         let reqs = vec![Requirement::parse("doesnotexist")];
         let solver = Solver::new(reqs, Rc::new(repo));
         // Either Solver::new returns a ScopeError or the solve fails;
@@ -456,6 +496,94 @@ mod tests {
                 assert_ne!(solver.status(), SolverStatus::Solved);
             }
         }
+    }
+
+    // --- package-orderer plugin -----------------------------------------
+
+    #[test]
+    fn test_orderer_reverses_preference() {
+        // Default order prefers the highest version. An orderer that
+        // returns versions lowest-first flips that — the solver should
+        // resolve foo-1.0, not foo-3.0.
+        let r = repo(vec![(
+            "foo",
+            vec![
+                ("1.0", pkg(&[], &[])),
+                ("2.0", pkg(&[], &[])),
+                ("3.0", pkg(&[], &[])),
+            ],
+        )]);
+        let orderer: Rc<crate::rez_solver::FamilyOrderer> =
+            Rc::new(|_family: &str, versions: &[&str]| {
+                let mut v: Vec<String> = versions.iter().map(|s| s.to_string()).collect();
+                v.sort(); // ascending — lowest version most preferred
+                v
+            });
+        let solver = solve_with_orderer(r, &["foo"], orderer);
+        assert_eq!(solver.status(), SolverStatus::Solved);
+        assert_eq!(resolved_set(&solver), vec![("foo".into(), "1.0".into())]);
+    }
+
+    #[test]
+    fn test_orderer_pins_a_version() {
+        // An orderer that puts "2.0" first makes the solver resolve
+        // foo-2.0 even though 3.0 exists.
+        let r = repo(vec![(
+            "foo",
+            vec![
+                ("1.0", pkg(&[], &[])),
+                ("2.0", pkg(&[], &[])),
+                ("3.0", pkg(&[], &[])),
+            ],
+        )]);
+        let orderer: Rc<crate::rez_solver::FamilyOrderer> =
+            Rc::new(|_family: &str, versions: &[&str]| {
+                let mut v: Vec<String> = vec!["2.0".to_string()];
+                v.extend(
+                    versions
+                        .iter()
+                        .filter(|s| **s != "2.0")
+                        .map(|s| s.to_string()),
+                );
+                v
+            });
+        let solver = solve_with_orderer(r, &["foo"], orderer);
+        assert_eq!(resolved_set(&solver), vec![("foo".into(), "2.0".into())]);
+    }
+
+    #[test]
+    fn test_orderer_partial_output_no_panic() {
+        // An orderer that names only one version must not panic — the
+        // omitted versions sink to the bottom. With only "1.0" named,
+        // 1.0 is most preferred → resolved.
+        let r = repo(vec![(
+            "foo",
+            vec![
+                ("1.0", pkg(&[], &[])),
+                ("2.0", pkg(&[], &[])),
+                ("3.0", pkg(&[], &[])),
+            ],
+        )]);
+        let orderer: Rc<crate::rez_solver::FamilyOrderer> =
+            Rc::new(|_family: &str, _versions: &[&str]| vec!["1.0".to_string()]);
+        let solver = solve_with_orderer(r, &["foo"], orderer);
+        assert_eq!(resolved_set(&solver), vec![("foo".into(), "1.0".into())]);
+    }
+
+    #[test]
+    fn test_no_orderer_prefers_highest() {
+        // Control: with no orderer, the default order resolves the
+        // highest version. Guards the default rank branch.
+        let r = repo(vec![(
+            "foo",
+            vec![
+                ("1.0", pkg(&[], &[])),
+                ("2.0", pkg(&[], &[])),
+                ("3.0", pkg(&[], &[])),
+            ],
+        )]);
+        let solver = solve(r, &["foo"]);
+        assert_eq!(resolved_set(&solver), vec![("foo".into(), "3.0".into())]);
     }
 
     #[test]

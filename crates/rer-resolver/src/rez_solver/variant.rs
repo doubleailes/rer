@@ -226,6 +226,12 @@ pub struct PackageEntry {
     variants: Vec<Rc<PackageVariant>>,
     /// Whether `variants` is in rez's preferred (descending key) order.
     sorted: bool,
+    /// This version's rank in the family's preference order — 0 is the
+    /// most-preferred version. Computed once per family in
+    /// [`PackageVariantList::new`] (default: version-descending; or via
+    /// the pluggable [`FamilyOrderer`](super::context::FamilyOrderer)).
+    /// `PackageVariantSlice::sort_versions` sorts by this.
+    order_rank: usize,
 }
 
 impl PackageEntry {
@@ -278,11 +284,13 @@ impl PackageEntry {
             version: self.version.clone(),
             variants: self.variants[..nvariants].to_vec(),
             sorted: true,
+            order_rank: self.order_rank,
         };
         let next_entry = PackageEntry {
             version: self.version.clone(),
             variants: self.variants[nvariants..].to_vec(),
             sorted: true,
+            order_rank: self.order_rank,
         };
         Some((entry, next_entry))
     }
@@ -334,6 +342,41 @@ fn variant_sort_key(variant: &PackageVariant, ctx: &SolverContext) -> VariantKey
 // PackageVariantList — every variant of a family (cached per family)
 // ---------------------------------------------------------------------------
 
+/// Turn a [`FamilyOrderer`](super::context::FamilyOrderer)'s output into a
+/// `version_str -> rank` map (0 = most preferred). This is the single
+/// enforcement point for the orderer's advisory contract — a misbehaving
+/// orderer can never panic the solver:
+///
+/// - A version named in `ordered` keeps its **first-seen** position as its
+///   rank (a duplicate in `ordered` uses the first occurrence).
+/// - A version in `input` the orderer **omitted** sinks to the bottom — it
+///   gets a rank worse than every named version, ties broken by `input`
+///   order (deterministic).
+/// - A version in `ordered` **not in `input`** is ignored.
+///
+/// Every `input` version ends up with exactly one rank.
+fn build_rank_map(input: &[&str], ordered: Vec<String>) -> FxHashMap<String, usize> {
+    let input_set: FxHashSet<&str> = input.iter().copied().collect();
+    let mut ranks: FxHashMap<String, usize> = FxHashMap::default();
+    ranks.reserve(input.len());
+    let mut next_rank = 0usize;
+    // Named-by-the-orderer versions, in the orderer's order.
+    for v in &ordered {
+        if input_set.contains(v.as_str()) && !ranks.contains_key(v.as_str()) {
+            ranks.insert(v.clone(), next_rank);
+            next_rank += 1;
+        }
+    }
+    // Omitted versions sink to the bottom, keeping input order.
+    for v in input {
+        if !ranks.contains_key(*v) {
+            ranks.insert((*v).to_string(), next_rank);
+            next_rank += 1;
+        }
+    }
+    ranks
+}
+
 /// One version of a family, whose `PackageEntry` (parsed requirements) is
 /// materialised lazily on first access.
 #[derive(Debug)]
@@ -341,6 +384,9 @@ struct LazyEntry {
     version: RerVersion,
     /// The repository key for this version, used to look its data back up.
     version_str: String,
+    /// Preference rank for this version — 0 is most preferred. Stamped
+    /// onto the `PackageEntry` built from this `LazyEntry`.
+    order_rank: usize,
     /// `None` until the version is first touched by a range intersection;
     /// thereafter the built `Rc<PackageEntry>` — unsorted, and shared (by
     /// `Rc`) with every slice that intersects this version.
@@ -390,11 +436,37 @@ impl PackageVariantList {
                 LazyEntry {
                     version,
                     version_str: version_str.clone(),
+                    order_rank: 0, // assigned below
                     entry: RefCell::new(None),
                 }
             })
             .collect();
         entries.sort_by(|a, b| a.version.cmp(&b.version));
+
+        // Assign preference ranks (`order_rank` 0 = most preferred). The
+        // orderer is (re-)invoked on every (re)build of this list — including
+        // the widened-range reload path of issue #92 — so ranks are always
+        // recomputed wholesale; no stale ranks survive.
+        match &ctx.package_order {
+            None => {
+                // Default — rez's `SortedOrder(descending=True)`: highest
+                // version most preferred. `entries` is ascending, so the
+                // rank is the reversed index.
+                let n = entries.len();
+                for (i, e) in entries.iter_mut().enumerate() {
+                    e.order_rank = n - 1 - i;
+                }
+            }
+            Some(orderer) => {
+                let version_strs: Vec<&str> =
+                    entries.iter().map(|e| e.version_str.as_str()).collect();
+                let ordered = orderer(package_name, &version_strs);
+                let ranks = build_rank_map(&version_strs, ordered);
+                for e in entries.iter_mut() {
+                    e.order_rank = ranks[e.version_str.as_str()];
+                }
+            }
+        }
 
         Some(PackageVariantList {
             package_name: Name::from(package_name),
@@ -420,6 +492,7 @@ impl PackageVariantList {
                     version: lazy.version.clone(),
                     variants: build_variants(&self.package_name, &lazy.version, data),
                     sorted: false,
+                    order_rank: lazy.order_rank,
                 })
             });
             out.push(Rc::clone(built));
@@ -515,7 +588,7 @@ pub struct PackageVariantSlice {
     entries: Vec<Rc<PackageEntry>>,
     /// Families already extracted from this slice as common requirements.
     extracted_fams: FxHashSet<Name>,
-    /// Whether `entries` is version-sorted (descending).
+    /// Whether `entries` is in preference order (`sort_versions` applied).
     sorted: bool,
     // Lazily-computed, entries-derived caches.
     len_cache: OnceCell<usize>,
@@ -694,6 +767,7 @@ impl PackageVariantSlice {
                     version: entry.version.clone(),
                     variants: kept,
                     sorted: entry.sorted,
+                    order_rank: entry.order_rank,
                 }));
             } else {
                 // Unchanged — share the entry rather than deep-cloning it.
@@ -831,12 +905,18 @@ impl PackageVariantSlice {
         )
     }
 
-    /// Sort entries by version, descending. Idempotent.
+    /// Sort entries into the family's preference order — most-preferred
+    /// version first. By default that is version-descending (rez's
+    /// `SortedOrder`); with a pluggable
+    /// [`FamilyOrderer`](super::context::FamilyOrderer) it is whatever
+    /// order that orderer produced. The preference is baked into each
+    /// entry's `order_rank` (0 = most preferred) by
+    /// [`PackageVariantList::new`]. Idempotent.
     pub fn sort_versions(&mut self) {
         if self.sorted {
             return;
         }
-        self.entries.sort_by(|a, b| b.version.cmp(&a.version));
+        self.entries.sort_by(|a, b| a.order_rank.cmp(&b.order_rank));
         self.sorted = true;
     }
 
@@ -983,6 +1063,57 @@ mod tests {
     use super::super::context::{FamilyMap, PackageRepo};
     use super::*;
     use crate::PackageData;
+
+    // --- build_rank_map (package-orderer plugin) ------------------------
+
+    fn ord(strs: &[&str]) -> Vec<String> {
+        strs.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn rank_map_permutation() {
+        // A clean reorder — ranks follow the orderer's output order.
+        let m = build_rank_map(&["1", "2", "3"], ord(&["3", "1", "2"]));
+        assert_eq!(m["3"], 0);
+        assert_eq!(m["1"], 1);
+        assert_eq!(m["2"], 2);
+    }
+
+    #[test]
+    fn rank_map_omitted_versions_sink() {
+        // "2" is the only named version; "1" and "3" sink to the bottom
+        // in input order.
+        let m = build_rank_map(&["1", "2", "3"], ord(&["2"]));
+        assert_eq!(m["2"], 0);
+        assert_eq!(m["1"], 1);
+        assert_eq!(m["3"], 2);
+    }
+
+    #[test]
+    fn rank_map_unknown_versions_ignored() {
+        // "9" was never an input version — it's dropped, not ranked.
+        let m = build_rank_map(&["1", "2"], ord(&["9", "1", "2"]));
+        assert_eq!(m.len(), 2);
+        assert_eq!(m["1"], 0);
+        assert_eq!(m["2"], 1);
+    }
+
+    #[test]
+    fn rank_map_duplicate_uses_first_occurrence() {
+        let m = build_rank_map(&["1", "2"], ord(&["1", "1", "2"]));
+        assert_eq!(m["1"], 0);
+        assert_eq!(m["2"], 1);
+    }
+
+    #[test]
+    fn rank_map_empty_output_keeps_input_order() {
+        // An orderer that returns nothing → every version keeps input
+        // order, all ranked, no panic.
+        let m = build_rank_map(&["1", "2", "3"], ord(&[]));
+        assert_eq!(m["1"], 0);
+        assert_eq!(m["2"], 1);
+        assert_eq!(m["3"], 2);
+    }
 
     fn pkg(requires: &[&str], variants: &[&[&str]]) -> PackageData {
         PackageData {

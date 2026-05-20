@@ -38,8 +38,29 @@ pub type FamilyMap = HashMap<String, PackageData>;
 ///
 /// `pyrer` builds one of these from a Python callable. See the load_family
 /// callback in `pyrer.solve()` for the Python-side contract.
-pub type FamilyLoader =
-    Box<dyn Fn(&str, Option<&VersionRange>) -> Vec<(String, PackageData)>>;
+pub type FamilyLoader = Box<dyn Fn(&str, Option<&VersionRange>) -> Vec<(String, PackageData)>>;
+
+/// A pluggable package orderer. Given a family name and the version
+/// strings of every candidate, returns those strings reordered
+/// **most-preferred-first** — the order the solver should try them in.
+///
+/// `rer` defaults to rez's `SortedOrder(descending=True)` (highest
+/// version first) when no orderer is set. A host overrides that by
+/// supplying one of these — e.g. to order by PEP 440 semantics rather
+/// than rez's native alphanumeric-token comparison.
+///
+/// The contract is advisory and pyrer is defensive: a version present
+/// in the input but missing from the output sinks to the bottom
+/// (least preferred); a version in the output that wasn't in the input
+/// is ignored. The orderer is a *preference* function — it never
+/// changes whether a solve succeeds, only which solution is found
+/// first.
+///
+/// `pyrer` builds one of these from a registered `PackageOrderer`
+/// plugin. Wrapped in `Rc` so the `Solver` constructor's `build_ctx`
+/// closure can clone it cheaply (mirrors how the variant cache is
+/// shared).
+pub type FamilyOrderer = dyn Fn(&str, &[&str]) -> Vec<String>;
 
 /// Records which version-range was passed to the loader when a family was
 /// last loaded. Used by [`PackageRepo`] to decide whether a cached family
@@ -73,9 +94,7 @@ impl LoadedRange {
     fn widened_with(&self, hint: Option<&VersionRange>) -> LoadedRange {
         match (self, hint) {
             (LoadedRange::Unconstrained, _) | (_, None) => LoadedRange::Unconstrained,
-            (LoadedRange::Bounded(loaded), Some(want)) => {
-                LoadedRange::Bounded(loaded.union(want))
-            }
+            (LoadedRange::Bounded(loaded), Some(want)) => LoadedRange::Bounded(loaded.union(want)),
         }
     }
 }
@@ -202,11 +221,7 @@ impl PackageRepo {
     /// `iter_packages(range_=...)`). The repo tracks which range each
     /// family was loaded under and reloads (with a widened range) when a
     /// later request can't be served from the cache.
-    pub fn get_family(
-        &self,
-        name: &str,
-        hint: Option<&VersionRange>,
-    ) -> Option<Rc<FamilyMap>> {
+    pub fn get_family(&self, name: &str, hint: Option<&VersionRange>) -> Option<Rc<FamilyMap>> {
         // Cache hit + range covered → return directly.
         if let Some(entry) = self.families.borrow().get(name) {
             if entry.loaded_range.covers(hint) {
@@ -303,7 +318,6 @@ pub enum VariantSelectMode {
 /// and the variant cache. The cache is wrapped in `Rc<RefCell<…>>` so that it
 /// can be shared between solvers of the same repository — see
 /// [`SharedVariantCache`].
-#[derive(Debug)]
 pub struct SolverContext {
     /// The package repository, shared (never cloned per solve).
     pub repo: Rc<PackageRepo>,
@@ -312,10 +326,30 @@ pub struct SolverContext {
     /// rez's `config.variant_select_mode` — selects the variant ordering
     /// key. Defaults to `VersionPriority` to match rez out of the box.
     pub variant_select_mode: VariantSelectMode,
+    /// Optional pluggable package orderer (see [`FamilyOrderer`]). `None`
+    /// means the default version-descending order. When set, it decides
+    /// the per-family version preference the solver explores.
+    pub package_order: Option<Rc<FamilyOrderer>>,
     /// Per-family variant cache. Sharing it across solves of the same repo is
     /// the dominant single optimisation: it skips re-parsing every variant's
     /// requires every solve.
     cache: SharedVariantCache,
+}
+
+// Manual `Debug` — `Rc<FamilyOrderer>` (an `Rc<dyn Fn>`) is not `Debug`.
+impl std::fmt::Debug for SolverContext {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SolverContext")
+            .field("repo", &self.repo)
+            .field("request_list", &self.request_list)
+            .field("variant_select_mode", &self.variant_select_mode)
+            .field(
+                "package_order",
+                &self.package_order.as_ref().map(|_| "<set>"),
+            )
+            .field("cache", &self.cache)
+            .finish()
+    }
 }
 
 impl SolverContext {
@@ -329,6 +363,7 @@ impl SolverContext {
             repo,
             request_list,
             variant_select_mode: VariantSelectMode::default(),
+            package_order: None,
             cache: make_shared_cache(),
         }
     }
@@ -345,6 +380,7 @@ impl SolverContext {
             repo,
             request_list,
             variant_select_mode: VariantSelectMode::default(),
+            package_order: None,
             cache,
         }
     }
@@ -355,6 +391,21 @@ impl SolverContext {
     /// `PackageEntry.sorted` flag depends on the mode used to compute it.
     pub fn with_variant_select_mode(mut self, mode: VariantSelectMode) -> Self {
         self.variant_select_mode = mode;
+        self
+    }
+
+    /// Set this context's pluggable package orderer (see [`FamilyOrderer`]).
+    /// `None` keeps the default version-descending order. Chainable on the
+    /// builder-style constructors.
+    ///
+    /// Caveat — same shape as [`Self::with_variant_select_mode`]: a
+    /// [`SharedVariantCache`] reused across solves must use a **consistent**
+    /// orderer. A cached `PackageVariantList` bakes in orderer-specific
+    /// `order_rank` values; reusing it under a different orderer would
+    /// silently apply the stale ranking. `pyrer` is unaffected — it builds a
+    /// fresh cache per `solve()`.
+    pub fn with_package_order(mut self, orderer: Option<Rc<FamilyOrderer>>) -> Self {
+        self.package_order = orderer;
         self
     }
 
