@@ -120,23 +120,78 @@ def rand_package(r):
     return text
 
 
+YAML_SCALARS = [
+    "a", "foo bar", "1.2.0", "yes", "No", "on", "OFF", "true", "False", "~", "null", "Null", "",
+    "0", "-0", "+12", "1_000", "012", "0x1F", "0b11", "1:20", "1.5", "-.5", "1e5", "1.0e+5", ".inf",
+    "-.Inf", ".NaN", "2001-12-14", "2001-12-14 21:59:43.10 -5", "<<", "=", "'q'", "'it''s'",
+    '"esc \\t \\n \\x41 \\u00e9"', '"\\"', "a:b", "a #not comment", "x # comment", "-dash", "?q",
+    "foo-1.2+<2", "'yes'", '"1.5"', "http://x/y", "{root}/bin", "[1, 2]", "{a: 1}", "[]", "{}",
+    "[a, 'b', [c]]", "[a, b,]", "{a: [1, 2], b: x}",
+]
+
+
+def rand_yaml_value(r, indent, depth):
+    kind = r.choice(["scalar"] * 4 + (["seq", "map", "block"] if depth < 3 else ["block"]))
+    pad = " " * indent
+    if kind == "scalar":
+        return " " + r.choice(YAML_SCALARS)
+    if kind == "block":
+        head = r.choice(["|", ">", "|-", ">-", "|+", ">+"])
+        body = []
+        for _ in range(r.randint(0, 4)):
+            body.append(r.choice(["line one", "", "  more indented", "line two  ", "x: y", "# not a comment"]))
+        inner = " " * (indent + 2)
+        return " " + head + "".join("\n" + (inner + b if b else "") for b in body)
+    if kind == "seq":
+        seq_indent = indent + r.choice([0, 2]) if depth > 0 else indent
+        out = ""
+        for _ in range(r.randint(0, 3)):
+            if r.random() < 0.2:
+                out += "\n" + " " * seq_indent + "- k1:" + rand_yaml_value(r, seq_indent + 2, depth + 1) \
+                    + "\n" + " " * (seq_indent + 2) + "k2:" + rand_yaml_value(r, seq_indent + 2, depth + 1)
+            else:
+                out += "\n" + " " * seq_indent + "-" + rand_yaml_value(r, seq_indent + 2, depth + 1)
+        return out
+    out = ""
+    for _ in range(r.randint(0, 3)):
+        out += "\n" + pad + "  " + r.choice(["k", "x", "on", "2", "a b"]) + ":" + rand_yaml_value(r, indent + 2, depth + 1)
+    return out
+
+
+def rand_yaml(r):
+    lines = [r.choice(["", "---\n", "# comment\n"]) + "name: pkg", "version: '1.0'"]
+    for _ in range(r.randint(1, 8)):
+        if r.random() < 0.1:
+            lines.append(r.choice(["", "# comment", "   # indented comment"]))
+            continue
+        key = r.choice(["requires", "description", "variants", "tools", "x", "y", "uuid", "name", "on", "1"])
+        lines.append(key + ":" + rand_yaml_value(r, 0, 0) + r.choice(["", "", "  # trailing"]))
+    return "\n".join(lines) + r.choice(["\n", "", "\n\n"])
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--n", type=int, default=2000)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--keep", help="write generated packages here instead of a temp dir")
+    ap.add_argument("--format", choices=["py", "yaml"], default="py")
+    ap.add_argument("--clean", action="store_true",
+                    help="yaml: avoid scalars rer always refuses, to exercise the accepted path")
     args = ap.parse_args()
 
     r = random.Random(args.seed)
+    if args.clean:
+        refused = {"012", "0x1F", "0b11", "1:20", "2001-12-14", "2001-12-14 21:59:43.10 -5", "<<", "="}
+        YAML_SCALARS[:] = [x for x in YAML_SCALARS if x not in refused]
     root = args.keep or tempfile.mkdtemp(prefix="rer-fuzz-")
     counts = collections.Counter()
     blockers = []
     for i in range(args.n):
         d = os.path.join(root, "p%05d" % i)
         os.makedirs(d, exist_ok=True)
-        path = os.path.join(d, "package.py")
+        path = os.path.join(d, "package." + args.format)
         with open(path, "w", newline="") as f:
-            f.write(rand_package(r))
+            f.write(rand_package(r) if args.format == "py" else rand_yaml(r))
         outcome, reason, detail = compare_file(path)
         counts[outcome if outcome != "needs_python" else "needs_python:" + reason] += 1
         if outcome in ("MISMATCH", "rer_static_rez_error"):

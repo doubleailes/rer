@@ -1,0 +1,12 @@
+name: foo
+version: 1.2.0
+flag_yes: yes
+flag_off: Off
+int_us: 1_000
+float: 1.5
+exp: 1e5
+null_tilde: ~
+empty:
+neg_zero: -0
+inf: -.inf
+quoted_yes: 'yes'

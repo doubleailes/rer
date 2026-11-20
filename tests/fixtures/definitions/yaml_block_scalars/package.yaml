@@ -1,0 +1,14 @@
+name: foo
+lit: |
+  line one
+
+  line two
+folded: >-
+  a
+  b
+
+  c
+keep: |+
+  x
+
+after: 1
