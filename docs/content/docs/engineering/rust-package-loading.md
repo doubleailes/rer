@@ -101,13 +101,16 @@ disk, warm page cache, no memcached; mean of two runs (runs within 2%).
 | `pyrer.solve` excluding Python callbacks (solve + Rust loading) | 13.2 | 23.2 |
 | Post-solve rez Variant construction | 14.6 | 11.7 |
 | Rest of `ResolvedContext` | 2.4 | 2.1 |
-| Resolves solved (rez solver: 187) | 186 | 187 |
+| Resolves solved (rez solver: 187) | 186* | 187 |
 
 The Rust-loading share of the 23.2 s is inferred (≈ 10 s: 23.2 − 13.2),
 not measured separately. Caches are cleared before every resolve, so
 each of the 387,168 package loads in the run reads and parses its file.
 `num_loaded_packages` is identical in both modes on every request that
 solves in both.
+
+\* Measured before the `RerVersion` separator fix; with it, the
+`use_rer_solver` path also solves 187 (rez benchmark request #84).
 
 ## Wiring into rez
 

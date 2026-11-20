@@ -61,7 +61,11 @@ jobs:
       - name: 🔍 rez-vs-rer package definition differential
         run: |
           . .venv/bin/activate
-          pytest tests/test_definitions_differential.py tests/test_package_repository.py -q
+          pytest tests/test_definitions_differential.py tests/test_package_repository.py tests/test_range_hint.py -q
+      - name: 🔁 rer range strings round-trip through rez
+        run: |
+          . .venv/bin/activate
+          python scripts/check_range_roundtrip.py --n 5000
   bench:
     runs-on: ubuntu-latest
     steps:
