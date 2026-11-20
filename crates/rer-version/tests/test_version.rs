@@ -39,3 +39,34 @@ fn test_compare_version() {
     let v2: RerVersion = "1.0.0a".try_into().unwrap();
     assert!(v1 == v2);
 }
+
+// rez's `Version.__eq__` / `__lt__` compare tokens only; separators are
+// cosmetic ("the version ``1.0.0`` is equivalent to ``1-0-0``").
+#[test]
+fn test_separators_do_not_affect_equality_or_order() {
+    use rer_version::{RerVersion, VersionRange};
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+
+    let dash = RerVersion::try_from("7-1.1.0").unwrap();
+    let dot = RerVersion::try_from("7.1.1.0").unwrap();
+    assert_eq!(dash, dot);
+    assert_eq!(dash.cmp(&dot), std::cmp::Ordering::Equal);
+    let h = |v: &RerVersion| {
+        let mut s = DefaultHasher::new();
+        v.hash(&mut s);
+        s.finish()
+    };
+    assert_eq!(h(&dash), h(&dot));
+    // Display keeps the original separators.
+    assert_eq!(dash.to_string(), "7-1.1.0");
+
+    // Rez benchmark request #84: "7-1.1.0" minus "==7.1.1.0" must not
+    // produce a segment whose bounds are equal versions.
+    let r = VersionRange::parse("7-1.1.0")
+        .intersection(&VersionRange::parse("==7.1.1.0").inverse().unwrap())
+        .unwrap();
+    assert!(!r.contains(&dot));
+    assert!(r.contains(&RerVersion::try_from("7.1.1.0.vrayFix").unwrap()));
+    assert!(!r.to_string().contains("+<7.1.1.0"), "{r}");
+}

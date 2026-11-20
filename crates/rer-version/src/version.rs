@@ -241,10 +241,40 @@ fn test_bump_alpha_num() {
 pub struct RerVersion(Rc<RerVersionInner>);
 
 /// Token/separator representation behind a [`RerVersion`].
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+///
+/// Equality, ordering and hashing use `tokens` only, like rez's
+/// `Version.__eq__` / `__lt__`: separators are cosmetic, so `1.0.0` and
+/// `1-0-0` are the same version. `seps` only affects `Display`.
+#[derive(Debug, Clone)]
 struct RerVersionInner {
     tokens: Vec<AlphanumericVersionToken>,
     seps: Vec<char>,
+}
+
+impl PartialEq for RerVersionInner {
+    fn eq(&self, other: &Self) -> bool {
+        self.tokens == other.tokens
+    }
+}
+
+impl Eq for RerVersionInner {}
+
+impl PartialOrd for RerVersionInner {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for RerVersionInner {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.tokens.cmp(&other.tokens)
+    }
+}
+
+impl std::hash::Hash for RerVersionInner {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.tokens.hash(state);
+    }
 }
 impl RerVersion {
     /// # from_str
