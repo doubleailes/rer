@@ -38,13 +38,22 @@ page.
   `scripts/rez-patches/0001-rer-package-loader.patch` (config
   `use_rer_package_loader`).
 
-### Known issues
+### Fixed
 
-- The `version_range` string pyrer passes to a Python `load_family`
-  callback can be unparseable by rez (rez benchmark request #84:
-  `7-1.1.0+<7.1.1.0`), which fails that resolve through the existing
-  `load_family` path. The new `package_repository` path is not affected
-  (the range never becomes a string). Not fixed here.
+- **`RerVersion` compares by tokens only, like rez.** Equality, ordering
+  and hashing included the separators, so `7-1.1.0` sorted before
+  `7.1.1.0` where rez treats them as the same version. Two visible
+  effects: the `version_range` hint passed to Python `load_family`
+  callbacks could be a string rez rejects (rez benchmark request #84:
+  `7-1.1.0+<7.1.1.0` → "Invalid bound", failing the resolve through the
+  patched rez), and range membership could differ from rez for versions
+  differing only in separators (`<7.7` contained `7-7` in rer, not in
+  rez). Display still keeps the original separators. The rez benchmark
+  through the patched rez's `load_family` path is now 188/188 identical
+  to rez's own solver (was 187).
+- `scripts/check_range_roundtrip.py` checks that range strings rer
+  produces parse in rez with the same membership (0 failures over 17,000+
+  random non-empty ranges; 74 before the fix).
 
 ## [1.0.0-rc.3] — 2026-05-19
 
