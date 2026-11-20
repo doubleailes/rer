@@ -40,6 +40,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: true
       - uses: dtolnay/rust-toolchain@stable
       - uses: actions/setup-python@v5
         with:
@@ -50,12 +52,16 @@ jobs:
         run: |
           python -m venv .venv
           . .venv/bin/activate
-          pip install maturin pytest
+          pip install maturin pytest ./rez
           cd crates/rer-python && maturin develop
       - name: 🔍 Python differential tests
         run: |
           . .venv/bin/activate
           pytest tests/test_differential.py -v
+      - name: 🔍 rez-vs-rer package definition differential
+        run: |
+          . .venv/bin/activate
+          pytest tests/test_definitions_differential.py -q
   bench:
     runs-on: ubuntu-latest
     steps:
