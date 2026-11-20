@@ -61,7 +61,7 @@ jobs:
       - name: 🔍 rez-vs-rer package definition differential
         run: |
           . .venv/bin/activate
-          pytest tests/test_definitions_differential.py -q
+          pytest tests/test_definitions_differential.py tests/test_package_repository.py -q
   bench:
     runs-on: ubuntu-latest
     steps:
