@@ -10,6 +10,8 @@
 //! objects with the attribute surface a `rez.Variant` consumer expects
 //! (`name`, `version`, `variant_index`, `requires`, `uri`).
 
+mod definition;
+
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::PyType;
@@ -779,5 +781,6 @@ fn pyrer(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PackageData>()?;
     m.add_class::<ResolvedVariant>()?;
     m.add_class::<SolveResult>()?;
+    definition::register(m)?;
     Ok(())
 }
