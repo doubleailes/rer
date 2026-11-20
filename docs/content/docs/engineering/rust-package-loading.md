@@ -85,6 +85,30 @@ resolvers (in PyYAML's order) for scalars.
 A *blocker* is a file where rer returned data that differs from rez's,
 or where rer returned data and rez raised.
 
+## Profile: before and after
+
+`scripts/profile_rez_resolves.py`, the 188 requests of rez's benchmark
+against its 18,226-package repo, `ResolvedContext` with
+`package_repository_manager.clear_caches()` before each resolve; local
+disk, warm page cache, no memcached; mean of two runs (runs within 2%).
+
+| Bucket (s) | `use_rer_solver` (before) | `+ use_rer_package_loader` (after) |
+|---|---:|---:|
+| **Wall** | **69.6** | **37.0** |
+| Python `load_family` (rez `iter_packages`, static parse, PackageData) | 39.3 | 0 |
+| — of which rez `iter_packages` | 30.0 | — |
+| — of which batched static parse | 5.7 | — |
+| `pyrer.solve` excluding Python callbacks (solve + Rust loading) | 13.2 | 23.2 |
+| Post-solve rez Variant construction | 14.6 | 11.7 |
+| Rest of `ResolvedContext` | 2.4 | 2.1 |
+| Resolves solved (rez solver: 187) | 186 | 187 |
+
+The Rust-loading share of the 23.2 s is inferred (≈ 10 s: 23.2 − 13.2),
+not measured separately. Caches are cleared before every resolve, so
+each of the 387,168 package loads in the run reads and parses its file.
+`num_loaded_packages` is identical in both modes on every request that
+solves in both.
+
 ## Wiring into rez
 
 `scripts/rez-patches/0001-rer-package-loader.patch` (for the patched rez
