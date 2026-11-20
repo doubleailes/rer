@@ -1,0 +1,20 @@
+[package]
+name = "rer-repository"
+version = { workspace = true }
+description = "rez filesystem package repository (discovery + definition loading) in pure Rust."
+edition = { workspace = true }
+repository = { workspace = true }
+readme = { workspace = true }
+authors = { workspace = true }
+license-file = { workspace = true }
+
+[lib]
+name = "rer_repository"
+
+[dependencies]
+rer-package = { workspace = true }
+rer-version = { workspace = true }
+regex = { workspace = true }
+rayon = { workspace = true }
+
+[dev-dependencies]

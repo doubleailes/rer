@@ -1,0 +1,2 @@
+name = 'oldfmt'
+requires = ['x']
