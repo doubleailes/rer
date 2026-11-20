@@ -11,6 +11,7 @@
 //! (`name`, `version`, `variant_index`, `requires`, `uri`).
 
 mod definition;
+mod repository;
 
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
@@ -523,6 +524,13 @@ fn parse_variant_select_mode(s: &str) -> PyResult<VariantSelectMode> {
 /// * `variant_select_mode` — either `"version_priority"` (default, rez's
 ///   default config) or `"intersection_priority"`. Mirrors rez's
 ///   `config.variant_select_mode`.
+/// * `package_repository` — Optional [`repository::PackageRepository`]:
+///   opt-in Rust-side package loading. Families are enumerated and package
+///   definitions loaded by rer; a family rer can't model is handed to
+///   `load_family`, a package rer can't load is handed to `load_package`.
+/// * `load_package` — Optional `Callable[[str, str], PackageData]` taking
+///   `(name, version)`; required with `package_repository` whenever a
+///   package needs rez's own loader.
 /// * `filters` — Optional `(filter_type, pattern)` tuples (reserved, ignored).
 /// * `max_iterations` — Optional iteration cap (reserved, ignored).
 ///
@@ -538,6 +546,8 @@ fn parse_variant_select_mode(s: &str) -> PyResult<VariantSelectMode> {
         *,
         load_family=None,
         variant_select_mode="version_priority",
+        package_repository=None,
+        load_package=None,
         filters=None, max_iterations=None,
     )
 )]
@@ -546,6 +556,8 @@ fn solve(
     packages: Option<Vec<PackageData>>,
     load_family: Option<Py<PyAny>>,
     variant_select_mode: &str,
+    package_repository: Option<Py<repository::PackageRepository>>,
+    load_package: Option<Py<PyAny>>,
     filters: Option<Vec<(String, String)>>,
     max_iterations: Option<u32>,
 ) -> PyResult<SolveResult> {
@@ -563,7 +575,26 @@ fn solve(
     // raises; checked after the solver finishes to surface the failure.
     let load_err: Rc<RefCell<Option<String>>> = Rc::new(RefCell::new(None));
 
-    let repo = if let Some(callback) = load_family {
+    let repo = if let Some(rust_repo) = package_repository {
+        // Opt-in Rust loading, with the Python callbacks as fallbacks.
+        let family_fallback = load_family.map(|callback| {
+            let takes_range = Python::with_gil(|py| callback_takes_range(py, &callback));
+            make_loader(callback, Rc::clone(&load_err), takes_range)
+        });
+        let loader = Python::with_gil(|py| {
+            repository::make_rust_loader(
+                rust_repo.get(),
+                family_fallback,
+                load_package.map(|c| c.clone_ref(py)),
+                Rc::clone(&load_err),
+            )
+        });
+        let lazy = PackageRepo::with_loader(loader);
+        for (name, fam) in initial_map {
+            lazy.insert_family(name, fam);
+        }
+        lazy
+    } else if let Some(callback) = load_family {
         // One-time signature inspection (issue #92): if the callback can
         // take a `version_range` argument, we pass the current solver
         // range as a rez-style string so the shim can pre-filter.
@@ -782,5 +813,6 @@ fn pyrer(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<ResolvedVariant>()?;
     m.add_class::<SolveResult>()?;
     definition::register(m)?;
+    repository::register(m)?;
     Ok(())
 }
