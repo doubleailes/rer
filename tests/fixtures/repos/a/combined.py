@@ -1,0 +1,2 @@
+name = 'combined'
+versions = ['1.0', '2.0']
