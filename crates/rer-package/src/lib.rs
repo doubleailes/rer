@@ -35,6 +35,8 @@
 //! - Missing `name` or `version`
 //! - Anything else the scanner doesn't explicitly accept
 
+pub mod definition;
+
 /// The four solver-relevant fields extracted from a `package.py`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PackageInfo {
