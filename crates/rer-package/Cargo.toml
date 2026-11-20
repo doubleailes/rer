@@ -22,3 +22,7 @@ name = "rer_package"
 # the rez shim's serial Python file-open loop (~3 s on a typical
 # 132-package Fortiche resolve).
 rayon = { workspace = true }
+# Event stream for `package.yaml` (definition::yaml). Scalars are resolved
+# by rer with PyYAML's YAML 1.1 rules, not by this crate.
+yaml-rust2 = { workspace = true }
+regex = { workspace = true }

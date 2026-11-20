@@ -1,0 +1,11 @@
+name: foo
+tests:
+  unit:
+    command: pytest
+    requires: [pytest-3, 'mock']
+help:
+- [Docs, 'http://x']
+seq_of_maps:
+- a: 1
+  b: two
+- {c: 3}

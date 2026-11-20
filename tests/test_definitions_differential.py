@@ -74,3 +74,14 @@ def test_fuzz(tmp_path):
         path.write_text(fuzz_definitions.rand_package(r), newline="")
         outcome, _, detail = compare_file(str(path))
         assert outcome not in BLOCKERS, (path.read_text(), detail)
+
+
+def test_fuzz_yaml(tmp_path):
+    r = random.Random(0)
+    for i in range(300):
+        d = tmp_path / ("y%03d" % i)
+        d.mkdir()
+        path = d / "package.yaml"
+        path.write_text(fuzz_definitions.rand_yaml(r), newline="")
+        outcome, _, detail = compare_file(str(path))
+        assert outcome not in BLOCKERS, (path.read_text(), detail)

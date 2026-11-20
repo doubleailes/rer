@@ -29,6 +29,9 @@ rer-package = { path = "crates/rer-package", version = "1.0.0-rc.3" }
 # Rayon powers the batched `parse_static_packages_py` API (#94). Honours
 # `RAYON_NUM_THREADS` for environments that need to cap the pool size.
 rayon = "1"
+# YAML event parser for `package.yaml` loading in rer-package. Only the
+# event stream is used; scalar resolution follows PyYAML (YAML 1.1) in rer.
+yaml-rust2 = { version = "0.13", default-features = false }
 pyo3 = { version = "0.23.5", features = ["extension-module"] }
 # `mimalloc` is wired into the bench binary as a `#[global_allocator]`.
 # Callgrind shows ~33 % of cycles in libc malloc/free; mimalloc has measurably
