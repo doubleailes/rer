@@ -12,6 +12,40 @@ page.
 
 ## [Unreleased]
 
+### Added
+
+- **Full package-definition loading in Rust** (`rer_package::definition`):
+  `load_package_py` / `load_package_yaml` reproduce the data dict rez's
+  `serialise.load_py` / `load_yaml` returns — every key, key order,
+  value, and `SourceCode` state for `commands()`-style and `@late`
+  functions — or return an explicit `NeedsPython { reason, line, detail }`.
+  Never guesses. Additive: the four-field `parse_static_package_py` is
+  unchanged.
+- **New crate `rer-repository`**: rez's filesystem repository discovery
+  (families, version dirs, `.ignore` / `.building` markers,
+  `package_filenames`, first-path-wins) and `_load` post-processing, with
+  per-family / per-package hand-back to rez.
+- **pyrer**: `PackageRepository`, `load_package_definition`,
+  `load_package_file`, `SourceCodeData`, `NeedsPython`, and opt-in
+  `solve(..., package_repository=..., load_package=...)`. Without
+  `package_repository`, `solve()` behaves exactly as before.
+- **Differential tooling**: `scripts/diff_definitions.py`,
+  `scripts/diff_repository.py`, `scripts/fuzz_definitions.py`,
+  `scripts/crossversion_definitions.py`, `scripts/profile_rez_resolves.py`,
+  and `tests/test_definitions_differential.py` /
+  `tests/test_package_repository.py` (CI installs the `rez` submodule).
+- **rez-side patch** for the patched rez in
+  `scripts/rez-patches/0001-rer-package-loader.patch` (config
+  `use_rer_package_loader`).
+
+### Known issues
+
+- The `version_range` string pyrer passes to a Python `load_family`
+  callback can be unparseable by rez (rez benchmark request #84:
+  `7-1.1.0+<7.1.1.0`), which fails that resolve through the existing
+  `load_family` path. The new `package_repository` path is not affected
+  (the range never becomes a string). Not fixed here.
+
 ## [1.0.0-rc.3] — 2026-05-19
 
 First release candidate of the 1.0 line. Closes the integration
