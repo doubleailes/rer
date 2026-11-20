@@ -1,0 +1,303 @@
+From 76194b0c319566b54649cdef435173e5b07c6a99 Mon Sep 17 00:00:00 2001
+From: rer integration <noreply@anthropic.com>
+Date: Fri, 20 Nov 2026 21:38:15 +0000
+Subject: [PATCH] Opt-in Rust package loading via pyrer.PackageRepository
+
+New config `use_rer_package_loader` (default False; requires
+use_rer_solver). When on, and the resolve has no package filter or user
+package-load callback, and every packages_path entry is a filesystem
+repository:
+
+- RerSolver passes a per-process pyrer.PackageRepository to
+  pyrer.solve; rez's loader remains the fallback per family
+  (`load_family`) and per package (`load_package`).
+- package_load_callback is still fired once per loaded package, so
+  ResolvedContext.num_loaded_packages keeps counting.
+- Resolved packages are built from the repository resource pyrer found
+  them in, instead of re-listing the family through get_package().
+- FileSystemPackageResource._load first tries pyrer.load_package_file
+  (rez's own loader for anything pyrer hands back, or files written by
+  this process); SourceCode values are rebuilt via __setstate__.
+- package_repository_manager.clear_caches() also clears pyrer's caches.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_014ZoN1vS65gdmG8gnnyUUem
+---
+ src/rez/config.py     |   1 +
+ src/rez/rer_solver.py | 198 +++++++++++++++++++++++++++++++++++++++++-
+ src/rez/rezconfig.py  |   9 ++
+ 3 files changed, 206 insertions(+), 2 deletions(-)
+
+diff --git a/src/rez/config.py b/src/rez/config.py
+index 83c7a5d..2656629 100644
+--- a/src/rez/config.py
++++ b/src/rez/config.py
+@@ -470,6 +470,7 @@ config_schema = Schema({
+     "color_enabled":                                ForceOrBool,
+     "resolve_caching":                              Bool,
+     "use_rer_solver":                               Bool,
++    "use_rer_package_loader":                       Bool,
+     "cache_package_files":                          Bool,
+     "cache_listdir":                                Bool,
+     "prune_failed_graph":                           Bool,
+diff --git a/src/rez/rer_solver.py b/src/rez/rer_solver.py
+index c20bdb5..5334918 100644
+--- a/src/rez/rer_solver.py
++++ b/src/rez/rer_solver.py
+@@ -92,6 +92,128 @@ def _supports_batched_static_parser(pyrer: Any) -> bool:
+     return hasattr(pyrer, "parse_static_packages_py")
+ 
+ 
++def _supports_package_repository(pyrer: Any) -> bool:
++    """True if pyrer can list and load filesystem repositories itself."""
++    return hasattr(pyrer, "PackageRepository") and hasattr(pyrer, "load_package_file")
++
++
++# One pyrer.PackageRepository per (paths, settings), kept for the process
++# like rez's own repository caches; cleared with them (see _install_hooks).
++_rer_repositories: dict = {}
++
++
++def _filesystem_locations(paths: list[str]) -> list[str] | None:
++    """Plain locations if every path is a filesystem repository, else None."""
++    out = []
++    for path in paths:
++        if "@" in path:
++            repo_type, location = path.split("@", 1)
++            if repo_type != "filesystem":
++                return None
++            out.append(location)
++        else:
++            out.append(path)
++    return out
++
++
++def _rer_package_repository(pyrer: Any, paths: list[str]) -> Any | None:
++    from rez.config import config
++
++    if not getattr(config, "use_rer_package_loader", False):
++        return None
++    if not _supports_package_repository(pyrer):
++        return None
++    locations = _filesystem_locations(paths)
++    if locations is None:
++        return None
++    _install_hooks(pyrer)
++    fs = config.plugins.package_repository.filesystem
++    key = (tuple(locations), tuple(fs.package_filenames),
++           bool(config.allow_unversioned_packages),
++           bool(fs.check_package_definition_files))
++    repo = _rer_repositories.get(key)
++    if repo is None:
++        repo = pyrer.PackageRepository(
++            locations,
++            package_filenames=list(fs.package_filenames),
++            allow_unversioned_packages=bool(config.allow_unversioned_packages),
++            check_package_definition_files=bool(fs.check_package_definition_files),
++        )
++        _rer_repositories[key] = repo
++    return repo
++
++
++def _only_counts_loads(callback: Callable | None) -> bool:
++    """True if ``callback`` is None, or is ResolvedContext's internal
++    ``_package_load_callback`` wrapping no user callback (it then only
++    increments ``num_loaded_packages`` and ignores its argument)."""
++    if callback is None:
++        return True
++    code = getattr(callback, "__code__", None)
++    if code is None or code.co_name != "_package_load_callback" \
++            or "package_load_callback" not in code.co_freevars:
++        return False
++    cell = callback.__closure__[code.co_freevars.index("package_load_callback")]
++    return cell.cell_contents is None
++
++
++_hooks_installed = False
++
++
++def _install_hooks(pyrer: Any) -> None:
++    """Route rez's filesystem definition loading through pyrer (falling
++    back to rez's loader per file), and clear pyrer's caches with rez's."""
++    global _hooks_installed
++    if _hooks_installed:
++        return
++    _hooks_installed = True
++
++    import os
++    from rez import serialise
++    from rez.config import config
++    from rez.package_repository import PackageRepositoryManager
++    from rez.utils.sourcecode import SourceCode
++    from rezplugins.package_repository import filesystem as fs_plugin
++
++    original_load = fs_plugin.FileSystemPackageResource._load
++
++    def _to_rez(data: dict, filepath: str) -> dict:
++        for key, value in data.items():
++            if isinstance(value, pyrer.SourceCodeData):
++                sc = SourceCode.__new__(SourceCode)
++                sc.__setstate__({
++                    "source": value.source,
++                    "filepath": filepath,
++                    "funcname": value.funcname,
++                    "eval_as_function": value.eval_as_function,
++                    "decorators": value.decorators,
++                })
++                data[key] = sc
++        return data
++
++    def _load(self):
++        if getattr(config, "use_rer_package_loader", False):
++            filepath = self.filepath
++            if filepath is not None:
++                realpath = os.path.realpath(filepath)
++                if realpath not in serialise.file_cache:
++                    data = pyrer.load_package_file(realpath, self.file_format.extension)
++                    if isinstance(data, dict):
++                        return _to_rez(data, realpath)
++        return original_load(self)
++
++    fs_plugin.FileSystemPackageResource._load = _load
++
++    original_clear = PackageRepositoryManager.clear_caches
++
++    def clear_caches(self) -> None:
++        original_clear(self)
++        for repo in _rer_repositories.values():
++            repo.clear_caches()
++
++    PackageRepositoryManager.clear_caches = clear_caches
++
++
+ class RerSolver:
+     """A :class:`rez.solver.Solver`-compatible front-end that delegates the
+     resolve to :func:`pyrer.solve`.
+@@ -144,6 +266,7 @@ class RerSolver:
+         self._resolved_ephemerals: list[Requirement] | None = None
+         self._failure_description: str = ""
+         self._num_iterations: int = 0
++        self._rer_repo: Any = None
+ 
+     @property
+     def status(self) -> SolverStatus:
+@@ -223,7 +346,26 @@ class RerSolver:
+             mode = getattr(config, "variant_select_mode", None) \
+                 or "version_priority"
+ 
+-            if _supports_load_family(pyrer):
++            rer_repo = None
++            if not self.package_filter and \
++                    _only_counts_loads(self.package_load_callback):
++                rer_repo = _rer_package_repository(pyrer, self.package_paths)
++
++            self._rer_repo = rer_repo
++            if rer_repo is not None:
++                before = rer_repo.stats()
++                result = pyrer.solve(
++                    request_strs,
++                    None,
++                    load_family=lambda name, version_range=None:
++                        self._load_family(pyrer, name, version_range),
++                    package_repository=rer_repo,
++                    load_package=lambda name, version:
++                        self._load_package(pyrer, name, version),
++                    variant_select_mode=mode,
++                )
++                self._count_rer_loads(before, rer_repo.stats())
++            elif _supports_load_family(pyrer):
+                 result = pyrer.solve(
+                     request_strs,
+                     None,
+@@ -261,6 +403,27 @@ class RerSolver:
+             "backend": "pyrer",
+         }
+ 
++    def _load_package(self, pyrer: Any, name: str, version: str) -> Any:
++        """``load_package`` fallback for pyrer.PackageRepository: one
++        package pyrer handed back (dynamic definition, late-bound requires,
++        ...) is loaded by rez."""
++        pkg = get_package(name, version, paths=self.package_paths)
++        if pkg is None:
++            raise RezSystemError("package %s-%s not found" % (name, version))
++        return _make_package_data_slow(pyrer, pkg, str(pkg.version))
++
++    def _count_rer_loads(self, before: dict, after: dict) -> None:
++        """Fire ``package_load_callback`` once per package pyrer loaded, so
++        ``ResolvedContext.num_loaded_packages`` keeps counting (only used
++        when the callback ignores its argument, see _only_counts_loads)."""
++        if self.package_load_callback is None:
++            return
++        n = after["packages_rust"] - before["packages_rust"]
++        n += sum(after["packages_python"].values()) - \
++            sum(before["packages_python"].values())
++        for _ in range(n):
++            self.package_load_callback(None)
++
+     def _load_family(self, pyrer: Any, name: str,
+                      version_range: str | None = None) -> list[Any]:
+         """Lazy ``load_family`` callback fed to ``pyrer.solve``.
+@@ -363,8 +526,39 @@ class RerSolver:
+                 or "rer solver reported status %r" % status_str
+             )
+ 
++    def _rer_package(self, name: str, version: str) -> Package | None:
++        """The rez Package for a package pyrer loaded, built from the
++        repository pyrer found it in (first path wins, as in
++        ``get_package``) without re-listing the family."""
++        from rez.package_repository import package_repository_manager
++        from rez.packages import Package
++        from rezplugins.package_repository.filesystem import \
++            FileSystemPackageResource
++
++        found = self._rer_repo.iter_packages(name, "==" + version)
++        if not isinstance(found, list) or len(found) != 1:
++            return None
++        filepath = found[0][2]
++        if filepath is None:
++            return None
++        import os
++        location = os.path.dirname(os.path.dirname(os.path.dirname(filepath)))
++        locations = self._rer_repo.locations()
++        if location not in locations:
++            return None
++        path = self.package_paths[locations.index(location)]
++        repo = package_repository_manager.get_repository(path)
++        resource = repo.get_resource(FileSystemPackageResource.key,
++                                     location=repo.location,
++                                     name=name, version=version)
++        return Package(resource)
++
+     def _make_package_variant(self, rv: Any) -> PackageVariant:
+-        pkg = get_package(rv.name, rv.version, paths=self.package_paths)
++        pkg = None
++        if self._rer_repo is not None:
++            pkg = self._rer_package(rv.name, rv.version)
++        if pkg is None:
++            pkg = get_package(rv.name, rv.version, paths=self.package_paths)
+         if pkg is None:
+             raise RezSystemError(
+                 "rer solver resolved package %s-%s, but it could not be "
+diff --git a/src/rez/rezconfig.py b/src/rez/rezconfig.py
+index ef710e7..761f795 100644
+--- a/src/rez/rezconfig.py
++++ b/src/rez/rezconfig.py
+@@ -409,6 +409,15 @@ variant_select_mode = "version_priority"
+ # of those should continue to use the default solver.
+ use_rer_solver = False
+ 
++# When ``use_rer_solver`` is enabled, also let ``pyrer`` (>= the release that
++# ships ``pyrer.PackageRepository``) list filesystem package repositories and
++# load ``package.py`` / ``package.yaml`` definitions in Rust. Definitions
++# that need Python (``@early``, imports, anything not a literal) and layouts
++# pyrer doesn't model are still loaded by rez, per package or per family.
++# Not used for resolves with a package filter or a user package-load
++# callback, or for non-filesystem repositories.
++use_rer_package_loader = False
++
+ # One or more filters can be listed, each with a list of
+ # exclusion and inclusion rules. These filters are applied to each package
+ # during a resolve, and if any filter excludes a package, that package is not
+-- 
+2.43.0
+
