@@ -1,6 +1,7 @@
 use crate::version::RerVersion;
 use lazy_static::lazy_static;
 use regex::Regex;
+use std::ops::Bound::{self, Excluded, Included};
 use version_ranges::Ranges;
 
 fn get_regex() -> String {
@@ -157,6 +158,29 @@ impl VersionParsed<'_> {
     }
 }
 
+/// Build the single segment `(lower, upper)`, rejecting an empty or inverted
+/// bound the way rez's `_Bound.__init__` does: `lower > upper`, or
+/// `lower == upper` unless both ends are inclusive, raises "Invalid bound".
+///
+/// Without this check `Ranges` would hold an invalid segment (e.g. `[1, 1)`
+/// for `"1+<1"`) and trip `version_ranges`' invariant on the next set
+/// operation.
+fn bounded(
+    input_str: &str,
+    lower: Bound<RerVersion>,
+    upper: Bound<RerVersion>,
+) -> Ranges<RerVersion> {
+    let valid = match (&lower, &upper) {
+        (Included(l), Included(u)) => l <= u,
+        (Included(l) | Excluded(l), Included(u) | Excluded(u)) => l < u,
+        _ => true,
+    };
+    if !valid {
+        panic!("Invalid version range '{}': Invalid bound", input_str);
+    }
+    Ranges::from_range_bounds((lower, upper))
+}
+
 pub(crate) fn parse_version_range(input_str: &str) -> Ranges<RerVersion> {
     if input_str.is_empty() {
         return Ranges::full();
@@ -173,8 +197,7 @@ pub(crate) fn parse_version_range(input_str: &str) -> Ranges<RerVersion> {
     if parsed.inclusive_bound.is_some() {
         let start: RerVersion = parsed.inclusive_lower_version.unwrap().try_into().unwrap();
         let end: RerVersion = parsed.inclusive_upper_version.unwrap().try_into().unwrap();
-        let b = Ranges::between(start, end.clone());
-        return b.union(&Ranges::singleton(end));
+        return bounded(input_str, Included(start), Included(end));
     }
     if parsed.lower_bound.is_some() {
         let start: RerVersion = parsed.lower_version.unwrap().try_into().unwrap();
@@ -190,16 +213,16 @@ pub(crate) fn parse_version_range(input_str: &str) -> Ranges<RerVersion> {
     if parsed.range_asc.is_some() {
         let start: RerVersion = parsed.range_lower_asc_version.unwrap().try_into().unwrap();
         let end: RerVersion = parsed.range_upper_asc_version.unwrap().try_into().unwrap();
-        return Ranges::between(start, end);
+        return bounded(input_str, Included(start), Excluded(end));
     }
     if parsed.range_desc.is_some() {
         let end: RerVersion = parsed.range_upper_desc_version.unwrap().try_into().unwrap();
         let start: RerVersion = parsed.range_lower_desc_version.unwrap().try_into().unwrap();
         if parsed.range_upper_desc_prefix == Some("<") {
-            return Ranges::between(start, end);
+            return bounded(input_str, Included(start), Excluded(end));
         }
         // parsed.range_upper_desc_prefix should a +<
-        return Ranges::between(start, end.clone()).union(&Ranges::singleton(end));
+        return bounded(input_str, Included(start), Included(end));
     }
     Ranges::full()
 }
@@ -265,6 +288,33 @@ fn test_parse_version_range() {
     let end: RerVersion = "2.0.0".try_into().unwrap();
     let start: RerVersion = "1.0.0".try_into().unwrap();
     assert_eq!(a, Ranges::between(start, end));
+}
+
+#[test]
+fn test_parse_version_range_valid_bounds() {
+    // `lo..hi` with lo == hi is the single version (rez: `1..1` -> `==1`).
+    let one: RerVersion = "1".try_into().unwrap();
+    assert_eq!(parse_version_range("1..1"), Ranges::singleton(one));
+    // `1+<1.0` is non-empty: `1` sorts before `1.0`.
+    let r = parse_version_range("1+<1.0");
+    assert!(r.contains(&"1".try_into().unwrap()));
+    assert!(!r.contains(&"1.0".try_into().unwrap()));
+}
+
+/// Each case is one rez rejects with "Invalid bound".
+#[test]
+fn test_parse_version_range_invalid_bound() {
+    for input in ["1+<1", "2+<1", "1.0+<1", "2..1", "1.0..1"] {
+        let err = std::panic::catch_unwind(|| parse_version_range(input))
+            .expect_err(&format!("{input:?} should be rejected"));
+        let msg = err
+            .downcast_ref::<String>()
+            .expect("panic payload is a String");
+        assert_eq!(
+            msg,
+            &format!("Invalid version range '{input}': Invalid bound")
+        );
+    }
 }
 
 #[test]

@@ -37,7 +37,7 @@ fn atom(r: &mut StdRng) -> String {
         6 => format!("<={a}"),
         7 => {
             // `lo+<hi` needs lo < hi: rez rejects an empty bound ("Invalid
-            // bound"), and rer's parse would build an invalid segment.
+            // bound"), and so does rer's parse (it panics).
             let (va, vb) = (
                 RerVersion::try_from(a.as_str()).unwrap(),
                 RerVersion::try_from(b.as_str()).unwrap(),
