@@ -53,7 +53,9 @@ impl VersionRange {
     /// # Panics
     ///
     /// Panics on a syntactically invalid range string, matching the existing
-    /// `parse_version_range` behaviour.
+    /// `parse_version_range` behaviour, and on an empty or inverted bound such
+    /// as `"1+<1"`, `"2+<1"` or `"2..1"`, which rez rejects with
+    /// "Invalid bound".
     pub fn parse(s: &str) -> Self {
         let mut range: Option<Ranges<RerVersion>> = None;
         for part in s.split('|') {
@@ -298,6 +300,19 @@ mod tests {
 
     fn v(s: &str) -> RerVersion {
         RerVersion::try_from(s).unwrap()
+    }
+
+    #[test]
+    #[should_panic(expected = "Invalid version range '1+<1': Invalid bound")]
+    fn test_parse_rejects_empty_bound() {
+        // rez: `VersionRange("1+<1")` raises VersionError("Invalid bound").
+        VersionRange::parse("1+<1");
+    }
+
+    #[test]
+    #[should_panic(expected = "Invalid bound")]
+    fn test_parse_rejects_empty_bound_in_union() {
+        VersionRange::parse("3|2+<1");
     }
 
     #[test]
